@@ -1,0 +1,72 @@
+{
+  "name": "soumya-ai-chatbot",
+  "version": "1.0.0",
+  "description": "A modern website chatbot powered by Google's Gemini AI",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "nodemon server.js",
+    "client": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "whatsapp": "node bot.js",
+    "both": "concurrently \"npm run whatsapp\" \"npm run server\" \"npm run client\""
+  },
+  "keywords": [
+    "chatbot",
+    "ai",
+    "gemini",
+    "express",
+    "websocket",
+    "modern",
+    "react",
+    "vite",
+    "tailwind"
+  ],
+  "author": "Soumya",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.17.1",
+    "@hapi/boom": "^10.0.1",
+    "@heyputer/puter.js": "^2.3.4",
+    "@react-sigma/core": "^5.0.6",
+    "@react-sigma/layout-forceatlas2": "^5.0.6",
+    "@whiskeysockets/baileys": "^6.7.8",
+    "clsx": "^2.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "firebase": "^12.13.0",
+    "graphology": "^0.26.0",
+    "graphology-communities-louvain": "^2.0.2",
+    "graphology-layout-forceatlas2": "^0.10.1",
+    "highlight.js": "^11.11.1",
+    "lucide-react": "^0.363.0",
+    "mongodb": "^7.2.0",
+    "pdf-parse": "^2.4.5",
+    "qrcode-terminal": "^0.12.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-force-graph-3d": "^1.29.1",
+    "react-markdown": "^9.0.1",
+    "react-router-dom": "^7.15.1",
+    "sigma": "^3.0.3",
+    "tailwind-merge": "^2.2.2",
+    "tailwindcss-animate": "^1.0.7",
+    "three": "^0.185.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.1.4",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.1",
+    "vite": "^5.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

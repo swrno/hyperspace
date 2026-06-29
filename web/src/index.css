@@ -1,0 +1,232 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Martina Plantijn';
+  src: url('/fonts/TestMartinaPlantijn-Light-BF663c36d1dbbe7.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Martina Plantijn Italic';
+  src: url('/fonts/TestMartinaPlantijn-LightItalic-BF663c36d1eacde.otf') format('opentype');
+  font-weight: 300;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Martina Plantijn';
+  src: url('/fonts/TestMartinaPlantijn-Regular-BF663c36d1ec6d5.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Martina Plantijn';
+  src: url('/fonts/TestMartinaPlantijn-Black-BF663c36d1526a3.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Theater Basel Grotesk';
+  src: url('/fonts/TheaterBaselGroteskVAR.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@layer base {
+  :root, .dark {
+    /* Main Background */
+    --bg-primary: #252523;
+    /* Input / Secondary Background */
+    --bg-secondary: #33302E;
+    --bg-tertiary: #33302E;
+    --bg-sidebar: #252523;
+    --bg-hover: #33302E;
+    --bg-active: #403E3C;
+
+    /* Text Colors */
+    --text-primary: #FFFFFE; /* For headings / active */
+    --text-secondary: #C7C2BC; /* For What would you like to do / subtle */
+    --text-tertiary: #8C8880;
+    --text-inverted: #252523;
+
+    --border-light: #33302E;
+    --border-medium: #403E3C;
+    --border-dark: #57534E;
+
+    --accent: #EBE9E2;
+    --accent-hover: #FFFFFF;
+    --accent-light: #33302E;
+
+    --success: #4ADE80;
+    --warning: #FBBF24;
+    --error: #F87171;
+  }
+
+  body {
+    @apply bg-[var(--bg-primary)] text-[var(--text-primary)] font-basel antialiased transition-colors duration-200;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-dark);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes messageAppear {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.animate-fade-in { animation: fadeIn 0.2s ease-out; }
+.animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-slide-in-left { animation: slideInLeft 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-shimmer { animation: shimmer 1.5s infinite linear; background-size: 200% 100%; }
+.animate-message-appear { animation: messageAppear 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+/* ─── Bumpy (tactile) buttons ─────────────────────────────────────────────
+   A physical, key-like press: the button sits on a hard bottom edge and
+   depresses into it on :active. Used across the dashboard / KB / integrations. */
+.btn-bump {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transform: translateY(0);
+  transition: transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.1s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.15s ease;
+}
+.btn-bump:active { transform: translateY(2px); }
+.btn-bump:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+.btn-bump-accent {
+  background: #f4f0eb;
+  color: #252523;
+  box-shadow: 0 4px 0 0 #bbb5a9, 0 7px 16px rgba(0, 0, 0, 0.3);
+}
+.btn-bump-accent:hover { background: #ffffff; }
+.btn-bump-accent:active { box-shadow: 0 2px 0 0 #bbb5a9, 0 3px 9px rgba(0, 0, 0, 0.3); }
+
+.btn-bump-dark {
+  background: #33302e;
+  color: #f4f0eb;
+  border: 1px solid #4a4744;
+  box-shadow: 0 4px 0 0 #1a1917, 0 7px 16px rgba(0, 0, 0, 0.35);
+}
+.btn-bump-dark:hover { background: #3d3a37; }
+.btn-bump-dark:active { box-shadow: 0 2px 0 0 #1a1917, 0 3px 9px rgba(0, 0, 0, 0.35); }
+
+.btn-bump-emerald {
+  background: #34d399;
+  color: #06281d;
+  box-shadow: 0 4px 0 0 #1f8e69, 0 7px 16px rgba(16, 185, 129, 0.28);
+}
+.btn-bump-emerald:hover { background: #4ade9f; }
+.btn-bump-emerald:active { box-shadow: 0 2px 0 0 #1f8e69, 0 3px 9px rgba(16, 185, 129, 0.28); }
+
+/* Let highlight.js token colors show through, but inherit our warm code-block
+   background instead of github-dark's cool near-black (#0d1117). */
+.markdown-content .hljs {
+  background: transparent !important;
+  padding: 0 !important;
+  color: #E6E1D8;
+}
+
+/* Claude-style shimmering "Thinking…" text while the model is generating. */
+@keyframes hypr-shimmer {
+  0% { background-position: 180% center; }
+  100% { background-position: -80% center; }
+}
+.text-shimmer {
+  background: linear-gradient(90deg, #6B6762 0%, #6B6762 40%, #F4F0EB 50%, #6B6762 60%, #6B6762 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: hypr-shimmer 2.4s linear infinite;
+}
+
+/* Elevated surface card with a soft inner top highlight */
+.card-elev {
+  background: linear-gradient(180deg, #2c2a28 0%, #262422 100%);
+  border: 1px solid #3d3a37;
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+    0 8px 24px rgba(0, 0, 0, 0.22);
+}
+.card-elev-hover {
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-elev-hover:hover {
+  border-color: #57534e;
+  transform: translateY(-2px);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 14px 34px rgba(0, 0, 0, 0.3);
+}
+
+.font-martina-italic {
+  font-family: 'Martina Plantijn Italic', serif;
+  font-style: italic;
+}
+
+.font-martina-light {
+  font-family: 'Martina Plantijn', serif;
+  font-weight: 300;
+  font-style: normal;
+}
+
+/* Hide number input spinners globally */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}

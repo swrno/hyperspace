@@ -1,0 +1,5 @@
+{
+  "watch": ["server.js", "api/chat.js", "api/**/*.js"],
+  "ignore": ["src/**/*", "dist/**/*", "node_modules/**/*", ".git/**/*"],
+  "ext": "js,json"
+}
