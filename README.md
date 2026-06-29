@@ -1,4 +1,4 @@
-# Architecting an Enterprise Knowledge Engine: Overcoming the AI Tax with GraphRAG, Cognee, and LangGraph
+# Architecting an Enterprise Knowledge Engine: GraphRAG, Cognee, and LangGraph
 
 The promise of Enterprise AI is simple: give an LLM access to your company’s internal tools, and let it answer complex organizational questions. But in reality, enterprise search is broken. Naive vector retrieval fails the moment a query requires connecting the dots across disparate platforms.
 This post details a production-grade blueprint that solves workspace search by transforming fragmented data silos into a dynamically synced, self-correcting Knowledge Graph using **Cognee**, **LangGraph**, and **Groq**.
