@@ -1,0 +1,189 @@
+type GreetingPool =
+  | 'lateNight'
+  | 'earlyMorning'
+  | 'morning'
+  | 'afternoon'
+  | 'lateAfternoon'
+  | 'evening'
+  | 'night';
+
+const greetings: Record<GreetingPool, string[]> = {
+  lateNight: [
+    "The knowledge graph never sleeps. Neither do you.",
+    "2am queries hit different. Let's see what you've got.",
+    "Burning the midnight oil. The graph is ready.",
+    "Late night insight or early morning panic? Either works.",
+    "The rest of the org is asleep. You have the context.",
+    "Deep work hours. hypr is here for it.",
+    "No context lost. No matter the hour.",
+    "Midnight clarity. Rarest kind.",
+    "The graph is live. So are you. Let's go.",
+    "Late night is when the best questions surface.",
+    "Your team is offline. Your knowledge graph isn't.",
+    "Cross the finish line. The data is all here.",
+    "Whatever the deadline, hypr has the context.",
+    "2am and shipping. Respect.",
+    "The knowledge base doesn't close at 5pm.",
+    "Connecting dots at midnight. Classic.",
+    "No sleep, no problem. The graph runs 24/7.",
+    "Your data is awake even when your team isn't.",
+    "Late night focus. hypr focus. Let's build.",
+    "Deep in the weeds at midnight. We've got you.",
+  ],
+
+  earlyMorning: [
+    "Early start. Let's set the context before the standups.",
+    "First light, first query. Good instinct.",
+    "Before the Slack flood - ask the graph.",
+    "The early engineer gets the cleanest knowledge.",
+    "Up before the team. Good time to get ahead.",
+    "Morning clarity before the noise begins.",
+    "The graph has been thinking overnight. So have you.",
+    "Early access to your own knowledge. That's the idea.",
+    "6am. The knowledge graph has been running since midnight.",
+    "Beat the meeting overhead. Query first.",
+    "Pre-standup intelligence. Smart move.",
+    "Your connected data is ready. Are you?",
+    "Dawn of a productive day. hypr is with you.",
+    "Early queries get the clearest answers.",
+    "Up early, context-ready. This is the way.",
+    "The graph indexed your repos overnight.",
+    "Your Jira tickets didn't go anywhere. They're here.",
+    "Sunrise. Sync complete. Let's work.",
+    "The knowledge base is always fresh. Like you.",
+    "Before the stand-up: ask the graph. Be the sharpest in the room.",
+  ],
+
+  morning: [
+    "Morning. Your knowledge graph is fully synced.",
+    "What does the team actually know? Let's find out.",
+    "Good morning. All sources connected. Ask away.",
+    "The graph spans every tool you use. Where do we start?",
+    "Morning context loading. Ask the right question.",
+    "Your workspace knowledge is one query away.",
+    "Good morning. What crossed your mind on the commute?",
+    "Start the day with context, not chaos.",
+    "Morning. hypr has been indexing since last night.",
+    "Ask across silos. That's the point of hypr.",
+    "Your GitHub, Jira, and Docs are talking. What do you want to know?",
+    "No more tab switching. Ask the graph.",
+    "Morning alignment starts with the right context.",
+    "Your morning briefing, powered by your own data.",
+    "What does the org know? Let's pull it up.",
+    "Good morning. The multi-hop graph is ready.",
+    "Context before code. Always.",
+    "The knowledge graph bridges your tools. Start bridging.",
+    "Your morning edge: asking the right question first.",
+    "What do you need to know today? hypr has it.",
+  ],
+
+  afternoon: [
+    "Post-lunch. Good time to query what you forgot.",
+    "Afternoon. The graph is still sharp even if you aren't.",
+    "Mid-day context check. What do you need?",
+    "Two tabs deep in confusion? Ask hypr instead.",
+    "The afternoon silos are real. Cut through them.",
+    "Half the day gone. What still needs answering?",
+    "Afternoon sync. What did you miss this morning?",
+    "Deep in a PR and lost context? Pull it up here.",
+    "The graph connects what Slack doesn't.",
+    "Whatever meeting you just left - hypr can recap.",
+    "Cross-platform knowledge on demand. It's 2pm. Use it.",
+    "Afternoon slump? A clear answer fixes that.",
+    "The org generates context faster than anyone reads it. hypr keeps up.",
+    "Your Jira ticket has a GitHub thread. Want to connect them?",
+    "Context fragmentation is the real enemy. hypr fights it.",
+    "Afternoon is when the best questions get buried in Slack. Ask here instead.",
+    "Mid-day is for decisions. Let's get the data.",
+    "The graph never loses context between meetings.",
+    "Midday is where knowledge silos get expensive. Not today.",
+    "Good time to untangle the week's threads. Let's go.",
+  ],
+
+  lateAfternoon: [
+    "Golden hour for shipping. What do you still need?",
+    "End of day approaching. Let's close the loop.",
+    "Almost 5pm. Last chance to pull the right context.",
+    "The day has generated a lot of data. hypr indexed it.",
+    "Late afternoon is for clarity. Ask away.",
+    "Before you wrap up - what question is still open?",
+    "The 4pm query is often the most important one.",
+    "Context before close of business. Smart.",
+    "Your docs, tickets, and repos are all here. Final stretch.",
+    "Late afternoon. Answers before end-of-day.",
+    "Home stretch. What does the graph know that you need?",
+    "The knowledge graph doesn't have an end-of-day cutoff.",
+    "Wrap up strong. Pull the context you need.",
+    "The afternoon's decisions need data. Here it is.",
+    "5pm is coming. Let's get you there with answers.",
+    "Last few queries of the day. Make them count.",
+    "What's still unresolved? Let's fix that.",
+    "End-of-day context is the most valuable kind.",
+    "The graph has everything your afternoon needed.",
+    "Close of business. Open knowledge. That's hypr.",
+  ],
+
+  evening: [
+    "Evening. The team is off. The graph stays on.",
+    "After-hours work deserves after-hours context.",
+    "No Slack noise. Just your knowledge graph.",
+    "Evening queries are quieter. The answers are the same.",
+    "The org generated knowledge today. You can query it tonight.",
+    "Night mode. Deep context mode.",
+    "After hours. Before the next sprint. Perfect time.",
+    "The docs wrote themselves today. Now let's read them smarter.",
+    "Your GitHub activity is in the graph. So is everything else.",
+    "Evening is when the best thinking happens. We're here for it.",
+    "Quiet hours. Good questions.",
+    "After the meetings, the real work. hypr is ready.",
+    "Evening. The context window is open.",
+    "The graph crosses timezones. So should your questions.",
+    "After-hours clarity is a competitive advantage.",
+    "Evening research session? hypr has the data.",
+    "The knowledge base is indexed. The hour doesn't matter.",
+    "Evening is for depth. Ask deeper.",
+    "Your team logged off. Their knowledge graph didn't.",
+    "Post-day reflection. Pre-tomorrow preparation.",
+  ],
+
+  night: [
+    "Late night. The knowledge graph runs in the dark too.",
+    "Night shift or night owl - hypr doesn't judge.",
+    "10pm query. The graph is still sharp.",
+    "Night mode thinking. Deep queries only.",
+    "The stars are out. So is your curiosity. Good.",
+    "Late night is when the big picture becomes clear.",
+    "Everyone else is asleep. You have the context to yourself.",
+    "Night queries tend to be the most interesting.",
+    "The knowledge graph works the night shift too.",
+    "Late night clarity or early morning prep? Either works.",
+    "The org is quiet. The data is loud. Let's use it.",
+    "Night. No interruptions. Best time to think.",
+    "Your repos didn't sleep. Neither did the graph.",
+    "10pm and still shipping. The graph ships with you.",
+    "Late night context: zero noise, full signal.",
+    "Night owl energy. Let's channel it into something useful.",
+    "The knowledge graph is fully available. No matter the hour.",
+    "Night queries get longer answers. We have time.",
+    "Late night work is underrated. So is hypr.",
+    "The graph doesn't do sleep mode. Good thing.",
+  ],
+};
+
+export const getTimeBasedGreeting = (): string => {
+  const hour = new Date().getHours();
+  let pool: string[];
+
+  if (hour >= 0 && hour < 4) pool = greetings.lateNight;
+  else if (hour >= 4 && hour < 7) pool = greetings.earlyMorning;
+  else if (hour >= 7 && hour < 12) pool = greetings.morning;
+  else if (hour >= 12 && hour < 15) pool = greetings.afternoon;
+  else if (hour >= 15 && hour < 18) pool = greetings.lateAfternoon;
+  else if (hour >= 18 && hour < 21) pool = greetings.evening;
+  else pool = greetings.night;
+
+  const minuteSeed = Math.floor(Date.now() / 60000);
+  return pool[minuteSeed % pool.length];
+};
+
+export default greetings;

@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Pragmatic backend migration: the API layer handles highly dynamic data
+       (Mongo documents, third-party API payloads). Public surfaces are typed
+       (Express handlers, domain models in api/types.ts); strict null/implicit-any
+       are relaxed so dynamic I/O bodies don't require hundreds of guards/casts. */
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "useUnknownInCatchVariables": false,
+    "noEmit": true
+  },
+  "include": ["server.ts", "api/**/*.ts"]
+}
