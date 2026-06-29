@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { getTimeBasedGreeting } from './greetings';
 import type {
@@ -1063,7 +1064,9 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       return payload.user_id || payload.sub || 'anon';
     } catch { return 'anon'; }
   };
-  const connectorsCacheKey = (token: string | null): string => `hs_connectors_${uidFromToken(token)}`;
+  // Bumped to v2: invalidates stale demo-era caches that left sources showing
+  // "connected" even when nothing is actually connected / the backend is down.
+  const connectorsCacheKey = (token: string | null): string => `hs_connectors_v2_${uidFromToken(token)}`;
   const persistConnectorsLocal = (next: Connectors, token?: string | null) => {
     try { localStorage.setItem(connectorsCacheKey(token || idToken), JSON.stringify(next)); } catch { /* ignore */ }
   };
@@ -2998,6 +3001,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                             )}
                             <div className="markdown-content text-[#F4F0EB] font-basel text-[15px] leading-relaxed" style={{ letterSpacing: '0.2px' }}>
                               <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
                                 components={{
                                   code({ node, className, children, ...props }: any) {
                                     const codeStr = String(children).replace(/\n$/, '');
