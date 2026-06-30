@@ -119,26 +119,18 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   });
 
   const load = async () => {
+    if (!idToken) return;
     try {
-      const stored = localStorage.getItem('hs_kbs');
-      if (stored) {
-        setKbs(JSON.parse(stored));
-      } else {
-        setKbs([]);
-      }
+      const res = await fetch('/api/kb', { headers: authHeaders() });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setKbs(data.kbs || []);
       setError('');
     } catch (e) {
-      setError((e as Error).message || 'Could not load local data.');
+      setError((e as Error).message || 'Could not load data.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const saveKbs = (newKbs: KnowledgeBase[]) => {
-    setKbs(newKbs);
-    localStorage.setItem('hs_kbs', JSON.stringify(newKbs));
-    // Trigger global event so App.tsx can update its kbList if needed
-    window.dispatchEvent(new Event('storage'));
   };
 
   useEffect(() => { load(); }, []);
@@ -157,19 +149,17 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const newKb: KnowledgeBase = {
-        id: Date.now().toString(),
-        name: newName.trim(),
-        description: newDesc.trim(),
-        documents: [],
-        sources: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      saveKbs([newKb, ...kbs]);
+      const res = await fetch('/api/kb', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ action: 'create', kb: { name: newName.trim(), description: newDesc.trim() } }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setKbs([data.kb, ...kbs]);
       setShowCreate(false);
       setNewName(''); setNewDesc('');
-      setActiveId(newKb.id);
+      setActiveId(data.kb.id);
     } catch (e) {
       setError((e as Error).message || 'Failed to create.');
     } finally {
@@ -178,62 +168,100 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   };
 
   const deleteKb = async (id: string) => {
-    saveKbs(kbs.filter((k) => k.id !== id));
-    if (activeId === id) setActiveId(null);
+    try {
+      const res = await fetch(`/api/kb?id=${id}`, { method: 'DELETE', headers: authHeaders() });
+      if (!res.ok) throw new Error(await res.text());
+      setKbs(kbs.filter((k) => k.id !== id));
+      if (activeId === id) setActiveId(null);
+    } catch (e) {
+      setError((e as Error).message || 'Failed to delete.');
+    }
   };
 
   const renameKb = async (id: string, newName: string) => {
     if (!newName.trim()) return;
-    saveKbs(kbs.map((k) => (k.id === id ? { ...k, name: newName.trim(), updatedAt: new Date().toISOString() } : k)));
+    try {
+      const res = await fetch('/api/kb', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ action: 'rename', kbId: id, name: newName.trim() }),
+      });
+      if (res.ok) {
+        setKbs(kbs.map((k) => (k.id === id ? { ...k, name: newName.trim(), updatedAt: new Date().toISOString() } : k)));
+      }
+    } catch (e) {
+      console.error('Failed to rename', e);
+    }
     setIsEditingName(false);
   };
 
   const addDoc = async (kbId: string, doc: DocInput) => {
     setUploading(true);
     try {
-      // Mock uploading and processing
-      setTimeout(() => {
-        const newDoc = {
-          id: Date.now().toString(),
-          name: doc.name,
-          type: doc.type,
-          size: doc.type === 'text' ? (doc as any).content.length : 1024 * 1024,
-          status: 'ready',
-          createdAt: new Date().toISOString()
-        };
-        saveKbs(kbs.map((k) =>
-          k.id === kbId ? { ...k, documents: [...(k.documents || []), newDoc], updatedAt: new Date().toISOString() } : k
-        ));
-        setGraphRefresh((x) => x + 1);
-        setUploading(false);
-      }, 1000);
+      const res = await fetch('/api/kb', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ action: 'add-doc', kbId, doc }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setKbs(kbs.map((k) =>
+        k.id === kbId ? { ...k, documents: [...(k.documents || []), data.doc], updatedAt: new Date().toISOString() } : k
+      ));
+      setGraphRefresh((x) => x + 1);
     } catch (e) {
       setError((e as Error).message || 'Failed to add document.');
+    } finally {
       setUploading(false);
     }
   };
 
   const deleteDoc = async (kbId: string, docId: string) => {
-    saveKbs(kbs.map((k) =>
-      k.id === kbId ? { ...k, documents: (k.documents || []).filter((d) => d.id !== docId), updatedAt: new Date().toISOString() } : k
-    ));
-    setGraphRefresh((x) => x + 1);
+    try {
+      const res = await fetch('/api/kb', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ action: 'delete-doc', kbId, docId }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setKbs(kbs.map((k) =>
+        k.id === kbId ? { ...k, documents: (k.documents || []).filter((d) => d.id !== docId), updatedAt: new Date().toISOString() } : k
+      ));
+      setGraphRefresh((x) => x + 1);
+    } catch (e) {
+      setError((e as Error).message || 'Failed to delete document.');
+    }
   };
 
   // ── Sources: attach a globally-authorized connector's items to this KB, or
   //    detach it. Both rebuild the KB graph (graphRefresh) on their own. ──────
   const updateSourceItems = async (kbId: string, platform: string, items: KbSource['items']) => {
-    if (items.length === 0) {
-      saveKbs(kbs.map((k) =>
-        k.id === kbId ? { ...k, sources: (k.sources || []).filter((s) => s.platform !== platform), updatedAt: new Date().toISOString() } : k
-      ));
-    } else {
-      const source: KbSource = { platform, items, attachedAt: new Date().toISOString() };
-      saveKbs(kbs.map((k) =>
-        k.id === kbId ? { ...k, sources: [...(k.sources || []).filter((s) => s.platform !== platform), source], updatedAt: new Date().toISOString() } : k
-      ));
+    try {
+      if (items.length === 0) {
+        await fetch('/api/kb', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ action: 'detach-source', kbId, platform }),
+        });
+        setKbs(kbs.map((k) =>
+          k.id === kbId ? { ...k, sources: (k.sources || []).filter((s) => s.platform !== platform), updatedAt: new Date().toISOString() } : k
+        ));
+      } else {
+        const res = await fetch('/api/kb', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ action: 'attach-source', kbId, platform, items }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        setKbs(kbs.map((k) =>
+          k.id === kbId ? { ...k, sources: [...(k.sources || []).filter((s) => s.platform !== platform), data.source], updatedAt: new Date().toISOString() } : k
+        ));
+      }
+      setGraphRefresh((x) => x + 1);
+    } catch (e) {
+      console.error('Failed to update source items', e);
     }
-    setGraphRefresh((x) => x + 1);
   };
 
   const readAsBase64 = (file: File): Promise<string> =>
