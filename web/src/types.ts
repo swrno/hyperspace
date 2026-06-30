@@ -69,6 +69,8 @@ export type ActiveScreen =
 /** An application created by the user, with its own chat scope, prompt and LLM settings. */
 export interface Application {
   id: string;
+  appId?: string;
+  apiKey?: string;
   name: string;
   description?: string;
   systemPrompt: string;

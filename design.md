@@ -1,6 +1,7 @@
 # Restructuring hypr: Integrations, Applications & App Playground
 
 ## Goal
+
 Restructure the hypr platform UI based on 6 changes: (1) Integrations should only show "Connected" status, not repo lists, (2) Add an "Applications" section where users create apps with custom system prompts & LLM settings, (3) Remove the "Assistant" sidebar tab and make it an "App Playground" inside each app, (4) Remove the retrieval mode picker and all ingestion/ingest logic, (5) Move repository selection into Knowledge Bases, and (6) Show "Coming Soon" for unimplemented platforms.
 
 ---
@@ -34,6 +35,7 @@ A new top-level nav item `Applications` (with a `LayoutGrid` or `AppWindow` icon
 **Current**: The chat input box has a retrieval mode picker (`Normal` / `Deep` / `Hyper`) and the connector modal has a 3-stage flow (`auth → select → ingest`) with animated ingestion progress bars.
 
 **What gets removed**:
+
 - `CHAT_MODELS` array and `modeIcon()` function (retrieval depth modes)
 - The model picker dropdown in the chat input box (the `Normal` / `Deep` / `Hyper` selector)
 - `currentModel` state and its persistence to localStorage
@@ -45,6 +47,7 @@ A new top-level nav item `Applications` (with a `LayoutGrid` or `AppWindow` icon
 - The `toggleItem()` helper
 
 **What stays**:
+
 - `connectorStage === 'auth'` panel (the authorization/OAuth flow) — this is the only stage needed for Integrations
 - After auth completes, the connector immediately saves as `connected: true` (no item selection)
 - The connector modal closes after successful auth
@@ -70,15 +73,17 @@ A new top-level nav item `Applications` (with a `LayoutGrid` or `AppWindow` icon
 ## Proposed Changes
 
 ### Types ([MODIFY] [types.ts](file:///Users/swarnendubhandari/My%20Space/Projects/hyper-space-2/web/src/types.ts))
+
 - Add `'applications'` to `ActiveScreen` union type
 - Add `Application` interface:
+
   ```ts
   interface Application {
     id: string;
     name: string;
     description?: string;
     systemPrompt: string;
-    model: string;          // e.g. 'gemini-2.5-flash'
+    model: string;          // e.g. 'qwen/qwen3.6-27b'
     temperature: number;    // 0.0–1.0
     maxTokens: number;
     linkedKbIds: string[];  // IDs of connected Knowledge Bases
@@ -93,6 +98,7 @@ A new top-level nav item `Applications` (with a `LayoutGrid` or `AppWindow` icon
 ### Sidebar Navigation ([MODIFY] [App.tsx](file:///Users/swarnendubhandari/My%20Space/Projects/hyper-space-2/web/src/App.tsx))
 
 In `renderSidebarContent()`:
+
 - Remove `{ id: 'chat', label: 'Assistant', Icon: MessagesSquare }` from nav items
 - Add `{ id: 'applications', label: 'Applications', Icon: LayoutGrid }` between Dashboard and Knowledge
 - Keep Dashboard, Knowledge, Integrations
@@ -102,6 +108,7 @@ In `renderSidebarContent()`:
 ### Integrations Page ([MODIFY] [App.tsx](file:///Users/swarnendubhandari/My%20Space/Projects/hyper-space-2/web/src/App.tsx))
 
 In `renderIntegrations()`:
+
 - Add `IMPLEMENTED_PLATFORMS` array: `['github', 'jira', 'gdocs', 'gslides', 'gsheets', 'gcal']`
 - For platforms NOT in this array (slack, salesforce):
   - Show "Coming Soon" badge instead of "Not connected"
@@ -111,6 +118,7 @@ In `renderIntegrations()`:
 - When "Connect" is clicked: Go through OAuth auth → on return, just mark as connected (no item selection)
 
 In Connector Modal:
+
 - **Remove** `select` and `ingest` stages entirely (panels + state + functions)
 - Keep only `auth` stage
 - After `auth` completes, directly `saveConnector(platformId, { connected: true, account: ... })` and close modal
@@ -118,6 +126,7 @@ In Connector Modal:
 - For simulated: after the timeout, save connected and close
 
 Remove from App.tsx:
+
 ```diff
 - const [availableItems, setAvailableItems] = useState<ConnectorItem[]>([]);
 - const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
@@ -135,6 +144,7 @@ Remove from App.tsx:
 ```
 
 In Settings → Connections tab:
+
 - Same changes: Coming Soon for slack/salesforce, disable buttons
 - Show "Connected" status, no item counts
 
@@ -143,6 +153,7 @@ In Settings → Connections tab:
 ### Applications Section ([MODIFY] [App.tsx](file:///Users/swarnendubhandari/My%20Space/Projects/hyper-space-2/web/src/App.tsx))
 
 Add new state and functions:
+
 - `applications: Application[]` state (persisted to localStorage)
 - `activeAppId: string | null` state  
 - `appTab: 'playground' | 'knowledge' | 'settings'` state
@@ -152,6 +163,7 @@ Add new state and functions:
   - **Detail view**: Three-tab layout:
 
 #### Playground tab
+
 - The full chat experience (input box, messages, reasoning) **scoped to this app**
 - Each app has its own `messages[]` array (isolated chat history)
 - When sending a message, the API call includes:
@@ -161,6 +173,7 @@ Add new state and functions:
 - The chat input box no longer has a KB scope picker or retrieval mode picker — those are defined in the app's settings/KB tab
 
 #### Knowledge Bases tab
+
 - Shows a list of all existing KBs with checkboxes
 - KBs that are linked to this app are checked / highlighted with an "Attached" badge
 - User can **link** (attach) or **unlink** (detach) any KB
@@ -169,8 +182,9 @@ Add new state and functions:
 - The KB list is fetched from the existing `/api/kb` endpoint
 
 #### Settings tab
+
 - **System Prompt**: Large textarea for customizing the AI's behavior/persona
-- **Model**: Dropdown selector (e.g. `gemini-2.5-flash`, `gpt-4o`, etc.)
+- **Model**: Dropdown selector (e.g. `qwen/qwen3.6-27b`, `gpt-4o`, etc.)
 - **Temperature**: Slider (0.0–1.0)
 - **Max Tokens**: Number input
 - Save button persists to localStorage
@@ -192,6 +206,7 @@ Add new state and functions:
 ## Open Questions
 
 > [!IMPORTANT]
+>
 > 1. **App Playground scope**: Each application's chat is **completely isolated** — separate chat history, system prompt, model, and KB scope per app.
 
 > [!IMPORTANT]
@@ -208,6 +223,7 @@ Add new state and functions:
 ## Verification Plan
 
 ### Automated Tests
+
 - Build the app with `npm run dev` and verify no compilation errors
 - Browser-test all navigation flows:
   - Sidebar: Dashboard → Applications → Knowledge → Integrations
@@ -217,4 +233,5 @@ Add new state and functions:
   - Knowledge Base: Sources tab → Select specific items from connected platforms
 
 ### Manual Verification
+
 - Visual walkthrough of all changes via browser recording

@@ -50,11 +50,11 @@ async function jpost(path, body) {
 // Domain extraction guidance so cognify builds OUR enterprise schema
 // (README §4 data model) and resolves identities across tools.
 const ENTERPRISE_PROMPT =
-  'Extract a cross-tool enterprise knowledge graph. Entity types: Repository, ' +
+  'Extract a cross-tool enterprise knowledge graph. Entity types: KnowledgeBase, Repository, ' +
   'PullRequest, Issue/WorkItem, Commit, Document, Spreadsheet, Slide, Sprint, ' +
-  'Project, Person, Channel, Message, Account. Relationships: HAS_REPO, HAS_PR, ' +
+  'Project, Person, Channel, Message, Account. Relationships: HAS_KB, HAS_REPO, HAS_PR, ' +
   'HAS_ISSUE, RESOLVES (PullRequest→Issue), AUTHORED_BY (→Person), MENTIONS ' +
-  '(Document→Issue/PR), REFERENCES, DISCUSSION_IN, WORKS_ON. Resolve the same ' +
+  '(Document→Issue/PR), REFERENCES, DISCUSSION_IN, WORKS_ON. Every node should be connected to its KnowledgeBase node via HAS_KB if applicable. Resolve the same ' +
   'person and entity across GitHub, Jira, Google and Slack using email or name. ' +
   'Preserve identifiers exactly: repo full names, PR numbers, Jira keys like PROJ-123.';
 
@@ -189,7 +189,7 @@ export async function recall(query, opts: any = {}) {
 /**
  * Build the text that describes a connector's ingested items for the KG.
  */
-export function formatConnectorPayload(userId, userEmail, platform, selectedItems) {
+export function formatConnectorPayload(kbId, userId, userEmail, platform, selectedItems) {
   const platformNames = {
     github: 'GitHub', gdocs: 'Google Docs', gslides: 'Google Slides', gsheets: 'Google Sheets',
     gcal: 'Google Calendar', jira: 'Jira', slack: 'Slack', salesforce: 'Salesforce',
@@ -198,6 +198,7 @@ export function formatConnectorPayload(userId, userEmail, platform, selectedItem
   const itemLines = selectedItems.map((i) => `  - ${i.name}${i.meta ? ` [${i.meta}]` : ''}`).join('\n');
   return [
     `# hypr Knowledge Source: ${name}`,
+    `Knowledge Base ID: ${kbId}`,
     `User: ${userEmail}  |  User ID: ${userId}`,
     `Connected at: ${new Date().toISOString()}`,
     ``,

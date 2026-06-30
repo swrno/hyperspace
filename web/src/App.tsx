@@ -15,6 +15,7 @@ import {
   Mic, Image as ImageIcon, Search, Pencil, RefreshCw, Shield, Users, LogOut, Key,
   LayoutDashboard, Database, Blocks, MessagesSquare, ArrowRight, ArrowUpRight,
   LayoutGrid, AppWindow, Link2, Link2Off, SlidersHorizontal, Cpu, Unlink,
+  Activity, Clock, Code, PlaySquare, Loader2
 } from 'lucide-react';
 import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -111,66 +112,66 @@ const platformIcon = (p: { id: string }, size = 15): ReactNode => {
   const icons: Record<string, ReactNode> = {
     github: (
       <svg viewBox="0 0 24 24" width={s} height={s} fill="#E7E1DA" className="shrink-0">
-        <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+        <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0 1 12 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
       </svg>
     ),
     gdocs: (
       <svg viewBox="0 0 30 40" width={s * 0.75} height={s} className="shrink-0">
-        <path d="M18 0H2C.9 0 0 .9 0 2v36c0 1.1.9 2 2 2h26c1.1 0 2-.9 2-2V12z" fill="#4285F4"/>
-        <path d="M18 0l12 12H18z" fill="#A8C7FA"/>
-        <rect x="4" y="18" width="22" height="2.5" rx="1" fill="#fff"/>
-        <rect x="4" y="24" width="22" height="2.5" rx="1" fill="#fff"/>
-        <rect x="4" y="30" width="14" height="2.5" rx="1" fill="#fff"/>
+        <path d="M18 0H2C.9 0 0 .9 0 2v36c0 1.1.9 2 2 2h26c1.1 0 2-.9 2-2V12z" fill="#4285F4" />
+        <path d="M18 0l12 12H18z" fill="#A8C7FA" />
+        <rect x="4" y="18" width="22" height="2.5" rx="1" fill="#fff" />
+        <rect x="4" y="24" width="22" height="2.5" rx="1" fill="#fff" />
+        <rect x="4" y="30" width="14" height="2.5" rx="1" fill="#fff" />
       </svg>
     ),
     gslides: (
       <svg viewBox="0 0 30 40" width={s * 0.75} height={s} className="shrink-0">
-        <path d="M18 0H2C.9 0 0 .9 0 2v36c0 1.1.9 2 2 2h26c1.1 0 2-.9 2-2V12z" fill="#FBBC04"/>
-        <path d="M18 0l12 12H18z" fill="#FDE68A"/>
-        <rect x="4" y="16" width="22" height="16" rx="1.5" fill="#fff" opacity="0.9"/>
-        <path d="M13 19l8 5-8 5V19z" fill="#FBBC04"/>
+        <path d="M18 0H2C.9 0 0 .9 0 2v36c0 1.1.9 2 2 2h26c1.1 0 2-.9 2-2V12z" fill="#FBBC04" />
+        <path d="M18 0l12 12H18z" fill="#FDE68A" />
+        <rect x="4" y="16" width="22" height="16" rx="1.5" fill="#fff" opacity="0.9" />
+        <path d="M13 19l8 5-8 5V19z" fill="#FBBC04" />
       </svg>
     ),
     jira: (
       <svg viewBox="0 0 256 257" width={s} height={s} className="shrink-0">
         <defs>
-          <linearGradient id="jG1" x1="105%" x2="50%" y1="-1%" y2="45%"><stop offset="18%" stopColor="#0052CC"/><stop offset="100%" stopColor="#2684FF"/></linearGradient>
-          <linearGradient id="jG2" x1="-4%" x2="51%" y1="101%" y2="55%"><stop offset="18%" stopColor="#0052CC"/><stop offset="100%" stopColor="#2684FF"/></linearGradient>
+          <linearGradient id="jG1" x1="105%" x2="50%" y1="-1%" y2="45%"><stop offset="18%" stopColor="#0052CC" /><stop offset="100%" stopColor="#2684FF" /></linearGradient>
+          <linearGradient id="jG2" x1="-4%" x2="51%" y1="101%" y2="55%"><stop offset="18%" stopColor="#0052CC" /><stop offset="100%" stopColor="#2684FF" /></linearGradient>
         </defs>
-        <path fill="#2684FF" d="M244.658 0H121.707a55.502 55.502 0 0 0 55.502 55.502h22.649V77.37c.02 30.625 24.841 55.447 55.466 55.467V11.342C255.324 5.076 250.248 0 244.658 0z"/>
-        <path fill="url(#jG1)" d="M183.822 61.262H60.87c.019 30.625 24.84 55.447 55.466 55.467h22.648v21.867c.02 30.625 24.841 55.447 55.466 55.467V72.605c0-6.265-5.076-11.342-10.628-11.342z"/>
-        <path fill="url(#jG2)" d="M122.951 122.489H0c0 30.653 24.85 55.502 55.502 55.502h22.649v21.868C78.17 230.642 103.02 257 133.65 256.98V133.83c0-6.265-5.076-11.341-10.699-11.341z"/>
+        <path fill="#2684FF" d="M244.658 0H121.707a55.502 55.502 0 0 0 55.502 55.502h22.649V77.37c.02 30.625 24.841 55.447 55.466 55.467V11.342C255.324 5.076 250.248 0 244.658 0z" />
+        <path fill="url(#jG1)" d="M183.822 61.262H60.87c.019 30.625 24.84 55.447 55.466 55.467h22.648v21.867c.02 30.625 24.841 55.447 55.466 55.467V72.605c0-6.265-5.076-11.342-10.628-11.342z" />
+        <path fill="url(#jG2)" d="M122.951 122.489H0c0 30.653 24.85 55.502 55.502 55.502h22.649v21.868C78.17 230.642 103.02 257 133.65 256.98V133.83c0-6.265-5.076-11.341-10.699-11.341z" />
       </svg>
     ),
     slack: (
       <svg viewBox="0 0 54 54" width={s} height={s} className="shrink-0">
-        <path d="M19.712.133a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386h5.376V5.52A5.381 5.381 0 0 0 19.712.133m0 14.365H5.376A5.381 5.381 0 0 0 0 19.884a5.381 5.381 0 0 0 5.376 5.387h14.336a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386" fill="#36C5F0"/>
-        <path d="M53.76 19.884a5.381 5.381 0 0 0-5.376-5.386 5.381 5.381 0 0 0-5.376 5.386v5.387h5.376a5.381 5.381 0 0 0 5.376-5.387m-14.336 0V5.52A5.381 5.381 0 0 0 34.048.133a5.381 5.381 0 0 0-5.376 5.387v14.364a5.381 5.381 0 0 0 5.376 5.387 5.381 5.381 0 0 0 5.376-5.387" fill="#2EB67D"/>
-        <path d="M34.048 54a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386h-5.376v5.386A5.381 5.381 0 0 0 34.048 54m0-14.365h14.336a5.381 5.381 0 0 0 5.376-5.386 5.381 5.381 0 0 0-5.376-5.387H34.048a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386" fill="#ECB22E"/>
-        <path d="M0 34.249a5.381 5.381 0 0 0 5.376 5.386 5.381 5.381 0 0 0 5.376-5.386v-5.387H5.376A5.381 5.381 0 0 0 0 34.249m14.336 0v14.364A5.381 5.381 0 0 0 19.712 54a5.381 5.381 0 0 0 5.376-5.387V34.249a5.381 5.381 0 0 0-5.376-5.387 5.381 5.381 0 0 0-5.376 5.387" fill="#E01E5A"/>
+        <path d="M19.712.133a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386h5.376V5.52A5.381 5.381 0 0 0 19.712.133m0 14.365H5.376A5.381 5.381 0 0 0 0 19.884a5.381 5.381 0 0 0 5.376 5.387h14.336a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386" fill="#36C5F0" />
+        <path d="M53.76 19.884a5.381 5.381 0 0 0-5.376-5.386 5.381 5.381 0 0 0-5.376 5.386v5.387h5.376a5.381 5.381 0 0 0 5.376-5.387m-14.336 0V5.52A5.381 5.381 0 0 0 34.048.133a5.381 5.381 0 0 0-5.376 5.387v14.364a5.381 5.381 0 0 0 5.376 5.387 5.381 5.381 0 0 0 5.376-5.387" fill="#2EB67D" />
+        <path d="M34.048 54a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386h-5.376v5.386A5.381 5.381 0 0 0 34.048 54m0-14.365h14.336a5.381 5.381 0 0 0 5.376-5.386 5.381 5.381 0 0 0-5.376-5.387H34.048a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386" fill="#ECB22E" />
+        <path d="M0 34.249a5.381 5.381 0 0 0 5.376 5.386 5.381 5.381 0 0 0 5.376-5.386v-5.387H5.376A5.381 5.381 0 0 0 0 34.249m14.336 0v14.364A5.381 5.381 0 0 0 19.712 54a5.381 5.381 0 0 0 5.376-5.387V34.249a5.381 5.381 0 0 0-5.376-5.387 5.381 5.381 0 0 0-5.376 5.387" fill="#E01E5A" />
       </svg>
     ),
     salesforce: (
       <svg viewBox="0 0 256 180" width={s} height={s} className="shrink-0">
-        <path fill="#00A1E0" d="M106.67 33.5c8.65-9 20.7-14.6 34.09-14.6 17.66 0 33.13 9.69 41.46 24.14a54.28 54.28 0 0 1 21.3-4.36c30.14 0 54.55 24.62 54.55 54.99s-24.41 55-54.55 55a54.3 54.3 0 0 1-10.39-1.01c-7.27 13.66-21.5 22.93-37.83 22.93-6.57 0-12.8-1.52-18.35-4.21-7.14 17.77-24.66 30.33-45.11 30.33-20.62 0-38.27-12.73-45.37-30.75a43.65 43.65 0 0 1-10.46 1.28C16.43 167.24 0 150.65 0 130.16c0-13.75 7.36-25.83 18.3-32.4a55.57 55.57 0 0 1-1.6-13.4c0-30.72 24.67-55.63 55.12-55.63 13.4 0 25.7 4.78 35.14 12.77z"/>
+        <path fill="#00A1E0" d="M106.67 33.5c8.65-9 20.7-14.6 34.09-14.6 17.66 0 33.13 9.69 41.46 24.14a54.28 54.28 0 0 1 21.3-4.36c30.14 0 54.55 24.62 54.55 54.99s-24.41 55-54.55 55a54.3 54.3 0 0 1-10.39-1.01c-7.27 13.66-21.5 22.93-37.83 22.93-6.57 0-12.8-1.52-18.35-4.21-7.14 17.77-24.66 30.33-45.11 30.33-20.62 0-38.27-12.73-45.37-30.75a43.65 43.65 0 0 1-10.46 1.28C16.43 167.24 0 150.65 0 130.16c0-13.75 7.36-25.83 18.3-32.4a55.57 55.57 0 0 1-1.6-13.4c0-30.72 24.67-55.63 55.12-55.63 13.4 0 25.7 4.78 35.14 12.77z" />
       </svg>
     ),
     gsheets: (
       <svg viewBox="0 0 30 40" width={s * 0.75} height={s} className="shrink-0">
-        <path d="M18 0H2C.9 0 0 .9 0 2v36c0 1.1.9 2 2 2h26c1.1 0 2-.9 2-2V12z" fill="#34A853"/>
-        <path d="M18 0l12 12H18z" fill="#A8DAB5"/>
-        <rect x="6" y="18" width="18" height="14" rx="1" fill="#fff"/>
-        <rect x="6" y="22" width="18" height="1.6" fill="#34A853"/>
-        <rect x="6" y="26.6" width="18" height="1.6" fill="#34A853"/>
-        <rect x="14.4" y="18" width="1.6" height="14" fill="#34A853"/>
+        <path d="M18 0H2C.9 0 0 .9 0 2v36c0 1.1.9 2 2 2h26c1.1 0 2-.9 2-2V12z" fill="#34A853" />
+        <path d="M18 0l12 12H18z" fill="#A8DAB5" />
+        <rect x="6" y="18" width="18" height="14" rx="1" fill="#fff" />
+        <rect x="6" y="22" width="18" height="1.6" fill="#34A853" />
+        <rect x="6" y="26.6" width="18" height="1.6" fill="#34A853" />
+        <rect x="14.4" y="18" width="1.6" height="14" fill="#34A853" />
       </svg>
     ),
     gcal: (
       <svg viewBox="0 0 24 24" width={s} height={s} className="shrink-0">
-        <rect x="3" y="4.5" width="18" height="16.5" rx="2" fill="#fff"/>
-        <path d="M3 9h18V6.5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2V9z" fill="#4285F4"/>
-        <rect x="6.5" y="2.5" width="2" height="4" rx="1" fill="#4285F4"/>
-        <rect x="15.5" y="2.5" width="2" height="4" rx="1" fill="#4285F4"/>
+        <rect x="3" y="4.5" width="18" height="16.5" rx="2" fill="#fff" />
+        <path d="M3 9h18V6.5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2V9z" fill="#4285F4" />
+        <rect x="6.5" y="2.5" width="2" height="4" rx="1" fill="#4285F4" />
+        <rect x="15.5" y="2.5" width="2" height="4" rx="1" fill="#4285F4" />
         <text x="12" y="18.5" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#4285F4" fontFamily="Arial, sans-serif">31</text>
       </svg>
     ),
@@ -926,7 +927,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const navigate = useNavigate();
   const currentChatId = chatId || null;
 
-  const [currentModel] = useState('gemini-2.5-flash'); // kept for API compatibility
+  const [currentModel] = useState('qwen/qwen3.6-27b'); // kept for API compatibility
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
@@ -937,7 +938,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const [selectedKbId, setSelectedKbId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<number | string | null>(null);
-  const [settings, setSettings] = useState<Settings>({ model: 'gemini-2.5-flash', temperature: 0.7 });
+  const [settings, setSettings] = useState<Settings>({ model: 'qwen/qwen3.6-27b', temperature: 0.7 });
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [renameModal, setRenameModal] = useState<{ chatId: string; currentTitle: string } | null>(null);
   const [deleteModal, setDeleteModal] = useState<{ chatId: string } | null>(null);
@@ -952,9 +953,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const [activeDocModal, setActiveDocModal] = useState<'terms' | 'privacy' | null>(null);
 
   // Applications state
-  const [applications, setApplications] = useState<Application[]>(() => {
-    try { return JSON.parse(localStorage.getItem('hs_applications') || '[]'); } catch { return []; }
-  });
+  const [applications, setApplications] = useState<Application[]>([]);
   const [activeAppId, setActiveAppId] = useState<string | null>(null);
   const [appTab, setAppTab] = useState<'playground' | 'knowledge' | 'settings'>('playground');
   const [showCreateApp, setShowCreateApp] = useState(false);
@@ -1409,10 +1408,15 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     localStorage.setItem('orgmind_chats', JSON.stringify(chats));
   }, [chats]);
 
-  // Persist applications to localStorage whenever they change
+  // Fetch apps on mount or auth change
   useEffect(() => {
-    try { localStorage.setItem('hs_applications', JSON.stringify(applications)); } catch { /* ignore */ }
-  }, [applications]);
+    fetch('/api/apps', {
+      headers: { ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) }
+    })
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setApplications(data); })
+      .catch(console.error);
+  }, [idToken]);
 
   // Sync activeScreen from URL path
   useEffect(() => {
@@ -1509,48 +1513,80 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   };
 
   // ── Application CRUD ───────────────────────────────────────────────────────
-  const createApp = () => {
+  const createApp = async () => {
     if (!newAppName.trim()) return;
-    const newApp: Application = {
-      id: generateId(),
-      name: newAppName.trim(),
-      description: newAppDesc.trim() || undefined,
-      systemPrompt: 'You are a helpful AI assistant.',
-      model: 'gemini-2.5-flash',
-      temperature: 0.7,
-      maxTokens: 2048,
-      linkedKbIds: [],
-      messages: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setApplications(prev => [newApp, ...prev]);
-    setNewAppName('');
-    setNewAppDesc('');
-    setShowCreateApp(false);
-    setActiveAppId(newApp.id);
-    setAppTab('playground');
+    setAppIsLoading(true);
+    try {
+      const response = await fetch('/api/apps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({
+          name: newAppName.trim(),
+          description: newAppDesc.trim() || undefined,
+          systemPrompt: 'You are a helpful AI assistant.',
+          model: 'qwen/qwen3.6-27b',
+          temperature: 0.7,
+          maxTokens: 2048,
+          linkedKbIds: [],
+          messages: []
+        })
+      });
+      if (response.ok) {
+        const newApp = await response.json();
+        setApplications(prev => [newApp, ...prev]);
+        setNewAppName('');
+        setNewAppDesc('');
+        setShowCreateApp(false);
+        setActiveAppId(newApp.id);
+        setAppTab('playground');
+      } else {
+        const err = await response.text();
+        console.error('Failed to create app:', err);
+        alert('Failed to create app: ' + err);
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert('Error creating app: ' + e.message);
+    }
+    setAppIsLoading(false);
   };
 
-  const deleteApp = (id: string) => {
+  const deleteApp = async (id: string) => {
     setApplications(prev => prev.filter(a => a.id !== id));
     if (activeAppId === id) setActiveAppId(null);
+    try {
+      await fetch('/api/apps', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({ id })
+      });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const updateApp = (id: string, patch: Partial<Application>) => {
+  const updateApp = async (id: string, patch: Partial<Application>) => {
     setApplications(prev => prev.map(a =>
       a.id === id ? { ...a, ...patch, updatedAt: new Date().toISOString() } : a
     ));
+    try {
+      await fetch('/api/apps', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({ id, ...patch })
+      });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const toggleAppKb = (appId: string, kbId: string) => {
-    setApplications(prev => prev.map(a => {
-      if (a.id !== appId) return a;
-      const linked = a.linkedKbIds.includes(kbId)
-        ? a.linkedKbIds.filter(id => id !== kbId)
-        : [...a.linkedKbIds, kbId];
-      return { ...a, linkedKbIds: linked, updatedAt: new Date().toISOString() };
-    }));
+    const app = applications.find(a => a.id === appId);
+    if (!app) return;
+    const linked = app.linkedKbIds.includes(kbId)
+      ? app.linkedKbIds.filter(id => id !== kbId)
+      : [...app.linkedKbIds, kbId];
+    updateApp(appId, { linkedKbIds: linked });
   };
 
   // Send a message in the app playground (isolated per-app history + KB scope)
@@ -1559,38 +1595,64 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     const app = applications.find(a => a.id === appId);
     if (!app) return;
 
-    const userMsg: Message = {
+    const userMessageContent = appInput.trim();
+
+    // Optimistically add user message
+    const tempUserMsg: Message = {
       id: Date.now(),
       role: 'user',
-      content: appInput.trim(),
+      content: userMessageContent,
       timestamp: new Date().toISOString(),
     };
 
-    updateApp(appId, { messages: [...app.messages, userMsg] });
+    setApplications(prev => prev.map(a =>
+      a.id === appId
+        ? { ...a, messages: [...a.messages, tempUserMsg] }
+        : a
+    ));
+
     setAppInput('');
     setAppIsLoading(true);
     setAppError(null);
 
     try {
-      // Mock API call to simulate AI response
-      setTimeout(() => {
-        const aiMsg: Message = {
-          id: Date.now() + 1,
-          role: 'assistant',
-          content: `This is a simulated response for the application **${app.name}**.\n\nUsing model: \`${app.model}\`.\nKnowledge Bases: ${app.linkedKbIds.length > 0 ? app.linkedKbIds.join(', ') : 'None'}.`,
-          reasoning: generateSarcasticReasoning(userMsg.content, ''),
-          timestamp: new Date().toISOString(),
-        };
-        
-        setApplications(prev => prev.map(a =>
-          a.id === appId
-            ? { ...a, messages: [...a.messages.filter(m => m.id !== userMsg.id), userMsg, aiMsg], updatedAt: new Date().toISOString() }
-            : a
-        ));
-        setAppIsLoading(false);
-      }, 1500);
+      const response = await fetch('/api/app-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({
+          appId: app.id,
+          message: userMessageContent,
+          systemPrompt: app.systemPrompt,
+          model: app.model,
+          temperature: app.temperature,
+          maxTokens: app.maxTokens,
+          topP: 1, // Add to app settings if needed
+          history: app.messages.map(m => ({ role: m.role, content: m.content })),
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch AI response');
+      }
+
+      const data = await response.json();
+
+      setApplications(prev => prev.map(a =>
+        a.id === appId
+          ? {
+            ...a,
+            messages: [
+              ...a.messages.filter(m => m.id !== tempUserMsg.id),
+              data.userMessage,
+              data.aiMessage
+            ],
+            updatedAt: new Date().toISOString()
+          }
+          : a
+      ));
     } catch (err: any) {
       setAppError(err.message);
+    } finally {
       setAppIsLoading(false);
     }
   };
@@ -2048,32 +2110,32 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   const renderInputBox = () => {
     return (
-    <div className="relative flex flex-col bg-[#33302E] px-5 pt-5 pb-4 rounded-[16px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] transition-colors duration-200" style={{ minHeight: '120px' }}>
-      <textarea
-        ref={inputRef}
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Ask anything..."
-        disabled={isLoading}
-        rows={1}
-        className="w-full bg-transparent font-basel text-[15px] placeholder:text-[#6B6762] focus:outline-none resize-none overflow-y-auto text-[#F4F0EB] leading-relaxed flex-1"
-        style={{ height: 'auto', minHeight: '52px' }}
-        onInput={(e) => {
-          e.currentTarget.style.height = 'auto';
-          e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
-        }}
-      />
-      <div className="flex items-center justify-end mt-4">
-        <button
-          onClick={handleSend}
-          disabled={isLoading || !input.trim()}
-          className="w-7 h-7 flex items-center justify-center bg-transparent border border-[#57534E] hover:bg-[#403E3C] text-[#8C8880] hover:text-[#F4F0EB] rounded-[8px] transition-all disabled:opacity-30"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
-        </button>
+      <div className="relative flex flex-col bg-[#33302E] px-5 pt-5 pb-4 rounded-[16px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] transition-colors duration-200" style={{ minHeight: '120px' }}>
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Ask anything..."
+          disabled={isLoading}
+          rows={1}
+          className="w-full bg-transparent font-basel text-[15px] placeholder:text-[#6B6762] focus:outline-none resize-none overflow-y-auto text-[#F4F0EB] leading-relaxed flex-1"
+          style={{ height: 'auto', minHeight: '52px' }}
+          onInput={(e) => {
+            e.currentTarget.style.height = 'auto';
+            e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
+          }}
+        />
+        <div className="flex items-center justify-end mt-4">
+          <button
+            onClick={handleSend}
+            disabled={isLoading || !input.trim()}
+            className="w-7 h-7 flex items-center justify-center bg-transparent border border-[#57534E] hover:bg-[#403E3C] text-[#8C8880] hover:text-[#F4F0EB] rounded-[8px] transition-all disabled:opacity-30"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+          </button>
+        </div>
       </div>
-    </div>
     );
   };
 
@@ -2632,7 +2694,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                         {mockReasoningText}
                       </ReasoningContent>
                     </Reasoning>
-                    
+
                     {/* Once reasoning finishes or when step 3 starts, show the AI reply */}
                     {mockStep === 3 && (
                       <div className="mt-2 text-[#F4F0EB] leading-relaxed animate-message-appear">
@@ -2683,7 +2745,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 <Plus size={16} /> Create App
               </button>
             </div>
-            
+
             {applications.length === 0 ? (
               <div className="text-center py-16 border border-[#3D3A37] border-dashed rounded-2xl bg-[#1E1D1C]">
                 <AppWindow size={32} className="mx-auto text-[#6B6762] mb-4" />
@@ -2715,12 +2777,12 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
         </div>
       );
     }
-    
+
     const app = applications.find(a => a.id === activeAppId);
-        if (!app) return null;
-        
+    if (!app) return null;
+
     const renderAppInputBox = () => (
-      <div className="relative flex flex-col bg-[#33302E] px-5 pt-5 pb-4 rounded-[16px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] transition-colors duration-200" style={{ minHeight: '120px' }}>
+      <div className="relative flex flex-col bg-[#2A2826] px-4 pt-4 pb-3 rounded-[12px] border border-[#3D3A37] transition-colors duration-200">
         <textarea
           ref={appInputRef}
           value={appInput}
@@ -2731,197 +2793,268 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
               handleAppSend(app.id);
             }
           }}
-          placeholder="Ask your application..."
+          placeholder="Type your message..."
           disabled={appIsLoading}
           rows={1}
-          className="w-full bg-transparent font-basel text-[15px] placeholder:text-[#6B6762] focus:outline-none resize-none overflow-y-auto text-[#F4F0EB] leading-relaxed flex-1"
-          style={{ height: 'auto', minHeight: '52px' }}
+          className="w-full bg-transparent font-basel text-[14px] placeholder:text-[#6B6762] focus:outline-none resize-none overflow-y-auto text-[#F4F0EB] leading-relaxed flex-1"
+          style={{ height: 'auto', minHeight: '44px' }}
           onInput={(e) => {
             e.currentTarget.style.height = 'auto';
-            e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
+            e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 150) + 'px';
           }}
         />
-        <div className="flex items-center justify-end mt-4">
+        <div className="flex items-center justify-end mt-2">
           <button
             onClick={() => handleAppSend(app.id)}
             disabled={appIsLoading || !appInput.trim()}
-            className="w-7 h-7 flex items-center justify-center bg-transparent border border-[#57534E] hover:bg-[#403E3C] text-[#8C8880] hover:text-[#F4F0EB] rounded-[8px] transition-all disabled:opacity-30"
+            className="w-8 h-8 flex items-center justify-center bg-[#3D3A37] hover:bg-[#4A4744] text-[#F4F0EB] rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+            <Send size={14} />
           </button>
         </div>
       </div>
     );
-    
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden bg-[#252523]">
-        <header className="h-[60px] flex items-center justify-between px-4 lg:px-6 shrink-0 border-b border-[#3D3A37] bg-[#1E1D1C]">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/app')} className="p-1.5 hover:bg-[#3D3A37] rounded-md text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
-              <ChevronLeft size={18} />
-            </button>
-            <div className="flex items-center gap-2">
-              <AppWindow size={16} className="text-[#F4F0EB]" />
-              <span className="font-geist font-semibold text-[15px] text-[#F4F0EB]">{app.name}</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center bg-[#2A2826] p-1 rounded-lg border border-[#3D3A37]">
-            {[
-              { id: 'playground', label: 'Playground', icon: MessagesSquare },
-              { id: 'knowledge', label: 'Knowledge Base', icon: Database },
-              { id: 'settings', label: 'Settings', icon: SettingsIcon },
-            ].map(t => (
-              <button key={t.id} onClick={() => setAppTab(t.id as any)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${appTab === t.id ? 'bg-[#3D3A37] text-[#F4F0EB] shadow-sm' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>
-                <t.icon size={14} /> {t.label}
-              </button>
-            ))}
-          </div>
-        </header>
-        
-        {appTab === 'playground' && (
-          <div className="flex-1 flex flex-col overflow-hidden relative">
-            {app.messages.length === 0 ? (
-               <div className="flex-1 flex flex-col items-center justify-center px-6" style={{ paddingBottom: '8vh' }}>
-                 <h2 className="font-martina text-[#9C9890] text-center mb-8 text-[24px]">Playground initialized for {app.name}</h2>
-                 <div className="w-full max-w-[720px] mx-auto">{renderAppInputBox()}</div>
-               </div>
-            ) : (
-               <>
-                 <div className="flex-1 overflow-y-auto scroll-smooth">
-                   <div className="max-w-[760px] mx-auto px-6 py-8 flex flex-col space-y-8 pb-6">
-                     {app.messages.map(msg => (
-                       <div key={msg.id} className="flex flex-col w-full">
-                         {msg.role === 'user' ? (
-                           <div className="flex flex-col items-end w-full">
-                             <div className="bg-[#3A3735] text-[#F4F0EB] font-basel text-[15px] px-4 py-2.5 rounded-[20px] max-w-[560px]">{msg.content}</div>
-                           </div>
-                         ) : (
-                           <div className="flex flex-col items-start w-full">
-                             <div className="flex gap-4 w-full">
-                               <div className="w-[30px] h-[30px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-1">
-                                 <img src="/particles.png" className="w-[16px] h-[16px] opacity-80" alt="ai" />
-                               </div>
-                               <div className="flex-1 min-w-0 font-basel text-[15px] text-[#E8E6E3] prose-invert">
-                                 {msg.reasoning && (
-                                   <Reasoning isStreaming={false} initialSeconds={3} customStreaming={true}>
-                                     <ReasoningTrigger />
-                                     <ReasoningContent>{msg.reasoning}</ReasoningContent>
-                                   </Reasoning>
-                                 )}
-                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                               </div>
-                             </div>
-                           </div>
-                         )}
-                       </div>
-                     ))}
-                     {appIsLoading && (
-                       <div className="flex items-start w-full gap-4">
-                         <div className="w-[30px] h-[30px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-1">
-                           <img src="/particles.png" className="w-[16px] h-[16px] opacity-80 animate-pulse" alt="ai" />
-                         </div>
-                         <div className="flex-1">
-                           <Reasoning isStreaming={true}><ReasoningTrigger /><ReasoningContent /></Reasoning>
-                         </div>
-                       </div>
-                     )}
-                     <div ref={appMessagesEndRef} />
-                   </div>
-                 </div>
-                 <div className="w-full shrink-0 relative z-20">
-                   <div className="absolute inset-x-0 -top-12 h-12 pointer-events-none" style={{ background: 'linear-gradient(to top, #252523 0%, transparent 100%)' }} />
-                   <div className="bg-[#252523] px-4 lg:px-8 pb-3 pt-1">
-                     <div className="max-w-[720px] mx-auto">{renderAppInputBox()}</div>
-                   </div>
-                 </div>
-               </>
-            )}
-          </div>
-        )}
-        
-        {appTab === 'knowledge' && (
-          <div className="flex-1 overflow-y-auto p-8 font-geist">
-             <div className="max-w-[760px] mx-auto">
-                <h2 className="text-[20px] font-semibold text-[#F4F0EB] mb-6">Linked Knowledge Bases</h2>
-                <div className="space-y-3">
-                  {kbList.map(kb => {
-                    const isLinked = app.linkedKbIds.includes(kb.id);
-                    return (
-                      <div key={kb.id} className="flex items-center justify-between p-4 rounded-xl border border-[#3D3A37] bg-[#1E1D1C]">
-                        <div className="flex items-center gap-3">
-                          <Database size={18} className={isLinked ? 'text-[#8FAE97]' : 'text-[#8C8880]'} />
-                          <div>
-                            <div className="text-[14px] font-medium text-[#F4F0EB]">{kb.name}</div>
-                            <div className="text-[12px] text-[#8C8880]">ID: {kb.id}</div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const newIds = isLinked ? app.linkedKbIds.filter(id => id !== kb.id) : [...app.linkedKbIds, kb.id];
-                            updateApp(app.id, { linkedKbIds: newIds });
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${isLinked ? 'bg-[#1E2A22] border-[#2E4636] text-[#8FAE97] hover:bg-[#25362B]' : 'border-[#3D3A37] text-[#C7C2BC] hover:bg-[#3D3A37]'}`}
-                        >
-                          {isLinked ? 'Linked' : 'Link KB'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {kbList.length === 0 && (
-                    <div className="text-center py-8 text-[#8C8880] text-[13px]">No knowledge bases available. Create one in the Knowledge tab.</div>
-                  )}
-                </div>
-             </div>
-          </div>
-        )}
 
-        {appTab === 'settings' && (
-          <div className="flex-1 overflow-y-auto p-8 font-geist">
-            <div className="max-w-[600px] mx-auto space-y-6">
+    return (
+      <div className="flex-1 flex flex-col overflow-y-auto bg-[#252523] font-geist custom-scrollbar">
+        {/* Header */}
+        <div className="px-6 lg:px-10 py-8 max-w-[1200px] mx-auto w-full shrink-0">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-4">
+              <button onClick={() => navigate('/app')} className="mt-1 text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
+                <ChevronLeft size={22} />
+              </button>
               <div>
-                <label className="block text-[12px] text-[#8C8880] mb-2 font-medium uppercase tracking-wider">System Prompt</label>
-                <textarea
-                  value={appSettingsForm?.systemPrompt ?? app.systemPrompt}
-                  onChange={e => setAppSettingsForm(prev => ({ ...(prev || app), systemPrompt: e.target.value }))}
-                  className="w-full h-[120px] bg-[#1E1D1C] border border-[#3D3A37] rounded-xl p-3 text-[13px] text-[#F4F0EB] focus:outline-none focus:border-[#8C8880] resize-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[12px] text-[#8C8880] mb-2 font-medium uppercase tracking-wider">Model</label>
-                  <select
-                    value={appSettingsForm?.model ?? app.model}
-                    onChange={e => setAppSettingsForm(prev => ({ ...(prev || app), model: e.target.value }))}
-                    className="w-full bg-[#1E1D1C] border border-[#3D3A37] rounded-xl p-3 text-[13px] text-[#F4F0EB] focus:outline-none focus:border-[#8C8880] appearance-none"
-                  >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                    <option value="gpt-4o">GPT-4o</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[12px] text-[#8C8880] mb-2 font-medium uppercase tracking-wider">Temperature ({appSettingsForm?.temperature ?? app.temperature})</label>
-                  <input
-                    type="range"
-                    min="0" max="1" step="0.1"
-                    value={appSettingsForm?.temperature ?? app.temperature}
-                    onChange={e => setAppSettingsForm(prev => ({ ...(prev || app), temperature: parseFloat(e.target.value) }))}
-                    className="w-full mt-2"
-                  />
+                <h1 className="text-[28px] font-semibold tracking-tight text-[#F4F0EB] leading-none mb-2">{app.name}</h1>
+                <p className="text-[14px] text-[#8C8880]">{app.description || 'Assistant for your customers.'}</p>
+                <div className="mt-4 flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-400 text-[11px] font-semibold rounded-md border border-blue-500/20 uppercase tracking-wide">
+                    <Database size={12} /> {app.linkedKbIds.length} Knowledge Bases
+                  </span>
                 </div>
               </div>
-              <div className="pt-4 border-t border-[#3D3A37] flex justify-end">
+            </div>
+            <button className="flex items-center gap-2 px-4 py-2 bg-[#1E1D1C] border border-[#3D3A37] rounded-xl text-[13px] font-medium text-[#F4F0EB] hover:bg-[#2A2826] transition-colors">
+              <ArrowUpRight size={15} /> Guide
+            </button>
+          </div>
+        </div>
+
+        {/* Content Grid */}
+        <div className="px-6 lg:px-10 pb-12 max-w-[1200px] mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Left Column */}
+          <div className="lg:col-span-2 space-y-6">
+
+            {/* Playground */}
+            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl flex flex-col overflow-hidden h-[600px]">
+              <div className="px-5 py-4 border-b border-[#3D3A37] flex items-center justify-between bg-[#1E1D1C] shrink-0">
+                <h3 className="font-semibold text-[#F4F0EB] text-[15px] flex items-center gap-2">
+                  <MessagesSquare size={16} className="text-[#8C8880]" />
+                  Playground (Preview to your Chatbot)
+                </h3>
+                <select className="bg-transparent border border-[#3D3A37] text-[12px] rounded-lg px-2.5 py-1.5 text-[#8C8880] focus:outline-none focus:border-[#57534E]">
+                  <option>Minimal Chat</option>
+                </select>
+              </div>
+              <div className="flex-1 overflow-y-auto bg-[#252523] p-6 relative custom-scrollbar">
+                {app.messages.length === 0 ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <Bot size={32} className="text-[#3D3A37] mb-4" />
+                    <p className="text-[#6B6762] text-[14px]">Send a message to start testing</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col space-y-6 pb-6 max-w-full">
+                    {app.messages.map(msg => (
+                      <div key={msg.id} className="flex flex-col w-full">
+                        {msg.role === 'user' ? (
+                          <div className="flex flex-col items-end w-full">
+                            <div className="bg-[#3A3735] text-[#F4F0EB] font-basel text-[14px] px-4 py-2.5 rounded-[20px] max-w-[85%] break-words">{msg.content}</div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-start w-full">
+                            <div className="flex gap-3 w-full">
+                              <div className="w-[28px] h-[28px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-0.5">
+                                <img src="/particles.png" className="w-[14px] h-[14px] opacity-80" alt="ai" />
+                              </div>
+                              <div className="flex-1 min-w-0 font-basel text-[14px] text-[#E8E6E3] prose-invert">
+                                {msg.reasoning && (
+                                  <Reasoning isStreaming={false} initialSeconds={3} customStreaming={true}>
+                                    <ReasoningTrigger />
+                                    <ReasoningContent>{msg.reasoning}</ReasoningContent>
+                                  </Reasoning>
+                                )}
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {appIsLoading && (
+                      <div className="flex items-start w-full gap-3">
+                        <div className="w-[28px] h-[28px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-0.5">
+                          <img src="/particles.png" className="w-[14px] h-[14px] opacity-80 animate-pulse" alt="ai" />
+                        </div>
+                        <div className="flex-1">
+                          <Reasoning isStreaming={true}><ReasoningTrigger /><ReasoningContent /></Reasoning>
+                        </div>
+                      </div>
+                    )}
+                    <div ref={appMessagesEndRef} />
+                  </div>
+                )}
+              </div>
+              <div className="p-4 bg-[#1E1D1C] border-t border-[#3D3A37] shrink-0">
+                {renderAppInputBox()}
+              </div>
+            </div>
+
+            {/* API Credentials */}
+            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
+              <h3 className="font-semibold text-[#F4F0EB] text-[16px] mb-6">API Credentials</h3>
+              <div className="space-y-5">
+                <div>
+                  <div className="text-[11px] font-semibold text-[#8C8880] uppercase tracking-wider mb-2">APP ID</div>
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={app.appId || `app_${app.id.replace(/-/g, '')}`} className="flex-1 bg-transparent border border-[#3D3A37] rounded-xl px-4 py-2.5 text-[13px] text-[#C7C2BC] focus:outline-none" />
+                    <button className="flex items-center gap-2 px-3 py-2.5 border border-[#3D3A37] rounded-xl text-[12px] font-medium text-[#8C8880] hover:text-[#F4F0EB] hover:bg-[#2A2826] transition-colors shrink-0">
+                      <Copy size={14} /> Copy
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-[#8C8880] uppercase tracking-wider mb-2">API KEY</div>
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={app.apiKey || 'sk_live_...'} className="flex-1 bg-transparent border border-[#3D3A37] rounded-xl px-4 py-2.5 text-[13px] text-[#C7C2BC] focus:outline-none" />
+                    <button className="flex items-center gap-2 px-3 py-2.5 border border-[#3D3A37] rounded-xl text-[12px] font-medium text-[#8C8880] hover:text-[#F4F0EB] hover:bg-[#2A2826] transition-colors shrink-0">
+                      <Copy size={14} /> Copy
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Integration Code */}
+            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
+              <h3 className="font-semibold text-[#F4F0EB] text-[16px] mb-4">Integration Code</h3>
+              <div className="relative group">
+                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button className="p-1.5 bg-[#3D3A37] rounded-md text-[#8C8880] hover:text-[#F4F0EB]">
+                    <Copy size={14} />
+                  </button>
+                </div>
+                <div className="bg-[#2A2826] border border-[#3D3A37] rounded-xl overflow-hidden">
+                  <div className="px-4 py-2 border-b border-[#3D3A37] text-[11px] font-mono text-[#8C8880]">typescript</div>
+                  <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed text-[#D4D4D4] font-mono custom-scrollbar">
+                    <span className="text-[#C586C0]">import</span> {'{ InfuseClient }'} <span className="text-[#C586C0]">from</span> <span className="text-[#CE9178]">'infuseai-sdk'</span>;<br /><br />
+                    <span className="text-[#569CD6]">const</span> client = <span className="text-[#569CD6]">new</span> InfuseClient({'{'}<br />
+                    {'  '}clientId: <span className="text-[#CE9178]">'client_e7bcfb5cadf64f...'</span>,<br />
+                    {'  '}appId: <span className="text-[#CE9178]">'{app.appId || `app_${app.id.replace(/-/g, '').substring(0, 16)}...`}'</span>,<br />
+                    {'}'});<br /><br />
+                    <span className="text-[#6A9955]">// Send a message to the bot</span><br />
+                    <span className="text-[#569CD6]">const</span> response = <span className="text-[#C586C0]">await</span> client.chat.completions.create({'{'}<br />
+                    {'  '}messages: [{'{'} role: <span className="text-[#CE9178]">'user'</span>, content: <span className="text-[#CE9178]">'Hello!'</span> {'}'}]<br />
+                    {'}'});
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Right Column */}
+          <div className="space-y-6">
+
+            {/* System Prompt */}
+            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-[#F4F0EB] text-[15px]">System Prompt</h3>
+                <button className="px-3 py-1.5 bg-[#2A2826] border border-[#3D3A37] rounded-lg flex items-center gap-2 text-[11px] font-medium text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors">
+                  <Edit2 size={12} /> Edit
+                </button>
+              </div>
+              <div className="bg-[#252523] p-4 rounded-xl border border-[#3D3A37] text-[13px] text-[#A8A39B] leading-relaxed max-h-[160px] overflow-y-auto custom-scrollbar">
+                {app.systemPrompt || "No system prompt configured. The assistant will use default behavior."}
+              </div>
+            </div>
+
+            {/* Model Configuration */}
+            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-[#F4F0EB] text-[15px]">Model Configuration</h3>
+                <button className="px-3 py-1.5 bg-[#2A2826] border border-[#3D3A37] rounded-lg flex items-center gap-2 text-[11px] font-medium text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors">
+                  <Edit2 size={12} /> Edit
+                </button>
+              </div>
+              <div className="bg-[#252523] p-4 rounded-xl border border-[#3D3A37] mb-3">
+                <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Model</div>
+                <div className="text-[13.5px] font-medium text-[#F4F0EB]">{app.model}</div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-[#252523] p-3 rounded-xl border border-[#3D3A37] text-center">
+                  <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Temp</div>
+                  <div className="text-[14px] font-medium text-[#F4F0EB]">{app.temperature}</div>
+                </div>
+                <div className="bg-[#252523] p-3 rounded-xl border border-[#3D3A37] text-center">
+                  <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Tokens</div>
+                  <div className="text-[14px] font-medium text-[#F4F0EB]">{app.maxTokens || 1024}</div>
+                </div>
+                <div className="bg-[#252523] p-3 rounded-xl border border-[#3D3A37] text-center">
+                  <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Top P</div>
+                  <div className="text-[14px] font-medium text-[#F4F0EB]">1</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Knowledge Bases */}
+            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-[#F4F0EB] text-[15px]">Knowledge Bases</h3>
+                <button className="text-[12px] text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors font-medium">
+                  <SettingsIcon size={13} /> Manage
+                </button>
+              </div>
+              <div className="space-y-2.5">
+                {app.linkedKbIds.map(kbId => {
+                  const kb = kbList.find(k => k.id === kbId);
+                  return (
+                    <div key={kbId} className="bg-[#252523] px-3.5 py-3 rounded-xl border border-[#3D3A37] flex items-center gap-3 group hover:border-[#57534E] transition-colors cursor-pointer">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0 border border-blue-500/20">
+                        <span className="text-[10px] font-bold">KB</span>
+                      </div>
+                      <span className="text-[13px] font-medium text-[#F4F0EB] truncate flex-1">{kb?.name || 'Unknown KB'}</span>
+                    </div>
+                  )
+                })}
+                {app.linkedKbIds.length === 0 && (
+                  <div className="text-[13px] text-[#8C8880] py-2">No knowledge bases linked.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-6">
+              <h3 className="font-semibold text-red-400 text-[15px] mb-4">Danger Zone</h3>
+              <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20">
+                <div className="text-[13px] text-red-400 font-medium">Delete this App</div>
+                <div className="text-[12px] text-red-400/70 mt-1 mb-4 leading-relaxed">Once deleted, it cannot be recovered. Please be certain.</div>
                 <button
-                  onClick={() => { if(appSettingsForm) { updateApp(app.id, appSettingsForm); setAppSettingsForm(null); } }}
-                  className="btn-bump btn-bump-accent px-5 py-2 text-[13px]"
-                  disabled={!appSettingsForm}
+                  className="px-4 py-2.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-[12px] font-medium transition-colors w-full"
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to delete ${app.name}?`)) {
+                      setApplications(prev => prev.filter(a => a.id !== app.id));
+                      setActiveAppId(null);
+                    }
+                  }}
                 >
-                  Save Settings
+                  Delete Application
                 </button>
               </div>
             </div>
+
           </div>
-        )}
+        </div>
       </div>
     );
   };
@@ -3041,10 +3174,65 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 </>
               )}
 
-                            </div>
             </div>
+          </div>
         );
       })()}
+
+      {/* ── Create App Modal ── */}
+      {showCreateApp && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setShowCreateApp(false)}>
+          <div className="bg-[#252523] border border-[#3D3A37] rounded-2xl w-full max-w-[460px] mx-4 shadow-2xl overflow-hidden flex flex-col font-geist" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-5 border-b border-[#3D3A37] flex items-center justify-between bg-[#1E1D1C]">
+              <h3 className="text-[18px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-tight flex items-center gap-2">
+                <AppWindow size={18} className="text-[#8C8880]" />
+                Create Application
+              </h3>
+              <button onClick={() => setShowCreateApp(false)} className="text-[#6B6762] hover:text-[#F4F0EB] transition-colors p-1 rounded-md hover:bg-[#3D3A37]">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-[12px] font-medium text-[#8C8880] uppercase tracking-wider mb-2">Application Name <span className="text-red-400">*</span></label>
+                <input
+                  type="text"
+                  value={newAppName}
+                  onChange={e => setNewAppName(e.target.value)}
+                  placeholder="e.g. City Coffee Bot"
+                  className="w-full bg-[#1E1D1C] border border-[#3D3A37] rounded-xl px-4 py-3 text-[14px] text-[#F4F0EB] focus:outline-none focus:border-[#8C8880] transition-colors"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') createApp(); }}
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-[#8C8880] uppercase tracking-wider mb-2">Description</label>
+                <textarea
+                  value={newAppDesc}
+                  onChange={e => setNewAppDesc(e.target.value)}
+                  placeholder="e.g. Assistant for City Coffee Shop customers."
+                  rows={3}
+                  className="w-full bg-[#1E1D1C] border border-[#3D3A37] rounded-xl px-4 py-3 text-[14px] text-[#F4F0EB] focus:outline-none focus:border-[#8C8880] resize-none transition-colors"
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); createApp(); } }}
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-[#3D3A37] flex items-center justify-end gap-3 bg-[#1E1D1C]">
+              <button onClick={() => setShowCreateApp(false)} className="px-4 py-2 text-[13px] font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={createApp}
+                disabled={!newAppName.trim() || appIsLoading}
+                className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[120px]"
+              >
+                {appIsLoading ? <Loader2 size={16} className="animate-spin" /> : 'Create App'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rename Modal */}
       {renameModal && (

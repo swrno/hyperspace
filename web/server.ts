@@ -13,6 +13,8 @@ import statsHandler from './api/stats.js';
 import graphHandler from './api/graph.js';
 import { authorizeHandler, callbackHandler } from './api/oauth.js';
 import { syncAllDue } from './api/ingest.js';
+import appsHandler from './api/apps.js';
+import appChatHandler from './api/app-chat.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +42,16 @@ app.all('/api/chats', async (req, res) => {
 // Admin Users Management Endpoint
 app.all('/api/admin/users', async (req, res) => {
   await adminUsersHandler(req, res);
+});
+
+// Applications Endpoint
+app.all('/api/apps', async (req, res) => {
+  await appsHandler(req, res);
+});
+
+// App Playground Chat Endpoint
+app.post('/api/app-chat', async (req, res) => {
+  await appChatHandler(req, res);
 });
 
 // Knowledge Source Connectors Endpoint
@@ -79,7 +91,7 @@ app.all('/api/graph', async (req, res) => {
 // vercel.json → builds/routes), so we must NOT bind a port or start the long-
 // running poll loop there. Locally / on any normal Node host we do both.
 if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 
     // Polling safety net / "update every N minutes" delta loop (architecture §7).
@@ -91,6 +103,12 @@ if (!process.env.VERCEL) {
       );
     }, SYNC_INTERVAL_MINUTES * 60 * 1000);
   });
+
+  // Graceful shutdown to prevent EADDRINUSE on hot-reloads
+  const cleanup = () => server.close(() => process.exit(0));
+  process.on('SIGTERM', cleanup);
+  process.on('SIGINT', cleanup);
+  process.once('SIGUSR2', () => server.close(() => process.kill(process.pid, 'SIGUSR2')));
 }
 
 // Vercel's @vercel/node runtime invokes this default export as (req, res).

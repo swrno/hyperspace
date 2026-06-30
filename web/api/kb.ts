@@ -3,6 +3,9 @@ import { getDb } from './mongodb.js';
 import { verifyToken } from './auth.js';
 import { ingest as cogneeIngest, cognify, formatConnectorPayload } from './cognee.js';
 import { textFromBase64 } from './lib/pdf.js';
+import { getConnection, getAccessToken } from './connections.js';
+import * as github from './lib/github.js';
+import { entitiesToDocument } from './lib/schema.js';
 
 /** Per-KB Cognee tag so a knowledge base's graph is built only from its own
  *  documents and attached sources (README §4 — graph "based on sources"). */
@@ -115,7 +118,7 @@ export default async function handler(req: Request, res: Response) {
         // reason over this document. Tag with this KB's nodeSet so its graph is
         // scoped to its own documents and sources.
         if (content.trim()) {
-          const header = `# Knowledge Base Document: ${entry.name}\n\n`;
+          const header = `# Knowledge Base Document: ${entry.name}\nKnowledge Base ID: ${kbId}\n\n`;
           cogneeIngest(header + content.slice(0, 100000), {
             userId: user.uid,
             nodeSet: ['kb', kbNodeSet(kbId)],
@@ -157,9 +160,31 @@ export default async function handler(req: Request, res: Response) {
           { $push: { sources: source }, $set: { updatedAt: now } }
         );
         if (source.items.length) {
-          const payload = formatConnectorPayload(user.uid, user.email, platform, source.items);
+          const payload = formatConnectorPayload(kbId, user.uid, user.email, platform, source.items);
           cogneeIngest(payload, { userId: user.uid, nodeSet: ['kb', kbNodeSet(kbId)] })
             .catch((e) => console.warn('KB source Cognee ingest failed (non-fatal):', e.message));
+
+          if (platform === 'github') {
+            // Background ingestion of real GitHub data
+            (async () => {
+              try {
+                const conn = await getConnection(user.uid, 'github');
+                if (!conn) throw new Error('No GitHub connection');
+                const token = await getAccessToken(conn);
+                const repoNames = source.items.map(i => i.name);
+                const { entities } = await github.snapshot(token, repoNames);
+                // Ingest in batches of 25
+                for (let i = 0; i < entities.length; i += 25) {
+                  const batch = entities.slice(i, i + 25);
+                  const doc = entitiesToDocument(batch, `github knowledge`);
+                  const kbDoc = `# Knowledge Base ID: ${kbId}\n\n${doc}`;
+                  await cogneeIngest(kbDoc, { userId: user.uid, nodeSet: ['kb', kbNodeSet(kbId)] });
+                }
+              } catch (err: any) {
+                console.error('KB Github snapshot ingest failed:', err.message);
+              }
+            })();
+          }
         }
         return res.status(200).json({ success: true, source });
       }

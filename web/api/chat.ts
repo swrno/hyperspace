@@ -105,7 +105,7 @@ export const MODE_STYLE = {
 const MODES = {
   normal: {
     searchType: 'GRAPH_COMPLETION', topK: 8, timeout: 6000, maxTokens: 1024,
-    chain: [['groq', 'openai/gpt-oss-120b'], ['fireworks', 'accounts/fireworks/models/gpt-oss-120b'], ['gemini', 'gemini-2.5-flash']],
+    chain: [['groq', 'openai/gpt-oss-120b'], ['fireworks', 'accounts/fireworks/models/gpt-oss-120b'], ['gemini', 'qwen/qwen3.6-27b']],
   },
   deep: {
     searchType: 'GRAPH_COMPLETION_DECOMPOSITION', topK: 12, timeout: 10000, maxTokens: 2800,
