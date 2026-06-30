@@ -340,8 +340,7 @@ export default function KbInsights({ idToken, kb, refreshKey = 0 }: { idToken: s
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-[1080px] mx-auto px-6 lg:px-10 py-7 space-y-5">
+    <div className="space-y-5">
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
           <StatCard label="Graph nodes" value={nodes} color="#C9A66B" Icon={Network} spark={timeline.docSer.map((d, i) => d + timeline.itemSer[i])} />
@@ -383,7 +382,6 @@ export default function KbInsights({ idToken, kb, refreshKey = 0 }: { idToken: s
             {composition.length ? <BarList data={composition} /> : <p className="text-[12.5px] font-geist text-[#8C8880] py-8 text-center">The graph is still building.</p>}
           </div>
         </div>
-      </div>
     </div>
   );
 }

@@ -1416,12 +1416,21 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   // Sync activeScreen from URL path
   useEffect(() => {
-    const p = location.pathname;
+    const p = window.location.pathname;
     if (p.startsWith('/app')) setActiveScreen('applications');
     else if (p.startsWith('/kb')) setActiveScreen('knowledge');
     else if (p.startsWith('/integration')) setActiveScreen('integrations');
     else if (p === '/' || (!p.startsWith('/c') && !p.startsWith('/login'))) setActiveScreen('dashboard');
   }, [location.pathname]);
+
+  const handleNavigate = (screen: ActiveScreen) => {
+    setActiveScreen(screen);
+    if (screen === 'knowledge') navigate('/kb');
+    else if (screen === 'applications') navigate('/app');
+    else if (screen === 'integrations') navigate('/integration');
+    else if (screen === 'dashboard') navigate('/');
+    else if (screen === 'admin') navigate('/admin');
+  };
 
   // Sync activeAppId from URL param
   useEffect(() => {
@@ -2683,7 +2692,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {applications.map(app => (
-                  <div key={app.id} onClick={() => setActiveAppId(app.id)} className="card-elev rounded-2xl p-5 cursor-pointer hover:border-[#8C8880] group flex flex-col gap-3">
+                  <div key={app.id} onClick={() => navigate(`/app/${app.id}`)} className="card-elev rounded-2xl p-5 cursor-pointer hover:border-[#8C8880] group flex flex-col gap-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-[#3D3A37] flex items-center justify-center shrink-0">
                         <Bot size={18} className="text-[#F4F0EB]" />
@@ -2748,7 +2757,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       <div className="flex-1 flex flex-col overflow-hidden bg-[#252523]">
         <header className="h-[60px] flex items-center justify-between px-4 lg:px-6 shrink-0 border-b border-[#3D3A37] bg-[#1E1D1C]">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setActiveAppId(null); setAppTab('playground'); }} className="p-1.5 hover:bg-[#3D3A37] rounded-md text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
+            <button onClick={() => navigate('/app')} className="p-1.5 hover:bg-[#3D3A37] rounded-md text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
               <ChevronLeft size={18} />
             </button>
             <div className="flex items-center gap-2">
@@ -2948,11 +2957,11 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           renderAdminDashboard()
         ) : activeScreen === 'dashboard' ? (
           <ErrorBoundary label="the dashboard">
-            <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={setActiveScreen} onAsk={onAskFromHub} platformIcon={platformIcon} />
+            <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={handleNavigate} onAsk={onAskFromHub} platformIcon={platformIcon} />
           </ErrorBoundary>
         ) : activeScreen === 'knowledge' ? (
           <ErrorBoundary label="knowledge bases">
-            <KnowledgeBases idToken={idToken} connectors={connectors} platformIcon={platformIcon} onAsk={onAskFromHub} onOpenIntegrations={() => setActiveScreen('integrations')} />
+            <KnowledgeBases idToken={idToken} connectors={connectors} platformIcon={platformIcon} onAsk={onAskFromHub} onOpenIntegrations={() => handleNavigate('integrations')} />
           </ErrorBoundary>
         ) : activeScreen === 'integrations' ? (
           renderIntegrations()
