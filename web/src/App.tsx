@@ -1670,9 +1670,10 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           model: app.model,
           temperature: app.temperature,
           maxTokens: app.maxTokens,
-          topP: 1, // Add to app settings if needed
+          topP: 1,
           history: sessionHistory,
-          sessionId: activeSessionId
+          sessionId: activeSessionId,
+          linkedKbIds: app.linkedKbIds
         })
       });
 
