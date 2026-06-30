@@ -33,6 +33,7 @@ export interface Message {
   content: string;
   reasoning?: string;
   timestamp: string;
+  sessionId?: string;
 }
 
 export interface Chat {

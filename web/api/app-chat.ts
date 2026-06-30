@@ -7,7 +7,7 @@ export default async function appChatHandler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { appId, message, systemPrompt, model, temperature, maxTokens, topP, history = [], linkedKbIds = [] } = req.body;
+    const { appId, message, systemPrompt, model, temperature, maxTokens, topP, history = [], linkedKbIds = [], sessionId = 'default' } = req.body;
 
     if (!appId || !message) {
       return res.status(400).json({ error: 'appId and message are required' });
@@ -95,8 +95,8 @@ export default async function appChatHandler(req: Request, res: Response) {
     const db = await getDb();
     const appsCollection = db.collection('apps');
     
-    const userMsgObj = { id: Date.now(), role: 'user', content: message, timestamp: new Date().toISOString() };
-    const aiMsgObj = { id: Date.now() + 1, role: 'assistant', content: replyContent, timestamp: new Date().toISOString() };
+    const userMsgObj = { id: Date.now(), role: 'user', content: message, timestamp: new Date().toISOString(), sessionId };
+    const aiMsgObj = { id: Date.now() + 1, role: 'assistant', content: replyContent, timestamp: new Date().toISOString(), sessionId };
 
     await appsCollection.updateOne(
       { id: appId },

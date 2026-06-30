@@ -969,6 +969,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   // Applications state
   const [applications, setApplications] = useState<Application[]>([]);
   const [activeAppId, setActiveAppId] = useState<string | null>(null);
+  const [appSessions, setAppSessions] = useState<Record<string, string>>({});
   const [appTab, setAppTab] = useState<'playground' | 'knowledge' | 'settings'>('playground');
   const [showCreateApp, setShowCreateApp] = useState(false);
   const [newAppName, setNewAppName] = useState('');
@@ -982,7 +983,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const [appSettingsForm, setAppSettingsForm] = useState<{
     systemPrompt: string; model: string; temperature: number; maxTokens: number;
   } | null>(null);
-  const [editingAppField, setEditingAppField] = useState<'prompt' | 'model' | null>(null);
+  const [editingAppField, setEditingAppField] = useState<'prompt' | 'model' | 'kbs' | null>(null);
   const [promptTopic, setPromptTopic] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
 
@@ -1635,6 +1636,9 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     const app = applications.find(a => a.id === appId);
     if (!app) return;
 
+    const activeSessionId = appSessions[appId] || 'default';
+    const sessionHistory = app.messages.filter(m => (m.sessionId || 'default') === activeSessionId).map(m => ({ role: m.role, content: m.content }));
+
     const userMessageContent = appInput.trim();
 
     // Optimistically add user message
@@ -1643,6 +1647,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       role: 'user',
       content: userMessageContent,
       timestamp: new Date().toISOString(),
+      sessionId: activeSessionId
     };
 
     setApplications(prev => prev.map(a =>
@@ -1667,7 +1672,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           temperature: app.temperature,
           maxTokens: app.maxTokens,
           topP: 1, // Add to app settings if needed
-          history: app.messages.map(m => ({ role: m.role, content: m.content })),
+          history: sessionHistory,
+          sessionId: activeSessionId
         })
       });
 
@@ -2893,20 +2899,44 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                   <MessagesSquare size={16} className="text-[#8C8880]" />
                   Playground (Preview to your Chatbot)
                 </h3>
-                <select className="bg-transparent border border-[#3D3A37] text-[12px] rounded-lg px-2.5 py-1.5 text-[#8C8880] focus:outline-none focus:border-[#57534E]">
-                  <option>Minimal Chat</option>
-                </select>
+                <div className="flex items-center gap-2">
+                  <select 
+                    value={appSessions[app.id] || 'default'}
+                    onChange={(e) => setAppSessions(prev => ({ ...prev, [app.id]: e.target.value }))}
+                    className="bg-transparent border border-[#3D3A37] text-[12px] rounded-lg px-2.5 py-1.5 text-[#8C8880] focus:outline-none focus:border-[#57534E]"
+                  >
+                    {(() => {
+                      const sessions = Array.from(new Set(app.messages.map(m => m.sessionId || 'default')));
+                      if (!sessions.includes(appSessions[app.id] || 'default')) {
+                        sessions.push(appSessions[app.id] || 'default');
+                      }
+                      return sessions.map((s, idx) => (
+                        <option key={s} value={s}>{s === 'default' ? 'Default Session' : `Session ${idx}`}</option>
+                      ));
+                    })()}
+                  </select>
+                  <button 
+                    onClick={() => setAppSessions(prev => ({ ...prev, [app.id]: `session_${Date.now()}` }))}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A66B] rounded-lg text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors"
+                  >
+                    <Plus size={12} /> New Chat
+                  </button>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto bg-[#252523] p-6 relative custom-scrollbar">
-                {app.messages.length === 0 ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <Bot size={32} className="text-[#3D3A37] mb-4" />
-                    <p className="text-[#6B6762] text-[14px]">Send a message to start testing</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col space-y-6 pb-6 max-w-full">
-                    {app.messages.map(msg => (
-                      <div key={msg.id} className="flex flex-col w-full">
+                {(() => {
+                  const currentSessionId = appSessions[app.id] || 'default';
+                  const currentMessages = app.messages.filter(m => (m.sessionId || 'default') === currentSessionId);
+                  
+                  return currentMessages.length === 0 ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <Bot size={32} className="text-[#3D3A37] mb-4" />
+                      <p className="text-[#6B6762] text-[14px]">Send a message to start testing</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col space-y-6 pb-6 max-w-full">
+                      {currentMessages.map(msg => (
+                        <div key={msg.id} className="flex flex-col w-full">
                         {msg.role === 'user' ? (
                           <div className="flex flex-col items-end w-full">
                             <div className="bg-[#3A3735] text-[#F4F0EB] font-basel text-[14px] px-4 py-2.5 rounded-[20px] max-w-[85%] break-words">{msg.content}</div>
@@ -2951,7 +2981,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                     )}
                     <div ref={appMessagesEndRef} />
                   </div>
-                )}
+                ); })()}
               </div>
               <div className="p-4 bg-[#1E1D1C] border-t border-[#3D3A37] shrink-0">
                 {renderAppInputBox()}
@@ -3151,24 +3181,64 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-[#F4F0EB] text-[15px]">Knowledge Bases</h3>
-                <button className="text-[12px] text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors font-medium">
-                  <SettingsIcon size={13} /> Manage
-                </button>
+                {editingAppField === 'kbs' ? (
+                  <button onClick={() => setEditingAppField(null)} className="px-3 py-1.5 bg-[#C9A66B] border border-[#C9A66B] rounded-lg flex items-center gap-2 text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors">
+                    <Check size={12} /> Done
+                  </button>
+                ) : (
+                  <button onClick={() => setEditingAppField('kbs')} className="text-[12px] text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors font-medium">
+                    <SettingsIcon size={13} /> Manage
+                  </button>
+                )}
               </div>
               <div className="space-y-2.5">
-                {app.linkedKbIds.map(kbId => {
-                  const kb = kbList.find(k => k.id === kbId);
-                  return (
-                    <div key={kbId} className="bg-[#252523] px-3.5 py-3 rounded-xl border border-[#3D3A37] flex items-center gap-3 group hover:border-[#57534E] transition-colors cursor-pointer">
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0 border border-blue-500/20">
+                {editingAppField === 'kbs' ? (
+                  kbList.length > 0 ? kbList.map(kb => (
+                    <div 
+                      key={kb.id} 
+                      onClick={() => toggleAppKb(app.id, kb.id)}
+                      className={`px-3.5 py-3 rounded-xl border flex items-center gap-3 group transition-colors cursor-pointer ${
+                        app.linkedKbIds.includes(kb.id) 
+                          ? 'bg-[#C9A66B]/10 border-[#C9A66B]/30' 
+                          : 'bg-[#252523] border-[#3D3A37] hover:border-[#57534E]'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
+                        app.linkedKbIds.includes(kb.id)
+                          ? 'bg-[#C9A66B]/20 text-[#C9A66B] border-[#C9A66B]/30'
+                          : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      }`}>
                         <span className="text-[10px] font-bold">KB</span>
                       </div>
-                      <span className="text-[13px] font-medium text-[#F4F0EB] truncate flex-1">{kb?.name || 'Unknown KB'}</span>
+                      <span className="text-[13px] font-medium text-[#F4F0EB] truncate flex-1">{kb.name}</span>
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                        app.linkedKbIds.includes(kb.id)
+                          ? 'bg-[#C9A66B] border-[#C9A66B] text-[#1A1917]'
+                          : 'border-[#57534E] text-transparent'
+                      }`}>
+                        <Check size={10} />
+                      </div>
                     </div>
+                  )) : (
+                    <div className="text-[13px] text-[#8C8880] py-2">No knowledge bases available. Create one in the Knowledge Base tab.</div>
                   )
-                })}
-                {app.linkedKbIds.length === 0 && (
-                  <div className="text-[13px] text-[#8C8880] py-2">No knowledge bases linked.</div>
+                ) : (
+                  <>
+                    {app.linkedKbIds.map(kbId => {
+                      const kb = kbList.find(k => k.id === kbId);
+                      return (
+                        <div key={kbId} className="bg-[#252523] px-3.5 py-3 rounded-xl border border-[#3D3A37] flex items-center gap-3 group hover:border-[#57534E] transition-colors cursor-pointer">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0 border border-blue-500/20">
+                            <span className="text-[10px] font-bold">KB</span>
+                          </div>
+                          <span className="text-[13px] font-medium text-[#F4F0EB] truncate flex-1">{kb?.name || 'Unknown KB'}</span>
+                        </div>
+                      )
+                    })}
+                    {app.linkedKbIds.length === 0 && (
+                      <div className="text-[13px] text-[#8C8880] py-2">No knowledge bases linked.</div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
