@@ -1111,16 +1111,20 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   // Lightweight knowledge-base list for the chat scope picker (id + name only).
   const loadKbList = async (token: string | null) => {
-    if (!token) { setKbList([]); return; }
+    // Mocked to use localStorage instead of API
     try {
-      const res = await fetch('/api/kb', { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const data = await res.json();
-        setKbList((data.kbs || []).map((k: { id: string; name: string }) => ({ id: k.id, name: k.name })));
+      const stored = localStorage.getItem('hs_kbs');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setKbList((parsed || []).map((k: { id: string; name: string }) => ({ id: k.id, name: k.name })));
+      } else {
+        setKbList([]);
       }
-    } catch { /* ignore */ }
+    } catch {
+      setKbList([]);
+    }
   };
-  useEffect(() => { setSelectedKbId(null); loadKbList(idToken); }, [idToken]);
+  useEffect(() => { setSelectedKbId(null); loadKbList(idToken); }, [idToken, activeScreen]);
 
   // Returning from a real OAuth handshake: /?screen=integrations&connected=<provider>
   useEffect(() => {
@@ -1595,38 +1599,25 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     setAppError(null);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({
-          message: userMsg.content,
-          history: app.messages.map(m => ({ role: m.role, content: m.content })),
-          model: app.model,
-          kbId: app.linkedKbIds[0] || undefined,
-          kbIds: app.linkedKbIds.length > 0 ? app.linkedKbIds : undefined,
-          systemPrompt: app.systemPrompt,
-          temperature: app.temperature,
-          maxTokens: app.maxTokens,
-        }),
-      });
-      if (!response.ok) { const e = await response.json(); throw new Error(e.error || 'Failed'); }
-      const data = await response.json();
-      const aiMsg: Message = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: data.response,
-        reasoning: generateSarcasticReasoning(userMsg.content, data.response),
-        timestamp: new Date().toISOString(),
-      };
-      // Re-fetch the latest app (state may have updated)
-      setApplications(prev => prev.map(a =>
-        a.id === appId
-          ? { ...a, messages: [...a.messages.filter(m => m.id !== userMsg.id), userMsg, aiMsg], updatedAt: new Date().toISOString() }
-          : a
-      ));
+      // Mock API call to simulate AI response
+      setTimeout(() => {
+        const aiMsg: Message = {
+          id: Date.now() + 1,
+          role: 'assistant',
+          content: `This is a simulated response for the application **${app.name}**.\n\nUsing model: \`${app.model}\`.\nKnowledge Bases: ${app.linkedKbIds.length > 0 ? app.linkedKbIds.join(', ') : 'None'}.`,
+          reasoning: generateSarcasticReasoning(userMsg.content, ''),
+          timestamp: new Date().toISOString(),
+        };
+        
+        setApplications(prev => prev.map(a =>
+          a.id === appId
+            ? { ...a, messages: [...a.messages.filter(m => m.id !== userMsg.id), userMsg, aiMsg], updatedAt: new Date().toISOString() }
+            : a
+        ));
+        setAppIsLoading(false);
+      }, 1500);
     } catch (err: any) {
       setAppError(err.message);
-    } finally {
       setAppIsLoading(false);
     }
   };
@@ -1991,117 +1982,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           );
         })}
       </div>
-
-      {!isSidebarCollapsed && <div className="mx-4 my-3 h-px bg-[#33302E]" />}
-
-      {isSidebarCollapsed ? (
-        <div className="flex flex-col gap-1 items-center mt-1">
-          <button
-            onClick={() => createNewChat()}
-            className="flex items-center justify-center p-2 rounded-lg text-[#A8A39B] hover:text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors"
-            title="New chat"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10.5V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14l4-4h6" /><line x1="16" y1="21" x2="22" y2="21" /><line x1="19" y1="18" x2="19" y2="24" /></svg>
-          </button>
-          <button
-            onClick={() => { setIsSearchOpen(true); setSearchQuery(''); }}
-            className="flex items-center justify-center p-2 rounded-lg text-[#A8A39B] hover:text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors"
-            title="Search chats"
-          >
-            <Search size={18} strokeWidth={2} />
-          </button>
-        </div>
-      ) : (
-        <div className="px-4 mt-1 flex items-center justify-between">
-          <span className="text-[11px] font-geist font-semibold uppercase tracking-[0.12em] text-[#8C8880]">Chats</span>
-          <div className="flex items-center gap-0.5">
-            <button
-              onClick={() => { setIsSearchOpen(true); setSearchQuery(''); }}
-              className="p-1.5 rounded-md text-[#8C8880] hover:text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors"
-              title="Search chats"
-            >
-              <Search size={16} strokeWidth={2} />
-            </button>
-            <button
-              onClick={() => createNewChat()}
-              className="p-1.5 rounded-md text-[#8C8880] hover:text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors"
-              title="New chat"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10.5V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14l4-4h6" /><line x1="16" y1="21" x2="22" y2="21" /><line x1="19" y1="18" x2="19" y2="24" /></svg>
-            </button>
-          </div>
-        </div>
-      )}
-
-
-      {!isSidebarCollapsed && (
-        <div className="flex-1 overflow-y-auto px-3 mt-2 space-y-6 scrollbar-thin">
-          {Object.entries(chatGroups).map(([group, groupChats]) => (
-            groupChats.length > 0 && (
-              <div key={group}>
-                <h3 className="text-[11px] font-normal text-[#8C8880] mb-2 px-2 uppercase tracking-widest">
-                  {group === 'today' ? 'Today' : group === 'yesterday' ? 'Yesterday' : group === 'last7Days' ? 'Previous 7 Days' : 'Older'}
-                </h3>
-                <div className="space-y-0.5">
-                  {groupChats.map((chat, idx) => {
-                    const IconLetter = idx % 3 === 0 ? 'M' : idx % 3 === 1 ? 'A' : 'M';
-                    const isActive = chat.id === currentChatId;
-                    return (
-                      <div
-                        key={chat.id}
-                        className={`group relative flex items-center gap-2.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${isActive ? 'bg-[#3D3A37]' : 'hover:bg-[#2E2C2A]'}`}
-                        onClick={() => { navigate(`/c/${chat.id}`); setIsSidebarOpen(false); }}
-                      >
-
-
-                        {/* Title */}
-                        <span className="truncate text-[14px] leading-[20px] font-normal font-basel text-[#F4F0EB] flex-1">{chat.title}</span>
-
-                        {/* 3-dots button - visible on hover */}
-                        <div className="relative" onClick={e => e.stopPropagation()}>
-                          <button
-                            id={`menu-btn-${chat.id}`}
-                            onClick={() => setOpenMenuId(openMenuId === chat.id ? null : chat.id)}
-                            className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-[#403E3C] text-[#8C8880] hover:text-[#F4F0EB] transition-all"
-                          >
-                            <MoreHorizontal size={14} />
-                          </button>
-
-                          {/* Dropdown */}
-                          {openMenuId === chat.id && (
-                            <div className="absolute right-0 top-6 z-50 bg-[#2A2826] border border-[#403E3C] rounded-lg shadow-xl overflow-hidden min-w-[130px]">
-                              <button
-                                onClick={() => {
-                                  setOpenMenuId(null);
-                                  setRenameModal({ chatId: chat.id, currentTitle: chat.title });
-                                }}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-basel text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors text-left"
-                              >
-                                <Edit2 size={13} className="text-[#8C8880]" />
-                                Rename
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setOpenMenuId(null);
-                                  setDeleteModal({ chatId: chat.id });
-                                }}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-basel text-red-400 hover:bg-[#3D3A37] transition-colors text-left"
-                              >
-                                <Trash2 size={13} className="text-red-400" />
-                                Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )
-          ))}
-        </div>
-      )}
 
       {isSidebarCollapsed && <div className="flex-1"></div>}
 
@@ -2815,6 +2695,264 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     );
   }
 
+
+  const renderApplications = () => {
+    if (!activeAppId) {
+      return (
+        <div className="flex-1 overflow-y-auto bg-[#252523] font-geist animate-fade-in p-6 lg:p-10">
+          <div className="max-w-[1180px] mx-auto">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className="text-[30px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-none">Applications</h1>
+                <p className="text-[13.5px] text-[#8C8880] mt-2">Custom AI apps with specific instructions and knowledge scope.</p>
+              </div>
+              <button onClick={() => setShowCreateApp(true)} className="btn-bump btn-bump-accent px-4 py-2 text-[13px] flex items-center gap-2">
+                <Plus size={16} /> Create App
+              </button>
+            </div>
+            
+            {applications.length === 0 ? (
+              <div className="text-center py-16 border border-[#3D3A37] border-dashed rounded-2xl bg-[#1E1D1C]">
+                <AppWindow size={32} className="mx-auto text-[#6B6762] mb-4" />
+                <p className="text-[14px] text-[#8C8880]">No applications created yet.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {applications.map(app => (
+                  <div key={app.id} onClick={() => setActiveAppId(app.id)} className="card-elev rounded-2xl p-5 cursor-pointer hover:border-[#8C8880] group flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-[#3D3A37] flex items-center justify-center shrink-0">
+                        <Bot size={18} className="text-[#F4F0EB]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-[16px] font-semibold text-[#F4F0EB] truncate">{app.name}</h3>
+                        <p className="text-[12px] text-[#8C8880]">{app.linkedKbIds.length} Linked KB{app.linkedKbIds.length !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    {app.description && <p className="text-[12.5px] text-[#A8A39B] line-clamp-2">{app.description}</p>}
+                    <div className="mt-auto pt-3 border-t border-[#33302E] flex justify-between items-center text-[11px] text-[#6B6762]">
+                      <span>{app.model}</span>
+                      <span className="opacity-0 group-hover:opacity-100 transition-opacity">Open App <ArrowRight size={12} className="inline ml-1" /></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+    
+    const app = applications.find(a => a.id === activeAppId);
+        if (!app) return null;
+        
+    const renderAppInputBox = () => (
+      <div className="relative flex flex-col bg-[#33302E] px-5 pt-5 pb-4 rounded-[16px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] transition-colors duration-200" style={{ minHeight: '120px' }}>
+        <textarea
+          ref={appInputRef}
+          value={appInput}
+          onChange={(e) => setAppInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleAppSend(app.id);
+            }
+          }}
+          placeholder="Ask your application..."
+          disabled={appIsLoading}
+          rows={1}
+          className="w-full bg-transparent font-basel text-[15px] placeholder:text-[#6B6762] focus:outline-none resize-none overflow-y-auto text-[#F4F0EB] leading-relaxed flex-1"
+          style={{ height: 'auto', minHeight: '52px' }}
+          onInput={(e) => {
+            e.currentTarget.style.height = 'auto';
+            e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
+          }}
+        />
+        <div className="flex items-center justify-end mt-4">
+          <button
+            onClick={() => handleAppSend(app.id)}
+            disabled={appIsLoading || !appInput.trim()}
+            className="w-7 h-7 flex items-center justify-center bg-transparent border border-[#57534E] hover:bg-[#403E3C] text-[#8C8880] hover:text-[#F4F0EB] rounded-[8px] transition-all disabled:opacity-30"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+          </button>
+        </div>
+      </div>
+    );
+    
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#252523]">
+        <header className="h-[60px] flex items-center justify-between px-4 lg:px-6 shrink-0 border-b border-[#3D3A37] bg-[#1E1D1C]">
+          <div className="flex items-center gap-3">
+            <button onClick={() => { setActiveAppId(null); setAppTab('playground'); }} className="p-1.5 hover:bg-[#3D3A37] rounded-md text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
+              <ChevronLeft size={18} />
+            </button>
+            <div className="flex items-center gap-2">
+              <AppWindow size={16} className="text-[#F4F0EB]" />
+              <span className="font-geist font-semibold text-[15px] text-[#F4F0EB]">{app.name}</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center bg-[#2A2826] p-1 rounded-lg border border-[#3D3A37]">
+            {[
+              { id: 'playground', label: 'Playground', icon: MessagesSquare },
+              { id: 'knowledge', label: 'Knowledge Base', icon: Database },
+              { id: 'settings', label: 'Settings', icon: SettingsIcon },
+            ].map(t => (
+              <button key={t.id} onClick={() => setAppTab(t.id as any)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${appTab === t.id ? 'bg-[#3D3A37] text-[#F4F0EB] shadow-sm' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>
+                <t.icon size={14} /> {t.label}
+              </button>
+            ))}
+          </div>
+        </header>
+        
+        {appTab === 'playground' && (
+          <div className="flex-1 flex flex-col overflow-hidden relative">
+            {app.messages.length === 0 ? (
+               <div className="flex-1 flex flex-col items-center justify-center px-6" style={{ paddingBottom: '8vh' }}>
+                 <h2 className="font-martina text-[#9C9890] text-center mb-8 text-[24px]">Playground initialized for {app.name}</h2>
+                 <div className="w-full max-w-[720px] mx-auto">{renderAppInputBox()}</div>
+               </div>
+            ) : (
+               <>
+                 <div className="flex-1 overflow-y-auto scroll-smooth">
+                   <div className="max-w-[760px] mx-auto px-6 py-8 flex flex-col space-y-8 pb-6">
+                     {app.messages.map(msg => (
+                       <div key={msg.id} className="flex flex-col w-full">
+                         {msg.role === 'user' ? (
+                           <div className="flex flex-col items-end w-full">
+                             <div className="bg-[#3A3735] text-[#F4F0EB] font-basel text-[15px] px-4 py-2.5 rounded-[20px] max-w-[560px]">{msg.content}</div>
+                           </div>
+                         ) : (
+                           <div className="flex flex-col items-start w-full">
+                             <div className="flex gap-4 w-full">
+                               <div className="w-[30px] h-[30px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-1">
+                                 <img src="/particles.png" className="w-[16px] h-[16px] opacity-80" alt="ai" />
+                               </div>
+                               <div className="flex-1 min-w-0 font-basel text-[15px] text-[#E8E6E3] prose-invert">
+                                 {msg.reasoning && (
+                                   <Reasoning isStreaming={false} initialSeconds={3} customStreaming={true}>
+                                     <ReasoningTrigger />
+                                     <ReasoningContent>{msg.reasoning}</ReasoningContent>
+                                   </Reasoning>
+                                 )}
+                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                               </div>
+                             </div>
+                           </div>
+                         )}
+                       </div>
+                     ))}
+                     {appIsLoading && (
+                       <div className="flex items-start w-full gap-4">
+                         <div className="w-[30px] h-[30px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-1">
+                           <img src="/particles.png" className="w-[16px] h-[16px] opacity-80 animate-pulse" alt="ai" />
+                         </div>
+                         <div className="flex-1">
+                           <Reasoning isStreaming={true}><ReasoningTrigger /><ReasoningContent /></Reasoning>
+                         </div>
+                       </div>
+                     )}
+                     <div ref={appMessagesEndRef} />
+                   </div>
+                 </div>
+                 <div className="w-full shrink-0 relative z-20">
+                   <div className="absolute inset-x-0 -top-12 h-12 pointer-events-none" style={{ background: 'linear-gradient(to top, #252523 0%, transparent 100%)' }} />
+                   <div className="bg-[#252523] px-4 lg:px-8 pb-3 pt-1">
+                     <div className="max-w-[720px] mx-auto">{renderAppInputBox()}</div>
+                   </div>
+                 </div>
+               </>
+            )}
+          </div>
+        )}
+        
+        {appTab === 'knowledge' && (
+          <div className="flex-1 overflow-y-auto p-8 font-geist">
+             <div className="max-w-[760px] mx-auto">
+                <h2 className="text-[20px] font-semibold text-[#F4F0EB] mb-6">Linked Knowledge Bases</h2>
+                <div className="space-y-3">
+                  {kbList.map(kb => {
+                    const isLinked = app.linkedKbIds.includes(kb.id);
+                    return (
+                      <div key={kb.id} className="flex items-center justify-between p-4 rounded-xl border border-[#3D3A37] bg-[#1E1D1C]">
+                        <div className="flex items-center gap-3">
+                          <Database size={18} className={isLinked ? 'text-[#8FAE97]' : 'text-[#8C8880]'} />
+                          <div>
+                            <div className="text-[14px] font-medium text-[#F4F0EB]">{kb.name}</div>
+                            <div className="text-[12px] text-[#8C8880]">ID: {kb.id}</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const newIds = isLinked ? app.linkedKbIds.filter(id => id !== kb.id) : [...app.linkedKbIds, kb.id];
+                            updateApp(app.id, { linkedKbIds: newIds });
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${isLinked ? 'bg-[#1E2A22] border-[#2E4636] text-[#8FAE97] hover:bg-[#25362B]' : 'border-[#3D3A37] text-[#C7C2BC] hover:bg-[#3D3A37]'}`}
+                        >
+                          {isLinked ? 'Linked' : 'Link KB'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {kbList.length === 0 && (
+                    <div className="text-center py-8 text-[#8C8880] text-[13px]">No knowledge bases available. Create one in the Knowledge tab.</div>
+                  )}
+                </div>
+             </div>
+          </div>
+        )}
+
+        {appTab === 'settings' && (
+          <div className="flex-1 overflow-y-auto p-8 font-geist">
+            <div className="max-w-[600px] mx-auto space-y-6">
+              <div>
+                <label className="block text-[12px] text-[#8C8880] mb-2 font-medium uppercase tracking-wider">System Prompt</label>
+                <textarea
+                  value={appSettingsForm?.systemPrompt ?? app.systemPrompt}
+                  onChange={e => setAppSettingsForm(prev => ({ ...(prev || app), systemPrompt: e.target.value }))}
+                  className="w-full h-[120px] bg-[#1E1D1C] border border-[#3D3A37] rounded-xl p-3 text-[13px] text-[#F4F0EB] focus:outline-none focus:border-[#8C8880] resize-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[12px] text-[#8C8880] mb-2 font-medium uppercase tracking-wider">Model</label>
+                  <select
+                    value={appSettingsForm?.model ?? app.model}
+                    onChange={e => setAppSettingsForm(prev => ({ ...(prev || app), model: e.target.value }))}
+                    className="w-full bg-[#1E1D1C] border border-[#3D3A37] rounded-xl p-3 text-[13px] text-[#F4F0EB] focus:outline-none focus:border-[#8C8880] appearance-none"
+                  >
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gpt-4o">GPT-4o</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[12px] text-[#8C8880] mb-2 font-medium uppercase tracking-wider">Temperature ({appSettingsForm?.temperature ?? app.temperature})</label>
+                  <input
+                    type="range"
+                    min="0" max="1" step="0.1"
+                    value={appSettingsForm?.temperature ?? app.temperature}
+                    onChange={e => setAppSettingsForm(prev => ({ ...(prev || app), temperature: parseFloat(e.target.value) }))}
+                    className="w-full mt-2"
+                  />
+                </div>
+              </div>
+              <div className="pt-4 border-t border-[#3D3A37] flex justify-end">
+                <button
+                  onClick={() => { if(appSettingsForm) { updateApp(app.id, appSettingsForm); setAppSettingsForm(null); } }}
+                  className="btn-bump btn-bump-accent px-5 py-2 text-[13px]"
+                  disabled={!appSettingsForm}
+                >
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-[100dvh] bg-primary text-txt-primary font-body overflow-hidden transition-colors duration-200 animate-fade-in">
 
@@ -2834,7 +2972,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       )}
 
       <main className="flex-1 flex flex-col h-full relative min-w-0 bg-[#252523]">
-        {activeScreen !== 'chat' && (
+        {(
           <div className="lg:hidden h-[52px] flex items-center gap-3 px-4 border-b border-[#3D3A37] shrink-0 bg-[#252523]">
             <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 hover:bg-[#3D3A37] rounded-lg text-[#F4F0EB] transition-colors">
               <Menu size={22} />
@@ -2854,330 +2992,9 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           </ErrorBoundary>
         ) : activeScreen === 'integrations' ? (
           renderIntegrations()
-        ) : (
-          <>
-
-            <header className="h-[60px] flex items-center justify-between px-4 lg:px-6 z-10 shrink-0 sticky top-0 border-b border-[#3D3A37]">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-2 hover:bg-[#3D3A37] rounded-lg transition-colors text-[#F4F0EB]">
-                  <Menu size={24} />
-                </button>
-                {/* Chat title in header - current chat name, or the workspace label */}
-                {currentChat ? (
-                  <span className="font-basel text-[14px] text-[#8C8880] truncate max-w-[150px] sm:max-w-[300px]">{currentChat.title}</span>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <MessagesSquare size={16} className="text-[#8C8880]" />
-                    <span className="font-geist font-semibold text-[14px] text-[#F4F0EB] tracking-tight">Assistant</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                {currentChat && (
-                  <div className="flex items-center gap-1">
-                    <button onClick={exportChat} className="w-8 h-8 flex items-center justify-center hover:bg-[#3D3A37] rounded-md text-[#8C8880] transition-colors">
-                      <Download size={16} />
-                    </button>
-                    <button onClick={() => deleteChat(currentChat.id)} className="w-8 h-8 flex items-center justify-center hover:bg-[#3D3A37] text-[#8C8880] hover:text-red-400 rounded-md transition-colors">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </header>
-
-            {!currentChat || messages.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center px-6 animate-fade-in" style={{ paddingBottom: '8vh' }}>
-                <h2 className="font-martina font-normal text-[#9C9890] text-center mb-8 max-w-[700px] text-[22px] sm:text-[28px] whitespace-normal sm:whitespace-nowrap sm:overflow-hidden sm:text-ellipsis break-words" style={{ letterSpacing: '-0.01em' }}>
-                  {getTimeBasedGreeting()}
-                </h2>
-                <div className="w-full max-w-[720px] mx-auto">
-                  {renderInputBox()}
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex-1 overflow-y-auto scroll-smooth">
-                  <div className="max-w-[760px] mx-auto px-6 py-8 flex flex-col space-y-8 pb-6">
-                    {messages.map((msg) => (
-                      <div key={msg.id} className="flex flex-col w-full animate-message-appear">
-                        {msg.role === 'user' ? (
-                          /* USER MESSAGE - pill bubble + dynamic retry, edit, copy controls */
-                          <div className="flex flex-col items-end w-full group">
-                            {editingMessageId === msg.id ? (
-                              /* INLINE EDIT MODE */
-                              <div className="flex flex-col items-end w-full max-w-[560px] bg-[#2E2C2A] border border-[#3D3A37] rounded-[20px] p-3 shadow-md">
-                                <textarea
-                                  value={editingContent}
-                                  onChange={(e) => setEditingContent(e.target.value)}
-                                  className="w-full bg-[#1E1D1C] text-[#F4F0EB] font-basel text-[15px] p-2.5 rounded-[12px] border border-[#3D3A37] focus:border-[#8C8880] outline-none resize-none h-[80px]"
-                                />
-                                <div className="flex gap-2 mt-2">
-                                  <button
-                                    onClick={() => setEditingMessageId(null)}
-                                    className="px-3 py-1 text-[11px] font-basel font-bold text-[#8C8880] hover:text-[#F4F0EB] transition-colors border border-[#3D3A37] rounded-[6px]"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setEditingMessageId(null);
-                                      handleSaveEdit(msg, editingContent);
-                                    }}
-                                    className="px-3 py-1 text-[11px] font-basel font-bold bg-[#F4F0EB] text-[#252523] hover:bg-[#8C8880] hover:text-[#F4F0EB] transition-all rounded-[6px]"
-                                  >
-                                    Save & Submit
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              /* STANDARD PILL BUBBLE */
-                              <div className="bg-[#3A3735] text-[#F4F0EB] font-basel text-[15px] leading-relaxed px-4 py-2.5 rounded-[20px] max-w-[560px] whitespace-pre-wrap">
-                                {msg.content}
-                              </div>
-                            )}
-
-                            {/* Options bar below user message: Time, Retry, Edit, Copy */}
-                            {editingMessageId !== msg.id && (
-                              <div className="flex items-center gap-1.5 mt-1.5 px-2 text-[#6B6762] text-[11px] select-none opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none group-hover:pointer-events-auto">
-                                {/* Time */}
-                                <span className="font-basel opacity-80 font-medium mr-1.5">{formatMessageTime(msg.timestamp || msg.id)}</span>
-
-                                {/* Retry */}
-                                <div className="relative group/tooltip flex items-center justify-center">
-                                  <button
-                                    onClick={() => handleRetryUserMessage(msg)}
-                                    className="hover:text-[#F4F0EB] transition-colors p-0.5 cursor-pointer flex items-center justify-center"
-                                  >
-                                    <RefreshCw size={12} />
-                                  </button>
-                                  <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-[#1E1D1C] text-[#F4F0EB] text-[9px] font-basel font-bold rounded-[4px] border border-[#3D3A37] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150 whitespace-nowrap pointer-events-none z-50 shadow-md">
-                                    Retry
-                                  </div>
-                                </div>
-
-                                {/* Edit */}
-                                <div className="relative group/tooltip flex items-center justify-center">
-                                  <button
-                                    onClick={() => handleEditUserMessage(msg)}
-                                    className="hover:text-[#F4F0EB] transition-colors p-0.5 cursor-pointer flex items-center justify-center"
-                                  >
-                                    <Pencil size={12} />
-                                  </button>
-                                  <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-[#1E1D1C] text-[#F4F0EB] text-[9px] font-basel font-bold rounded-[4px] border border-[#3D3A37] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150 whitespace-nowrap pointer-events-none z-50 shadow-md">
-                                    Edit
-                                  </div>
-                                </div>
-
-                                {/* Copy */}
-                                <div className="relative group/tooltip flex items-center justify-center">
-                                  <button
-                                    onClick={() => copyUserMessage(msg.content, msg.id)}
-                                    className="hover:text-[#F4F0EB] transition-colors p-0.5 cursor-pointer flex items-center justify-center"
-                                  >
-                                    {copiedId === msg.id ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-                                  </button>
-                                  <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-[#1E1D1C] text-[#F4F0EB] text-[9px] font-basel font-bold rounded-[4px] border border-[#3D3A37] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150 whitespace-nowrap pointer-events-none z-50 shadow-md">
-                                    {copiedId === msg.id ? 'Copied' : 'Copy'}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          /* AI MESSAGE - amber text + action icons only, no badge/label */
-                          <div className="flex flex-col">
-                            {/* DeepSeek Reasoning Thought process card */}
-                            {msg.reasoning && (
-                              <div className="mb-3">
-                                <Reasoning isStreaming={false} initialSeconds={4}>
-                                  <ReasoningTrigger />
-                                  <ReasoningContent>
-                                    {msg.reasoning}
-                                  </ReasoningContent>
-                                </Reasoning>
-                              </div>
-                            )}
-                            <div className="markdown-content text-[#F4F0EB] font-basel text-[15px] leading-relaxed" style={{ letterSpacing: '0.2px' }}>
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                components={{
-                                  code({ node, className, children, ...props }: any) {
-                                    const codeStr = String(children).replace(/\n$/, '');
-                                    const match = /language-(\w+)/.exec(className || '');
-                                    // react-markdown v9 dropped the `inline` prop: a span is a
-                                    // block only if it has a language tag or spans multiple lines.
-                                    const isBlock = Boolean(match) || codeStr.includes('\n');
-
-                                    if (!isBlock) {
-                                      return (
-                                        <code className="bg-[#2E2C2A] border border-[#3D3A37] px-1.5 py-[1.5px] rounded-md text-[0.85em] font-mono text-[#D8B48C] break-words" {...props}>
-                                          {children}
-                                        </code>
-                                      );
-                                    }
-
-                                    const lang = match ? match[1] : '';
-                                    let highlightedHtml = '';
-                                    try {
-                                      highlightedHtml = lang && hljs.getLanguage(lang)
-                                        ? hljs.highlight(codeStr, { language: lang }).value
-                                        : hljs.highlightAuto(codeStr).value;
-                                    } catch {
-                                      highlightedHtml = codeStr;
-                                    }
-
-                                    return (
-                                      <div className="my-4 rounded-xl overflow-hidden border border-[#33302E] bg-[#1A1917]">
-                                        <div className="bg-[#211F1D] px-3.5 py-2 flex justify-between items-center select-none border-b border-[#33302E]">
-                                          <span className="font-geist font-medium text-[11.5px] text-[#9C968E] tracking-wide">
-                                            {lang || 'text'}
-                                          </span>
-                                          <button
-                                            onClick={() => copyToClipboard(codeStr, msg.id)}
-                                            className="flex items-center gap-1.5 text-[11.5px] font-geist text-[#8C8880] hover:text-[#F4F0EB] transition-colors cursor-pointer bg-transparent border-none"
-                                          >
-                                            {copiedId === msg.id ? (
-                                              <><Check size={12} className="text-[#8FAE97]" /><span className="text-[#8FAE97]">Copied</span></>
-                                            ) : (
-                                              <><Copy size={12} /><span>Copy</span></>
-                                            )}
-                                          </button>
-                                        </div>
-                                        <div className="overflow-x-auto px-4 py-3.5 text-[13px] leading-[1.6]">
-                                          <pre className="m-0 font-mono whitespace-pre select-text custom-scrollbar">
-                                            <code
-                                              className={`hljs ${className || ''}`}
-                                              dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-                                            />
-                                          </pre>
-                                        </div>
-                                      </div>
-                                    );
-                                  },
-                                  p: ({ children }: any) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
-                                  ul: ({ children }: any) => <ul className="list-disc pl-5 my-3 space-y-1.5 marker:text-[#6B6762]">{children}</ul>,
-                                  ol: ({ children }: any) => <ol className="list-decimal pl-5 my-3 space-y-1.5 marker:text-[#6B6762]">{children}</ol>,
-                                  li: ({ children }: any) => <li className="leading-relaxed pl-1">{children}</li>,
-                                  h1: ({ children }: any) => <h1 className="text-[18px] font-geist font-semibold text-[#F4F0EB] tracking-tight mt-5 mb-2.5 first:mt-0">{children}</h1>,
-                                  h2: ({ children }: any) => <h2 className="text-[16px] font-geist font-semibold text-[#F4F0EB] tracking-tight mt-5 mb-2 first:mt-0">{children}</h2>,
-                                  h3: ({ children }: any) => <h3 className="text-[14px] font-geist font-semibold text-[#F4F0EB] tracking-tight mt-4 mb-1.5 first:mt-0">{children}</h3>,
-                                  strong: ({ children }: any) => <strong className="font-semibold text-[#F4F0EB]">{children}</strong>,
-                                  a: ({ children, href }: any) => <a href={href} target="_blank" rel="noreferrer" className="text-[#D8B48C] underline underline-offset-2 decoration-[#5A5048] hover:decoration-[#D8B48C] transition-colors">{children}</a>,
-                                  blockquote: ({ children }: any) => <blockquote className="border-l-2 border-[#4A4744] pl-3.5 my-3 text-[#C7C2BC] italic">{children}</blockquote>,
-                                  table: ({ children }: any) => <div className="my-4 overflow-x-auto rounded-xl border border-[#33302E]"><table className="w-full text-[13px] border-collapse">{children}</table></div>,
-                                  th: ({ children }: any) => <th className="bg-[#211F1D] text-left font-geist font-semibold text-[#C7C2BC] px-3.5 py-2 border-b border-[#33302E]">{children}</th>,
-                                  td: ({ children }: any) => <td className="px-3.5 py-2 border-b border-[#2A2826] text-[#C7C2BC]">{children}</td>,
-                                }}
-                              >
-                                {msg.content}
-                              </ReactMarkdown>
-                            </div>
-                            {/* Action buttons */}
-                            <div className="flex items-center gap-3 mt-3">
-                              {/* Like */}
-                              <div className="relative group/tooltip flex items-center justify-center">
-                                <button className="text-[#6B6762] hover:text-[#F4F0EB] transition-colors flex items-center justify-center">
-                                  <ThumbsUp size={14} />
-                                </button>
-                                <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-[#1E1D1C] text-[#F4F0EB] text-[9px] font-basel font-bold rounded-[4px] border border-[#3D3A37] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150 whitespace-nowrap pointer-events-none z-50 shadow-md">
-                                  Like response
-                                </div>
-                              </div>
-
-                              {/* Dislike - Blocked with funny hover message */}
-                              <div className="relative group/tooltip flex items-center justify-center">
-                                <button className="text-[#4A4744] hover:text-red-400/80 transition-colors flex items-center justify-center cursor-not-allowed" onClick={(e) => e.preventDefault()}>
-                                  <ThumbsDown size={14} />
-                                </button>
-                                <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-[#2D1B1B] text-[#E57373] text-[9.5px] font-basel font-semibold rounded-[6px] border border-red-900/30 opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150 whitespace-nowrap pointer-events-none z-50 shadow-lg">
-                                  Not helpful
-                                </div>
-                              </div>
-
-                              {/* Copy */}
-                              <div className="relative group/tooltip flex items-center justify-center">
-                                <button onClick={() => copyToClipboard(msg.content, msg.id)} className="text-[#6B6762] hover:text-[#F4F0EB] transition-colors flex items-center justify-center">
-                                  {copiedId === msg.id ? <Check size={14} /> : <Copy size={14} />}
-                                </button>
-                                <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-[#1E1D1C] text-[#F4F0EB] text-[9px] font-basel font-bold rounded-[4px] border border-[#3D3A37] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150 whitespace-nowrap pointer-events-none z-50 shadow-md">
-                                  {copiedId === msg.id ? 'Copied!' : 'Copy response'}
-                                </div>
-                              </div>
-
-                              {/* Retry */}
-                              <div className="relative group/tooltip flex items-center justify-center">
-                                <button onClick={() => handleRetryAiMessage(msg)} className="text-[#6B6762] hover:text-[#F4F0EB] transition-colors flex items-center justify-center cursor-pointer">
-                                  <RefreshCw size={14} />
-                                </button>
-                                <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-[#1E1D1C] text-[#F4F0EB] text-[9px] font-basel font-bold rounded-[4px] border border-[#3D3A37] opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150 whitespace-nowrap pointer-events-none z-50 shadow-md">
-                                  Retry AI response
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                    {isLoading && (
-                      <div className="flex flex-col animate-message-appear">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-5 h-5 rounded-full bg-[#252523] border border-[#3D3A37] overflow-hidden flex items-center justify-center shrink-0">
-                            <img src="/particles.png" className="w-full h-full object-contain p-0.5" alt="hypr" />
-                          </div>
-                          <span className="font-basel text-[14px] text-[#F4F0EB] font-medium">hypr</span>
-                        </div>
-                        <div className="w-full pl-0 pt-1">
-                          <Reasoning isStreaming={true}>
-                            <ReasoningTrigger />
-                            <ReasoningContent>
-                              Analyzing prompt constraints and preparing premium response parameters...
-                            </ReasoningContent>
-                          </Reasoning>
-                        </div>
-                      </div>
-                    )}
-
-                    {error && (
-                      <div className="w-full px-4 py-3.5 rounded-[12px] bg-[#33302E] border border-[#3D3A37] shadow-[0_4px_24px_rgba(0,0,0,0.15)] flex items-center justify-between animate-message-appear">
-                        <div className="flex items-center gap-2.5 text-[13px] font-basel text-[#E57373]">
-                          <Zap size={15} color="#E57373" />
-                          <span className="font-medium">{error}</span>
-                        </div>
-                        <button
-                          onClick={handleRetryLastQuery}
-                          className="px-3.5 py-1.5 bg-[#3D3A37] border border-[#57534E] text-[#E57373] hover:bg-[#4A4744] hover:text-red-300 font-basel font-bold text-[12px] rounded-[6px] transition-all cursor-pointer shadow-sm"
-                        >
-                          Retry
-                        </button>
-                      </div>
-                    )}
-
-                    <div ref={messagesEndRef} />
-                  </div>
-                </div>
-
-                {/* Input area with gradient shadow above */}
-                <div className="w-full shrink-0 relative z-20">
-                  <div className="absolute inset-x-0 -top-12 h-12 pointer-events-none" style={{ background: 'linear-gradient(to top, #252523 0%, transparent 100%)' }} />
-                  <div className="bg-[#252523] px-4 lg:px-8 pb-3 pt-1">
-                    <div className="max-w-[720px] mx-auto">
-                      {renderInputBox()}
-                      {rateLimitMsg && (
-                        <p className="text-center text-[12px] font-basel text-[#E57373] mt-2 animate-fade-in">{rateLimitMsg}</p>
-                      )}
-                      <p className="text-center text-[11px] font-basel text-[#4A4744] mt-2 leading-relaxed">
-                        Inputs are processed by third-party AI, have issue&apos;s? fuck yourself.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </>
-        )}
+        ) : activeScreen === 'applications' ? (
+          renderApplications()
+        ) : null}
       </main>
 
       <SettingsModal
@@ -3197,12 +3014,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       {connectorModal && (() => {
         const p = PLATFORM_MAP[connectorModal];
         const c = connectors[connectorModal];
-        const filtered = availableItems.filter(i => i.name.toLowerCase().includes(itemQuery.toLowerCase()));
-        const allFilteredSelected = filtered.length > 0 && filtered.every(i => selectedItemIds.includes(i.id));
-        const chosenItems = availableItems.filter(i => selectedItemIds.includes(i.id));
-        const syncedCount = Object.values(ingestProgress).filter(s => s === 'synced').length;
-        const ingestTotal = Object.keys(ingestProgress).length;
-        const ingestDone = ingestTotal > 0 && syncedCount === ingestTotal;
         return (
           <div className="fixed inset-0 z-[300] flex items-center justify-center animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={closeConnector}>
             <div className="bg-[#252523] border border-[#3D3A37] rounded-2xl w-full max-w-[460px] mx-4 shadow-2xl overflow-hidden flex flex-col font-geist" onClick={e => e.stopPropagation()}>
@@ -3257,124 +3068,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 </>
               )}
 
-              {/* Stage: Select items */}
-              {connectorStage === 'select' && (
-                <>
-                  <div className="px-4 pt-3 pb-2.5 border-b border-[#3D3A37]">
-                    <div className="relative">
-                      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B6762]" />
-                      <input
-                        value={itemQuery}
-                        onChange={e => setItemQuery(e.target.value)}
-                        placeholder={`Search ${p.nounPlural}…`}
-                        className="w-full bg-[#1E1D1C] border border-[#3D3A37] rounded-lg pl-8 pr-3 py-2 text-[13px] font-geist text-[#F4F0EB] placeholder:text-[#6B6762] focus:outline-none focus:border-[#57534E] transition-colors"
-                      />
-                    </div>
-                  </div>
-                  <div className="max-h-[290px] overflow-y-auto px-2 py-2">
-                    {connectorBusy ? (
-                      <div className="flex flex-col items-center justify-center py-12 gap-3">
-                        <RefreshCw size={18} className="animate-spin text-[#6B6762]" />
-                        <span className="text-[12.5px] font-geist text-[#6B6762]">Loading your {p.nounPlural}…</span>
-                      </div>
-                    ) : filtered.length === 0 ? (
-                      <div className="py-12 text-center text-[12.5px] font-geist text-[#6B6762]">No {p.nounPlural} found.</div>
-                    ) : (
-                      <>
-                        <div className="flex items-center justify-between px-2 py-1.5 mb-0.5">
-                          <span className="text-[10px] font-geist font-semibold uppercase tracking-[0.12em] text-[#6B6762]">{p.nounPlural}</span>
-                          <button
-                            onClick={() => {
-                              if (allFilteredSelected) setSelectedItemIds(prev => prev.filter(id => !filtered.some(f => f.id === id)));
-                              else setSelectedItemIds(prev => Array.from(new Set([...prev, ...filtered.map(f => f.id)])));
-                            }}
-                            className="text-[11px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors"
-                          >
-                            {allFilteredSelected ? 'Clear all' : 'Select all'}
-                          </button>
-                        </div>
-                        {filtered.map(item => {
-                          const sel = selectedItemIds.includes(item.id);
-                          return (
-                            <button key={item.id} onClick={() => toggleItem(item.id)} className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-[#2A2826] transition-colors text-left group/item">
-                              <div className={`w-[18px] h-[18px] rounded-[5px] border flex items-center justify-center shrink-0 transition-all ${sel ? 'bg-[#F4F0EB] border-[#F4F0EB]' : 'border-[#57534E] group-hover/item:border-[#8C8880]'}`}>
-                                {sel && <Check size={12} className="text-[#252523]" strokeWidth={3} />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-[13px] font-geist font-medium text-[#F4F0EB] truncate leading-tight">{item.name}</div>
-                                {item.meta && <div className="text-[11px] font-geist text-[#6B6762] truncate leading-tight mt-0.5">{item.meta}</div>}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2.5 px-5 py-4 border-t border-[#3D3A37]">
-                    {c?.connected ? (
-                      <button onClick={() => disconnectPlatform(p.id)} className="px-3 py-2.5 text-[13px] font-geist font-medium text-[#BFA39C] hover:text-[#C28379] hover:bg-[rgba(194,131,121,0.08)] rounded-xl transition-colors">
-                        Disconnect
-                      </button>
-                    ) : (
-                      <button onClick={() => setConnectorStage('auth')} className="px-3 py-2.5 text-[13px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
-                        Back
-                      </button>
-                    )}
-                    <button onClick={() => startIngestion(p.id)} disabled={selectedItemIds.length === 0} className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] font-geist disabled:opacity-40">
-                      {c?.connected ? 'Re-sync' : 'Ingest'} {selectedItemIds.length || ''} {selectedItemIds.length === 1 ? p.noun : selectedItemIds.length ? p.nounPlural : ''}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {/* Stage: Ingest */}
-              {connectorStage === 'ingest' && (
-                <>
-                  <div className="px-6 py-5">
-                    <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
-                      {chosenItems.map(item => {
-                        const st = ingestProgress[item.id] || 'queued';
-                        return (
-                          <div key={item.id} className="flex items-center gap-3">
-                            <div className="w-[18px] h-[18px] flex items-center justify-center shrink-0">
-                              {st === 'synced' ? (
-                                <div className="w-[18px] h-[18px] rounded-full bg-green-950/50 border border-green-900/50 flex items-center justify-center">
-                                  <Check size={11} className="text-green-400" strokeWidth={3} />
-                                </div>
-                              ) : st === 'ingesting' ? (
-                                <RefreshCw size={14} className="animate-spin text-[#C7A24A]" />
-                              ) : (
-                                <div className="w-[14px] h-[14px] rounded-full border border-[#57534E]"></div>
-                              )}
                             </div>
-                            <span className="flex-1 text-[13px] font-geist text-[#C7C2BC] truncate">{item.name}</span>
-                            <span className={`text-[10px] font-geist font-semibold uppercase tracking-wide shrink-0 ${st === 'synced' ? 'text-green-400' : st === 'ingesting' ? 'text-[#C7A24A]' : 'text-[#6B6762]'}`}>
-                              {st === 'synced' ? 'Synced' : st === 'ingesting' ? 'Extracting' : 'Queued'}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-5">
-                      <div className="h-1 rounded-full bg-[#33302E] overflow-hidden">
-                        <div className="h-full bg-green-400/80 transition-all duration-500 ease-out" style={{ width: `${ingestTotal ? (syncedCount / ingestTotal) * 100 : 0}%` }}></div>
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-[11px] font-geist text-[#6B6762]">{ingestDone ? 'Knowledge graph updated' : 'Writing nodes & edges to Cognee…'}</span>
-                        <span className="text-[11px] font-geist text-[#8C8880] tabular-nums">{syncedCount}/{ingestTotal}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-end px-5 py-4 border-t border-[#3D3A37]">
-                    <button onClick={closeConnector} disabled={!ingestDone} className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] font-geist disabled:opacity-40 disabled:cursor-wait">
-                      {ingestDone ? 'Done' : 'Ingesting…'}
-                    </button>
-                  </div>
-                </>
-              )}
-
             </div>
-          </div>
         );
       })()}
 

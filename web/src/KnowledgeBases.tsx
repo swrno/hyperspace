@@ -17,6 +17,33 @@ type DocInput =
 
 type DetailTab = 'documents' | 'sources' | 'insights' | 'graph' | 'mindmap';
 
+
+const MOCK_PLATFORM_ITEMS: Record<string, {id: string, name: string}[]> = {
+  github: [
+    { id: 'repo_1', name: 'orgmind/hyper-space-2' },
+    { id: 'repo_2', name: 'orgmind/frontend-core' },
+    { id: 'repo_3', name: 'orgmind/api-services' }
+  ],
+  gdocs: [
+    { id: 'doc_1', name: 'Q3 Product Roadmap' },
+    { id: 'doc_2', name: 'Engineering Guidelines' },
+    { id: 'doc_3', name: 'Architecture RFC' }
+  ],
+  jira: [
+    { id: 'proj_1', name: 'HYPR-Core' },
+    { id: 'proj_2', name: 'Web-App' }
+  ],
+  slack: [
+    { id: 'ch_1', name: '#engineering' },
+    { id: 'ch_2', name: '#product-updates' },
+    { id: 'ch_3', name: '#general' }
+  ],
+  salesforce: [
+    { id: 'sf_1', name: 'Enterprise Accounts' },
+    { id: 'sf_2', name: 'Q3 Opportunities' }
+  ]
+};
+
 const PLATFORM_NAMES: Record<string, string> = {
   github: 'GitHub', gdocs: 'Google Docs', gslides: 'Google Slides', gsheets: 'Google Sheets',
   gcal: 'Google Calendar', jira: 'Jira', slack: 'Slack', salesforce: 'Salesforce',
@@ -55,6 +82,10 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   // Bumped whenever the active KB's docs/sources change, to force the embedded
   // graph to rebuild on its own.
   const [graphRefresh, setGraphRefresh] = useState(0);
+  const [expandedPlatform, setExpandedPlatform] = useState<string | null>(null);
+  const [sourceSearch, setSourceSearch] = useState('');
+  const [tempSelectedItems, setTempSelectedItems] = useState<Record<string, boolean>>({});
+
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -71,21 +102,29 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   });
 
   const load = async () => {
-    if (!idToken) { setLoading(false); return; }
     try {
-      const res = await fetch('/api/kb', { headers: { Authorization: `Bearer ${idToken}` } });
-      if (!res.ok) throw new Error(`Failed to load (${res.status})`);
-      const data = await res.json();
-      setKbs(data.kbs || []);
+      const stored = localStorage.getItem('hs_kbs');
+      if (stored) {
+        setKbs(JSON.parse(stored));
+      } else {
+        setKbs([]);
+      }
       setError('');
     } catch (e) {
-      setError((e as Error).message || 'Could not reach the server.');
+      setError((e as Error).message || 'Could not load local data.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [idToken]);
+  const saveKbs = (newKbs: KnowledgeBase[]) => {
+    setKbs(newKbs);
+    localStorage.setItem('hs_kbs', JSON.stringify(newKbs));
+    // Trigger global event so App.tsx can update its kbList if needed
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  useEffect(() => { load(); }, []);
 
   // Auto-sync: while a knowledge base is open, poll for changes (docs/sources
   // added elsewhere, ingestion catching up) so the graph + mind map + insights
@@ -115,16 +154,19 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const res = await fetch('/api/kb', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ action: 'create', kb: { name: newName, description: newDesc } }),
-      });
-      const data = await res.json();
-      if (data.kb) setKbs((prev) => [data.kb, ...prev]);
+      const newKb: KnowledgeBase = {
+        id: Date.now().toString(),
+        name: newName.trim(),
+        description: newDesc.trim(),
+        documents: [],
+        sources: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      saveKbs([newKb, ...kbs]);
       setShowCreate(false);
       setNewName(''); setNewDesc('');
-      if (data.id) setActiveId(data.id);
+      setActiveId(newKb.id);
     } catch (e) {
       setError((e as Error).message || 'Failed to create.');
     } finally {
@@ -133,77 +175,56 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   };
 
   const deleteKb = async (id: string) => {
-    setKbs((prev) => prev.filter((k) => k.id !== id));
+    saveKbs(kbs.filter((k) => k.id !== id));
     if (activeId === id) setActiveId(null);
-    try { await fetch(`/api/kb?id=${id}`, { method: 'DELETE', headers: authHeaders() }); }
-    catch { /* ignore */ }
   };
 
   const addDoc = async (kbId: string, doc: DocInput) => {
     setUploading(true);
     try {
-      const res = await fetch('/api/kb', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ action: 'add-doc', kbId, doc }),
-      });
-      const data = await res.json();
-      if (data.doc) {
-        setKbs((prev) => prev.map((k) =>
-          k.id === kbId ? { ...k, documents: [...(k.documents || []), data.doc] } : k
+      // Mock uploading and processing
+      setTimeout(() => {
+        const newDoc = {
+          id: Date.now().toString(),
+          name: doc.name,
+          type: doc.type,
+          size: doc.type === 'text' ? (doc as any).content.length : 1024 * 1024,
+          status: 'ready',
+          createdAt: new Date().toISOString()
+        };
+        saveKbs(kbs.map((k) =>
+          k.id === kbId ? { ...k, documents: [...(k.documents || []), newDoc], updatedAt: new Date().toISOString() } : k
         ));
         setGraphRefresh((x) => x + 1);
-      }
+        setUploading(false);
+      }, 1000);
     } catch (e) {
       setError((e as Error).message || 'Failed to add document.');
-    } finally {
       setUploading(false);
     }
   };
 
   const deleteDoc = async (kbId: string, docId: string) => {
-    setKbs((prev) => prev.map((k) =>
-      k.id === kbId ? { ...k, documents: (k.documents || []).filter((d) => d.id !== docId) } : k
+    saveKbs(kbs.map((k) =>
+      k.id === kbId ? { ...k, documents: (k.documents || []).filter((d) => d.id !== docId), updatedAt: new Date().toISOString() } : k
     ));
     setGraphRefresh((x) => x + 1);
-    try {
-      await fetch('/api/kb', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ action: 'delete-doc', kbId, docId }),
-      });
-    } catch { /* ignore */ }
   };
 
   // ── Sources: attach a globally-authorized connector's items to this KB, or
   //    detach it. Both rebuild the KB graph (graphRefresh) on their own. ──────
-  const attachSource = async (kbId: string, platform: string, items: KbSource['items']) => {
-    const source: KbSource = { platform, items, attachedAt: new Date().toISOString() };
-    setKbs((prev) => prev.map((k) =>
-      k.id === kbId ? { ...k, sources: [...(k.sources || []).filter((s) => s.platform !== platform), source] } : k
-    ));
+  const updateSourceItems = async (kbId: string, platform: string, items: KbSource['items']) => {
+    if (items.length === 0) {
+      saveKbs(kbs.map((k) =>
+        k.id === kbId ? { ...k, sources: (k.sources || []).filter((s) => s.platform !== platform), updatedAt: new Date().toISOString() } : k
+      ));
+    } else {
+      const source: KbSource = { platform, items, attachedAt: new Date().toISOString() };
+      saveKbs(kbs.map((k) =>
+        k.id === kbId ? { ...k, sources: [...(k.sources || []).filter((s) => s.platform !== platform), source], updatedAt: new Date().toISOString() } : k
+      ));
+    }
     setGraphRefresh((x) => x + 1);
-    try {
-      await fetch('/api/kb', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ action: 'attach-source', kbId, platform, items }),
-      });
-    } catch { /* ignore */ }
-  };
-
-  const detachSource = async (kbId: string, platform: string) => {
-    setKbs((prev) => prev.map((k) =>
-      k.id === kbId ? { ...k, sources: (k.sources || []).filter((s) => s.platform !== platform) } : k
-    ));
-    setGraphRefresh((x) => x + 1);
-    try {
-      await fetch('/api/kb', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ action: 'detach-source', kbId, platform }),
-      });
-    } catch { /* ignore */ }
   };
 
   const readAsBase64 = (file: File): Promise<string> =>
@@ -367,7 +388,7 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                     <Blocks size={14} /> Manage integrations
                   </button>
                 </div>
-                <p className="text-[12.5px] font-geist text-[#8C8880] mb-5">Attach authorized sources so this base's graph and mind map are built from them. Detaching rebuilds the graph automatically.</p>
+                <p className="text-[12.5px] font-geist text-[#8C8880] mb-5">Attach specific items from your authorized platforms so this base's graph is built from them.</p>
 
                 {connectedPlatforms.length === 0 ? (
                   <div className="card-elev rounded-2xl py-14 flex flex-col items-center text-center">
@@ -381,46 +402,109 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {connectedPlatforms.map(([id, c]) => {
-                      const attached = attachedPlatforms.has(id);
-                      const items = (c?.selectedItems || []).map((i) => ({ id: i.id, name: i.name, meta: i.meta }));
                       const attachedItems = kbSources.find((s) => s.platform === id)?.items || [];
+                      const isExpanded = expandedPlatform === id;
+                      const availableItems = MOCK_PLATFORM_ITEMS[id] || [];
+                      const filteredItems = availableItems.filter(i => i.name.toLowerCase().includes(sourceSearch.toLowerCase()));
+                      const isAllFilteredSelected = filteredItems.length > 0 && filteredItems.every(i => tempSelectedItems[i.id]);
+                      
+                      const handleExpand = () => {
+                        if (isExpanded) {
+                          setExpandedPlatform(null);
+                        } else {
+                          // Initialize temp selection
+                          const temp: Record<string, boolean> = {};
+                          attachedItems.forEach(i => temp[i.id] = true);
+                          setTempSelectedItems(temp);
+                          setSourceSearch('');
+                          setExpandedPlatform(id);
+                        }
+                      };
+
+                      const handleSaveItems = () => {
+                        const selectedItems = availableItems.filter(i => tempSelectedItems[i.id]);
+                        updateSourceItems(active.id, id, selectedItems);
+                        setExpandedPlatform(null);
+                      };
+                      
                       return (
-                        <div key={id} className="card-elev rounded-2xl overflow-hidden">
-                          <div className="flex items-center gap-3.5 px-4 py-3.5">
+                        <div key={id} className={`card-elev rounded-2xl overflow-hidden transition-all ${isExpanded ? 'border-[#57534E]' : ''}`}>
+                          <div className="flex items-center gap-3.5 px-4 py-3.5 cursor-pointer hover:bg-[#2A2826] transition-colors" onClick={handleExpand}>
                             <span className="w-10 h-10 rounded-xl bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center shrink-0">
                               {renderSourceIcon(id, 18)}
                             </span>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="text-[14px] font-geist font-semibold text-[#F4F0EB]">{PLATFORM_NAMES[id] || id}</span>
-                                {attached && (
+                                {attachedItems.length > 0 && (
                                   <span className="flex items-center gap-1 text-[10px] font-geist font-semibold text-[#8FAE97] bg-[#1E2A22] border border-[#2E4636] px-1.5 py-0.5 rounded-md">
                                     <Check size={10} /> Attached
                                   </span>
                                 )}
                               </div>
                               <p className="text-[11.5px] font-geist text-[#8C8880] mt-0.5 truncate">
-                                {items.length} {platformNoun(id)} synced{attached ? ` · ${attachedItems.length} in this base` : ''}
+                                {attachedItems.length > 0 ? `${attachedItems.length} item(s) attached` : 'Click to select items'}
                               </p>
                             </div>
-                            {attached ? (
-                              <button onClick={() => detachSource(active.id, id)} className="text-[12px] font-geist font-medium px-3 py-2 rounded-lg text-[#BFA39C] hover:text-[#C28379] hover:bg-[rgba(194,131,121,0.08)] transition-colors shrink-0">
-                                Detach
-                              </button>
-                            ) : (
-                              <button onClick={() => attachSource(active.id, id, items)} disabled={!items.length} className="btn-bump btn-bump-accent px-3.5 py-2 text-[12px] shrink-0 disabled:opacity-50">
-                                <Plus size={14} /> Attach
-                              </button>
-                            )}
+                            <span className="text-[12px] text-[#8C8880] px-2">{isExpanded ? 'Collapse' : 'Configure'}</span>
                           </div>
-                          {attached && attachedItems.length > 0 && (
-                            <div className="border-t border-[#33302E] px-4 py-2.5 flex flex-wrap gap-1.5">
-                              {attachedItems.slice(0, 12).map((it) => (
-                                <span key={it.id} className="text-[11px] font-geist text-[#C7C2BC] bg-[#1E1D1C] border border-[#33302E] rounded-md px-2 py-1 truncate max-w-[220px]">{it.name}</span>
-                              ))}
-                              {attachedItems.length > 12 && <span className="text-[11px] font-geist text-[#6B6762] px-2 py-1">+{attachedItems.length - 12} more</span>}
+                          
+                          {isExpanded && (
+                            <div className="border-t border-[#33302E] bg-[#1E1D1C]">
+                              <div className="p-4 border-b border-[#33302E] flex items-center gap-3 bg-[#252523]">
+                                <div className="flex-1 flex items-center gap-2 bg-[#1E1D1C] border border-[#3D3A37] rounded-lg px-3 py-1.5 focus-within:border-[#57534E] transition-colors">
+                                  <Search size={14} className="text-[#6B6762]" />
+                                  <input 
+                                    value={sourceSearch} 
+                                    onChange={e => setSourceSearch(e.target.value)} 
+                                    placeholder={`Search ${platformNoun(id)}...`}
+                                    className="bg-transparent border-none text-[13px] text-[#F4F0EB] focus:outline-none w-full"
+                                  />
+                                </div>
+                                <button 
+                                  onClick={() => {
+                                    const next = { ...tempSelectedItems };
+                                    if (isAllFilteredSelected) {
+                                      filteredItems.forEach(i => delete next[i.id]);
+                                    } else {
+                                      filteredItems.forEach(i => next[i.id] = true);
+                                    }
+                                    setTempSelectedItems(next);
+                                  }}
+                                  className="text-[12px] text-[#8C8880] hover:text-[#F4F0EB] px-2"
+                                >
+                                  {isAllFilteredSelected ? 'Deselect All' : 'Select All'}
+                                </button>
+                              </div>
+                              
+                              <div className="max-h-[250px] overflow-y-auto p-2">
+                                {filteredItems.length === 0 ? (
+                                  <div className="py-8 text-center text-[#8C8880] text-[13px]">No items found.</div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {filteredItems.map(item => (
+                                      <label key={item.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[#2A2826] cursor-pointer transition-colors">
+                                        <input 
+                                          type="checkbox" 
+                                          checked={!!tempSelectedItems[item.id]}
+                                          onChange={(e) => {
+                                            setTempSelectedItems(prev => ({ ...prev, [item.id]: e.target.checked }));
+                                          }}
+                                          className="w-4 h-4 rounded border-[#3D3A37] bg-[#252523] checked:bg-[#C9A66B] checked:border-[#C9A66B] focus:ring-0 focus:ring-offset-0 accent-[#C9A66B]"
+                                        />
+                                        <span className="text-[13.5px] text-[#F4F0EB]">{item.name}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              
+                              <div className="p-3 border-t border-[#33302E] flex justify-end gap-2 bg-[#252523]">
+                                <button onClick={() => setExpandedPlatform(null)} className="px-3 py-1.5 text-[12px] text-[#8C8880] hover:text-[#F4F0EB]">Cancel</button>
+                                <button onClick={handleSaveItems} className="btn-bump btn-bump-accent px-4 py-1.5 text-[12px]">Save Sources</button>
+                              </div>
                             </div>
                           )}
                         </div>
