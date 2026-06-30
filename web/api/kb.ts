@@ -166,23 +166,40 @@ export default async function handler(req: Request, res: Response) {
             .catch((e) => console.warn('KB source Cognee ingest failed (non-fatal):', e.message));
 
           if (platform === 'github') {
-            // Background ingestion of real GitHub data
+            // Deep background ingestion — runs fully async so the HTTP response
+            // returns immediately while content is streamed into Cognee.
             (async () => {
               try {
                 const conn = await getConnection(user.uid, 'github');
                 if (!conn) throw new Error('No GitHub connection');
-                const token = await getAccessToken(conn);
-                const repoNames = source.items.map(i => i.name);
-                const { entities } = await github.snapshot(token, repoNames);
-                // Ingest in batches of 25
+                const ghToken = await getAccessToken(conn);
+                const repoNames = source.items.map((i: any) => i.name);
+
+                console.log(`[KB ${kbId}] Starting deep GitHub snapshot for: ${repoNames.join(', ')}`);
+                const { entities, documents } = await github.deepSnapshot(ghToken, repoNames);
+                console.log(`[KB ${kbId}] Snapshot complete — ${entities.length} entities, ${documents.length} documents`);
+
+                const opts = { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] };
+
+                // Ingest structured entities (issues, PRs, commits, repo meta) in
+                // batches of 25 so each Cognee text chunk stays manageable.
                 for (let i = 0; i < entities.length; i += 25) {
                   const batch = entities.slice(i, i + 25);
-                  const doc = entitiesToDocument(batch, `github knowledge`);
-                  const kbDoc = `# Knowledge Base ID: ${kbId}\n\n${doc}`;
-                  await cogneeIngest(kbDoc, { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] });
+                  const text = `# Knowledge Base ID: ${kbId}\n\n` + entitiesToDocument(batch, 'GitHub structured data');
+                  await cogneeIngest(text, opts);
                 }
+
+                // Ingest rich documents (README, docs, releases, issue threads,
+                // PR discussions) as individual Cognee texts so the retriever can
+                // surface them directly via vector + graph search.
+                for (const doc of documents) {
+                  const header = `# Knowledge Base ID: ${kbId}\n# Repo: ${doc.title} [${doc.kind}]\n\n`;
+                  await cogneeIngest(header + doc.content, opts);
+                }
+
+                console.log(`[KB ${kbId}] GitHub ingestion complete.`);
               } catch (err: any) {
-                console.error('KB Github snapshot ingest failed:', err.message);
+                console.error(`[KB ${kbId}] GitHub deepSnapshot failed:`, err.message);
               }
             })();
           }
