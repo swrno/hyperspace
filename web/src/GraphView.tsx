@@ -265,23 +265,47 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
   const load = async (m: 'structural' | 'cognee' = mode) => {
     setLoading(true);
     setTimeout(() => {
+      let kbNodes = [
+        { id: '1', label: 'Knowledge Base', type: 'Concept', degree: 3 },
+        { id: '2', label: 'Core Concepts', type: 'Topic', degree: 2 }
+      ];
+      let kbEdges = [
+        { source: '1', target: '2', label: 'contains' }
+      ];
+      
+      try {
+        if (kbId) {
+          const kbs = JSON.parse(localStorage.getItem('hs_kbs') || '[]');
+          const kb = kbs.find((k: any) => k.id === kbId);
+          if (kb) {
+            let idCounter = 3;
+            if (kb.documents) {
+              kb.documents.forEach((d: any) => {
+                const nId = `${idCounter++}`;
+                kbNodes.push({ id: nId, label: d.name, type: 'Document', degree: 1 });
+                kbEdges.push({ source: '1', target: nId, label: 'contains' });
+              });
+            }
+            if (kb.sources) {
+              kb.sources.forEach((s: any) => {
+                if (s.items) {
+                  s.items.forEach((item: any) => {
+                    const nId = `${idCounter++}`;
+                    kbNodes.push({ id: nId, label: item.name, type: 'Repository', degree: 2 });
+                    kbEdges.push({ source: '1', target: nId, label: 'integrates' });
+                  });
+                }
+              });
+            }
+          }
+        }
+      } catch (e) { /* ignore */ }
+
       // Mock Graph Data for local-first UI
       setData({
-        nodes: [
-          { id: '1', label: 'Knowledge Base', type: 'Concept', degree: 3 },
-          { id: '2', label: 'Document A', type: 'Document', degree: 2 },
-          { id: '3', label: 'Source File', type: 'File', degree: 1 },
-          { id: '4', label: 'Integration', type: 'System', degree: 2 },
-          { id: '5', label: 'Data Point', type: 'Entity', degree: 1 },
-        ],
-        edges: [
-          { source: '1', target: '2', label: 'contains' },
-          { source: '2', target: '3', label: 'references' },
-          { source: '1', target: '4', label: 'uses' },
-          { source: '4', target: '5', label: 'extracts' },
-          { source: '2', target: '5', label: 'mentions' },
-        ],
-        stats: { nodes: 5, edges: 5 }
+        nodes: kbNodes,
+        edges: kbEdges,
+        stats: { nodes: kbNodes.length, edges: kbEdges.length }
       });
       setLoading(false);
     }, 600);

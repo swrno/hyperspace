@@ -2,14 +2,11 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Database, Plus, ArrowLeft, FileText, Upload, Trash2, X,
   Loader2, FolderPlus, Search, FileStack, Calendar,
-  Network, GitBranch, Blocks, Plug, ArrowUpRight, Check, BarChart3, ChevronDown,
+  Blocks, Plug, ArrowUpRight, Check, ChevronDown,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { Connectors, KbDocument, KbSource, KnowledgeBase, PlatformIconFn } from './types';
 import ErrorBoundary from './ErrorBoundary';
-import GraphView from './GraphView';
-import MindMap from './MindMap';
-import KbInsights from './KbInsights';
 
 /** Shape sent to the backend when uploading a document. */
 type DocInput =
@@ -20,13 +17,7 @@ type DetailTab = 'documents' | 'sources' | 'insights' | 'graph' | 'mindmap';
 
 
 const MOCK_PLATFORM_ITEMS: Record<string, {id: string, name: string}[]> = {
-  github: [
-    { id: 'gh-1', name: 'facebook/react' },
-    { id: 'gh-2', name: 'vercel/next.js' },
-    { id: 'gh-3', name: 'tailwindlabs/tailwindcss' },
-    { id: 'gh-4', name: 'microsoft/vscode' },
-    { id: 'gh-5', name: 'torvalds/linux' }
-  ],
+  github: [],
   google_drive: [{ id: 'gd-1', name: 'Q3 Roadmaps.pdf' }, { id: 'gd-2', name: 'All Hands Deck.pptx' }, { id: 'gd-3', name: 'Customer Interview Notes.docx' }],
   gdocs: [
     { id: 'doc_1', name: 'Q3 Product Roadmap' },
@@ -112,6 +103,10 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
 
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  // Dynamic items fetched from external APIs
+  const [dynamicItems, setDynamicItems] = useState<Record<string, {id: string, name: string}[]>>({});
+  const [isFetchingGithub, setIsFetchingGithub] = useState(false);
 
   const authHeaders = (extra: Record<string, string> = {}): Record<string, string> => ({
     'Content-Type': 'application/json',
@@ -396,11 +391,11 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                 {connectedPlatforms.map(([id, c]) => {
                   const attachedItems = kbSources.find((s) => s.platform === id)?.items || [];
                   const isExpanded = expandedPlatform === id;
-                  const availableItems = MOCK_PLATFORM_ITEMS[id] || [];
+                  const availableItems = (id === 'github' && dynamicItems['github']?.length) ? dynamicItems['github'] : (MOCK_PLATFORM_ITEMS[id] || []);
                   const filteredItems = availableItems.filter(i => i.name.toLowerCase().includes(sourceSearch.toLowerCase()));
                   const isAllFilteredSelected = filteredItems.length > 0 && filteredItems.every(i => tempSelectedItems[i.id]);
                   
-                  const handleExpand = () => {
+                  const handleExpand = async () => {
                     if (isExpanded) {
                       setExpandedPlatform(null);
                     } else {
@@ -409,6 +404,22 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                       setTempSelectedItems(temp);
                       setSourceSearch('');
                       setExpandedPlatform(id);
+                      
+                      // Fetch from GitHub dynamically if expanded and not loaded
+                      if (id === 'github' && !dynamicItems['github']) {
+                        setIsFetchingGithub(true);
+                        try {
+                          const res = await fetch('https://api.github.com/users/swrno/repos?sort=updated&per_page=30');
+                          if (res.ok) {
+                            const repos = await res.json();
+                            setDynamicItems(prev => ({
+                              ...prev,
+                              github: repos.map((r: any) => ({ id: r.full_name, name: r.full_name }))
+                            }));
+                          }
+                        } catch (e) { console.error('Failed to fetch from GitHub API', e); }
+                        setIsFetchingGithub(false);
+                      }
                     }
                   };
 
@@ -434,11 +445,22 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                             )}
                           </div>
                           <p className="text-[11.5px] font-geist text-[#8C8880] mt-0.5 truncate">
-                            {attachedItems.length > 0 ? `${attachedItems.length} item(s) attached` : 'Click to select items'}
+                            {attachedItems.length === 0 ? 'Click to select items' : `${attachedItems.length} item(s) attached`}
                           </p>
                         </div>
                         <ChevronDown size={18} className={`text-[#6B6762] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                       </div>
+                      
+                      {/* Show attached items as chips when not expanded */}
+                      {!isExpanded && attachedItems.length > 0 && (
+                        <div className="px-4 pb-3.5 pt-0 flex flex-wrap gap-2">
+                          {attachedItems.map(item => (
+                            <span key={item.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#1E1D1C] border border-[#3D3A37] rounded-md text-[11px] font-geist text-[#C7C2BC]">
+                              {item.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       
                       {isExpanded && (
                         <div className="border-t border-[#3D3A37] bg-[#1E1D1C]">
@@ -459,6 +481,11 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                             {filteredItems.length === 0 ? (
                               <div className="py-6 text-center text-[12px] font-geist text-[#8C8880]">
                                 No items found
+                              </div>
+                            ) : isFetchingGithub && id === 'github' ? (
+                              <div className="py-6 flex flex-col items-center justify-center text-[12px] font-geist text-[#8C8880]">
+                                <Loader2 size={16} className="animate-spin mb-2 opacity-50" />
+                                Fetching your repositories directly from GitHub...
                               </div>
                             ) : (
                               <>
@@ -514,39 +541,7 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
             )}
           </div>
 
-          <div className="w-full h-px bg-[#3D3A37]" />
 
-          {/* Insights Section */}
-          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 py-10">
-            <h2 className="text-[18px] font-geist font-semibold text-[#F4F0EB] tracking-tight mb-6 flex items-center gap-2"><BarChart3 size={20} className="text-[#8FAE97]" /> Insights</h2>
-            <ErrorBoundary label="this knowledge base's insights">
-              <KbInsights idToken={idToken} kb={active} refreshKey={graphRefresh} />
-            </ErrorBoundary>
-          </div>
-
-          <div className="w-full h-px bg-[#3D3A37]" />
-
-          {/* Knowledge Graph Section */}
-          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 py-10">
-            <h2 className="text-[18px] font-geist font-semibold text-[#F4F0EB] tracking-tight mb-6 flex items-center gap-2"><Network size={20} className="text-[#C28379]" /> Knowledge Graph</h2>
-            <div className="h-[600px] rounded-2xl overflow-hidden border border-[#3D3A37]">
-              <ErrorBoundary label="this knowledge base's graph">
-                <GraphView idToken={idToken} kbId={active.id} embedded refreshKey={graphRefresh} onAsk={onAsk} />
-              </ErrorBoundary>
-            </div>
-          </div>
-
-          <div className="w-full h-px bg-[#3D3A37]" />
-
-          {/* Mind Map Section */}
-          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 py-10">
-            <h2 className="text-[18px] font-geist font-semibold text-[#F4F0EB] tracking-tight mb-6 flex items-center gap-2"><GitBranch size={20} className="text-[#9C93B0]" /> Mind Map</h2>
-            <div className="h-[600px] rounded-2xl overflow-hidden border border-[#3D3A37]">
-              <ErrorBoundary label="this knowledge base's mind map">
-                <MindMap kb={active} />
-              </ErrorBoundary>
-            </div>
-          </div>
 
         </div>
       </div>
