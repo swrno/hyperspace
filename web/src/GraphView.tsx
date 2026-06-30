@@ -324,22 +324,6 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Data mode selector */}
-          <div className="hidden md:flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
-            {(['structural', 'cognee'] as const).map((m) => (
-              <button key={m} onClick={() => setMode(m)} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${mode === m ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>
-                {m === 'structural' ? 'Structural' : 'Semantic'}
-              </button>
-            ))}
-          </div>
-          {/* Colour by */}
-          <div className="hidden lg:flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
-            {(['type', 'community'] as const).map((c) => (
-              <button key={c} onClick={() => setColorBy(c)} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors capitalize ${colorBy === c ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>
-                {c}
-              </button>
-            ))}
-          </div>
           {/* 2D / 3D */}
           <div className="flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
             <button onClick={() => setView('2d')} className={`flex items-center gap-1 px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${view === '2d' ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}><Network size={13} /> 2D</button>
