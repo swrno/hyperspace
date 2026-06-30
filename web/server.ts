@@ -15,6 +15,7 @@ import { authorizeHandler, callbackHandler } from './api/oauth.js';
 import { syncAllDue } from './api/ingest.js';
 import appsHandler from './api/apps.js';
 import appChatHandler from './api/app-chat.js';
+import generatePromptHandler from './api/generate-prompt.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -52,6 +53,11 @@ app.all('/api/apps', async (req, res) => {
 // App Playground Chat Endpoint
 app.post('/api/app-chat', async (req, res) => {
   await appChatHandler(req, res);
+});
+
+// Generate Prompt Endpoint
+app.post('/api/generate-prompt', async (req, res) => {
+  await generatePromptHandler(req, res);
 });
 
 // Knowledge Source Connectors Endpoint

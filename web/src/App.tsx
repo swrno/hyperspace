@@ -195,6 +195,20 @@ const OAUTH_PLATFORMS = ['github', 'jira', 'gdocs', 'gslides', 'gsheets', 'gcal'
 // Platforms not yet implemented — show Coming Soon
 const COMING_SOON_PLATFORMS = ['slack', 'salesforce'];
 
+const parseMessageWithThink = (content: string) => {
+  const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/);
+  if (thinkMatch) {
+    const reasoning = thinkMatch[1].trim();
+    const restContent = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+    return { reasoning, content: restContent };
+  }
+  if (content.includes('<think>')) {
+    const reasoning = content.split('<think>')[1].trim();
+    return { reasoning, content: '' };
+  }
+  return { reasoning: null, content };
+};
+
 const groupChatsByDate = (chats: Chat[]) => {
   const groups: Record<string, Chat[]> = {
     today: [],
@@ -968,6 +982,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const [appSettingsForm, setAppSettingsForm] = useState<{
     systemPrompt: string; model: string; temperature: number; maxTokens: number;
   } | null>(null);
+  const [editingAppField, setEditingAppField] = useState<'prompt' | 'model' | null>(null);
 
   const handleCookieConsent = (accepted: boolean) => {
     localStorage.setItem('orgmind_cookie_consent', accepted ? 'accepted' : 'declined');
@@ -1524,7 +1539,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           name: newAppName.trim(),
           description: newAppDesc.trim() || undefined,
           systemPrompt: 'You are a helpful AI assistant.',
-          model: 'qwen/qwen3.6-27b',
+          model: 'llama3-8b-8192',
           temperature: 0.7,
           maxTokens: 2048,
           linkedKbIds: [],
@@ -2878,13 +2893,21 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                                 <img src="/particles.png" className="w-[14px] h-[14px] opacity-80" alt="ai" />
                               </div>
                               <div className="flex-1 min-w-0 font-basel text-[14px] text-[#E8E6E3] prose-invert">
-                                {msg.reasoning && (
-                                  <Reasoning isStreaming={false} initialSeconds={3} customStreaming={true}>
-                                    <ReasoningTrigger />
-                                    <ReasoningContent>{msg.reasoning}</ReasoningContent>
-                                  </Reasoning>
-                                )}
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                                {(() => {
+                                  const parsed = parseMessageWithThink(msg.content);
+                                  const displayReasoning = msg.reasoning || parsed.reasoning;
+                                  return (
+                                    <>
+                                      {displayReasoning && (
+                                        <Reasoning isStreaming={false} initialSeconds={3} customStreaming={true}>
+                                          <ReasoningTrigger />
+                                          <ReasoningContent>{displayReasoning}</ReasoningContent>
+                                        </Reasoning>
+                                      )}
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsed.content}</ReactMarkdown>
+                                    </>
+                                  );
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -2970,12 +2993,35 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-[#F4F0EB] text-[15px]">System Prompt</h3>
-                <button className="px-3 py-1.5 bg-[#2A2826] border border-[#3D3A37] rounded-lg flex items-center gap-2 text-[11px] font-medium text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors">
-                  <Edit2 size={12} /> Edit
-                </button>
+                {editingAppField === 'prompt' ? (
+                  <button onClick={() => { updateApp(app.id, { systemPrompt: appSettingsForm?.systemPrompt }); setEditingAppField(null); }} className="px-3 py-1.5 bg-[#C9A66B] border border-[#C9A66B] rounded-lg flex items-center gap-2 text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors">
+                    <Check size={12} /> Save
+                  </button>
+                ) : (
+                  <button onClick={() => {
+                    setAppSettingsForm({
+                      systemPrompt: app.systemPrompt || '',
+                      model: app.model || '',
+                      temperature: app.temperature ?? 0.7,
+                      maxTokens: app.maxTokens ?? 1024
+                    });
+                    setEditingAppField('prompt');
+                  }} className="px-3 py-1.5 bg-[#2A2826] border border-[#3D3A37] rounded-lg flex items-center gap-2 text-[11px] font-medium text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors">
+                    <Edit2 size={12} /> Edit
+                  </button>
+                )}
               </div>
               <div className="bg-[#252523] p-4 rounded-xl border border-[#3D3A37] text-[13px] text-[#A8A39B] leading-relaxed max-h-[160px] overflow-y-auto custom-scrollbar">
-                {app.systemPrompt || "No system prompt configured. The assistant will use default behavior."}
+                {editingAppField === 'prompt' ? (
+                  <textarea 
+                    value={appSettingsForm?.systemPrompt || ''}
+                    onChange={(e) => setAppSettingsForm(prev => prev ? { ...prev, systemPrompt: e.target.value } : null)}
+                    className="w-full bg-transparent text-[#F4F0EB] resize-none outline-none focus:outline-none"
+                    rows={4}
+                  />
+                ) : (
+                  app.systemPrompt || "No system prompt configured. The assistant will use default behavior."
+                )}
               </div>
             </div>
 
@@ -2983,22 +3029,67 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-[#F4F0EB] text-[15px]">Model Configuration</h3>
-                <button className="px-3 py-1.5 bg-[#2A2826] border border-[#3D3A37] rounded-lg flex items-center gap-2 text-[11px] font-medium text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors">
-                  <Edit2 size={12} /> Edit
-                </button>
+                {editingAppField === 'model' ? (
+                  <button onClick={() => { updateApp(app.id, { model: appSettingsForm?.model, temperature: appSettingsForm?.temperature, maxTokens: appSettingsForm?.maxTokens }); setEditingAppField(null); }} className="px-3 py-1.5 bg-[#C9A66B] border border-[#C9A66B] rounded-lg flex items-center gap-2 text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors">
+                    <Check size={12} /> Save
+                  </button>
+                ) : (
+                  <button onClick={() => {
+                    setAppSettingsForm({
+                      systemPrompt: app.systemPrompt || '',
+                      model: app.model || '',
+                      temperature: app.temperature ?? 0.7,
+                      maxTokens: app.maxTokens ?? 1024
+                    });
+                    setEditingAppField('model');
+                  }} className="px-3 py-1.5 bg-[#2A2826] border border-[#3D3A37] rounded-lg flex items-center gap-2 text-[11px] font-medium text-[#F4F0EB] hover:bg-[#3D3A37] transition-colors">
+                    <Edit2 size={12} /> Edit
+                  </button>
+                )}
               </div>
               <div className="bg-[#252523] p-4 rounded-xl border border-[#3D3A37] mb-3">
                 <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Model</div>
-                <div className="text-[13.5px] font-medium text-[#F4F0EB]">{app.model}</div>
+                {editingAppField === 'model' ? (
+                  <input
+                    type="text"
+                    value={appSettingsForm?.model || ''}
+                    onChange={(e) => setAppSettingsForm(prev => prev ? { ...prev, model: e.target.value } : null)}
+                    className="w-full bg-transparent text-[13.5px] font-medium text-[#F4F0EB] border-b border-[#3D3A37] focus:border-[#C9A66B] outline-none py-1"
+                  />
+                ) : (
+                  <div className="text-[13.5px] font-medium text-[#F4F0EB]">{app.model}</div>
+                )}
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-[#252523] p-3 rounded-xl border border-[#3D3A37] text-center">
                   <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Temp</div>
-                  <div className="text-[14px] font-medium text-[#F4F0EB]">{app.temperature}</div>
+                  {editingAppField === 'model' ? (
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      value={appSettingsForm?.temperature ?? ''}
+                      onChange={(e) => setAppSettingsForm(prev => prev ? { ...prev, temperature: parseFloat(e.target.value) } : null)}
+                      className="w-full bg-transparent text-[14px] font-medium text-[#F4F0EB] border-b border-[#3D3A37] focus:border-[#C9A66B] outline-none text-center"
+                    />
+                  ) : (
+                    <div className="text-[14px] font-medium text-[#F4F0EB]">{app.temperature}</div>
+                  )}
                 </div>
                 <div className="bg-[#252523] p-3 rounded-xl border border-[#3D3A37] text-center">
                   <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Tokens</div>
-                  <div className="text-[14px] font-medium text-[#F4F0EB]">{app.maxTokens || 1024}</div>
+                  {editingAppField === 'model' ? (
+                    <input
+                      type="number"
+                      step="1"
+                      value={appSettingsForm?.maxTokens ?? ''}
+                      onChange={(e) => setAppSettingsForm(prev => prev ? { ...prev, maxTokens: parseInt(e.target.value) } : null)}
+                      className="w-full bg-transparent text-[14px] font-medium text-[#F4F0EB] border-b border-[#3D3A37] focus:border-[#C9A66B] outline-none text-center"
+                    />
+                  ) : (
+                    <div className="text-[14px] font-medium text-[#F4F0EB]">{app.maxTokens || 1024}</div>
+                  )}
                 </div>
                 <div className="bg-[#252523] p-3 rounded-xl border border-[#3D3A37] text-center">
                   <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Top P</div>
