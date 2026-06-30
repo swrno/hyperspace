@@ -1582,14 +1582,24 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     }
   };
 
-  const handleGeneratePrompt = async () => {
+  const handleGeneratePrompt = async (appId?: string) => {
     if (!promptTopic.trim()) return;
     setIsGeneratingPrompt(true);
     try {
+      // Pass app name + linked KB names so the generator can produce a
+      // prompt that is specific to this app's purpose and data sources.
+      const app = appId ? applications.find(a => a.id === appId) : null;
+      const kbNames = app
+        ? kbList.filter(k => app.linkedKbIds.includes(k.id)).map(k => k.name)
+        : [];
       const response = await fetch('/api/generate-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
-        body: JSON.stringify({ topic: promptTopic.trim() })
+        body: JSON.stringify({
+          topic: promptTopic.trim(),
+          appName: app?.name,
+          kbNames,
+        })
       });
       if (response.ok) {
         const data = await response.json();
@@ -3084,10 +3094,10 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                         value={promptTopic}
                         onChange={e => setPromptTopic(e.target.value)}
                         className="flex-1 bg-transparent text-[12px] text-[#A8A39B] outline-none border border-[#3D3A37] rounded-lg px-3 py-1.5 focus:border-[#C9A66B]"
-                        onKeyDown={e => { if (e.key === 'Enter') handleGeneratePrompt(); }}
+                        onKeyDown={e => { if (e.key === 'Enter') handleGeneratePrompt(app.id); }}
                       />
                       <button
-                        onClick={handleGeneratePrompt}
+                        onClick={() => handleGeneratePrompt(app.id)}
                         disabled={!promptTopic.trim() || isGeneratingPrompt}
                         className="px-3 py-1.5 bg-[#C9A66B] rounded-lg text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                       >

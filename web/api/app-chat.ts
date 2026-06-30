@@ -40,64 +40,82 @@ export default async function appChatHandler(req: Request, res: Response) {
     //   3. Reciprocal Rank Fusion — merges both ranked lists into a single context
     // Each KB has its own isolated Cognee dataset (hypr_kb_<kbId>).
     let retrievedContext = '';
+    let kbMeta: { name: string; sources: any[] }[] = [];
+
     if (linkedKbIds && linkedKbIds.length > 0) {
+      // Load KB metadata from MongoDB (always needed for system prompt framing).
+      try {
+        const db = await getDb();
+        const kbs = await db.collection('knowledge_bases')
+          .find({ _id: { $in: linkedKbIds }, userId })
+          .toArray();
+        kbMeta = kbs.map((k: any) => ({ name: k.name, sources: k.sources || [] }));
+
+        // ── MongoDB document retrieval ──────────────────────────────────────
+        // Keyword-rank docs, but ALWAYS include the top 3 even when score=0
+        // so vague/exploratory questions ("What do you know?") still get context.
+        const queryTokens = message.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
+        const scored: { text: string; score: number }[] = [];
+
+        for (const kb of kbs) {
+          for (const doc of (kb.documents || [])) {
+            if (!doc.content?.trim()) continue;
+            const hay = `${doc.name} ${doc.content}`.toLowerCase();
+            const score = queryTokens.reduce((n: number, t: string) => n + (hay.includes(t) ? 1 : 0), 0);
+            scored.push({ score, text: `[KB: ${kb.name}] ${doc.name}:\n${doc.content.slice(0, 3000)}` });
+          }
+        }
+
+        scored.sort((a, b) => b.score - a.score);
+        // Take keyword-matched docs first; always include up to 3 regardless of score.
+        const relevant = scored.filter(s => s.score > 0).slice(0, 5);
+        if (relevant.length < 3) {
+          const extras = scored.filter(s => s.score === 0).slice(0, 3 - relevant.length);
+          relevant.push(...extras);
+        }
+        if (relevant.length > 0) {
+          retrievedContext = relevant.map(s => s.text).join('\n\n---\n\n');
+        }
+      } catch (err) {
+        console.warn('KB direct retrieval failed:', err);
+      }
+
+      // ── Cognee hybrid search (graph + vector) ───────────────────────────
+      // Run in parallel with (or after) MongoDB. If Cognee returns results,
+      // prepend them — they are semantically richer than keyword matching.
       try {
         const fetchPromises = linkedKbIds.map((kbId: string) =>
           hybridSearch(message, { userId, kbId, topK: 10 })
         );
         const results = await Promise.all(fetchPromises);
-        const parts = results.filter(r => r);
+        const parts = results.filter((r): r is string => !!r);
         if (parts.length > 0) {
-          retrievedContext = parts.join('\n\n---\n\n');
+          // Cognee results take priority — prepend to any MongoDB context.
+          retrievedContext = parts.join('\n\n---\n\n')
+            + (retrievedContext ? '\n\n---\n\n' + retrievedContext : '');
         }
       } catch (err) {
-        console.warn('Failed to retrieve from Cognee KBs:', err);
-      }
-
-      // ── Fallback: direct MongoDB KB document retrieval ──────────────────
-      // Cognee may not have indexed the data yet (cognify is async + debounced)
-      // or the dataset search may return nothing. Always ground the answer in
-      // the raw KB documents that ARE stored in MongoDB so the LLM has real
-      // context regardless of Cognee's state.
-      if (!retrievedContext) {
-        try {
-          const db = await getDb();
-          const kbs = await db.collection('knowledge_bases')
-            .find({ _id: { $in: linkedKbIds }, userId })
-            .toArray();
-
-          // Keyword score so the most-relevant docs surface first.
-          const queryTokens = message.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
-          const scored: { text: string; score: number }[] = [];
-
-          for (const kb of kbs) {
-            for (const doc of (kb.documents || [])) {
-              if (!doc.content?.trim()) continue;
-              const hay = `${doc.name} ${doc.content}`.toLowerCase();
-              const score = queryTokens.reduce((n: number, t: string) => n + (hay.includes(t) ? 1 : 0), 0);
-              // Always include when there are ≤3 docs; otherwise keyword-gate.
-              if (score > 0 || (kb.documents || []).length <= 3) {
-                scored.push({
-                  score,
-                  text: `[KB: ${kb.name}] ${doc.name}:\n${doc.content.slice(0, 3000)}`,
-                });
-              }
-            }
-          }
-
-          scored.sort((a, b) => b.score - a.score);
-          if (scored.length > 0) {
-            retrievedContext = scored.slice(0, 5).map(s => s.text).join('\n\n---\n\n');
-          }
-        } catch (err) {
-          console.warn('KB direct fallback retrieval failed:', err);
-        }
+        console.warn('Cognee hybrid search failed:', err);
       }
     }
 
     let finalSystemPrompt = systemPrompt || 'You are a helpful AI assistant.';
+
+    // Always tell the LLM what knowledge bases are linked, even if retrieval
+    // returns nothing — so it can say "I have access to X but couldn't find..."
+    // instead of answering purely from its training data.
+    if (kbMeta.length > 0) {
+      const kbList = kbMeta.map(k => {
+        const srcList = k.sources.flatMap((s: any) => (s.items || []).map((i: any) => i.name)).join(', ');
+        return `- "${k.name}"${srcList ? ` (sources: ${srcList})` : ''}`;
+      }).join('\n');
+      finalSystemPrompt += `\n\n# Linked Knowledge Bases\nYou have access to the following knowledge bases:\n${kbList}\nAnswer questions using the content from these knowledge bases. If the retrieved context below is insufficient, say what you found and what's missing — do NOT answer from your general training data as if you have no KB access.`;
+    }
+
     if (retrievedContext) {
-      finalSystemPrompt += `\n\n# Context from Knowledge Base:\nThe following information is retrieved from the knowledge base using hybrid search (graph traversal + vector search). Use it to answer the user's question accurately. If the context is insufficient, say so.\n\n${retrievedContext}`;
+      finalSystemPrompt += `\n\n# Retrieved Context\nThe following was retrieved from the knowledge base. Use it to answer accurately:\n\n${retrievedContext}`;
+    } else if (kbMeta.length > 0) {
+      finalSystemPrompt += `\n\n# Retrieved Context\nNo specific documents were retrieved for this query. Let the user know what knowledge bases you have access to and suggest they ask more specific questions.`;
     }
 
     messages.push({ role: 'system', content: finalSystemPrompt });

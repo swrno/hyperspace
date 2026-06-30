@@ -122,10 +122,20 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   // Dynamic items fetched from external APIs
   const [dynamicItems, setDynamicItems] = useState<Record<string, {id: string, name: string}[]>>({});
   const [isFetchingGithub, setIsFetchingGithub] = useState(false);
+  // When no GitHub token is available, ask for a PAT
+  const [githubUsernameInput, setGithubUsernameInput] = useState('');
+  const [githubPatInput, setGithubPatInput] = useState('');
+  const [githubPatError, setGithubPatError] = useState('');
+  const [savingGithubPat, setSavingGithubPat] = useState(false);
+  const [needsGithubUsername, setNeedsGithubUsername] = useState(false);
 
   // Ingestion progress polling — keyed by kbId
   const [ingestProgress, setIngestProgress] = useState<Record<string, { phase: string; pct: number; done: boolean; error?: string }>>({});
   const ingestPollRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+
+  // Sync banner shown after attaching a GitHub source
+  const [syncBanner, setSyncBanner] = useState<{ visible: boolean; repoName: string }>({ visible: false, repoName: '' });
+  const syncBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const authHeaders = (extra: Record<string, string> = {}): Record<string, string> => ({
     'Content-Type': 'application/json',
@@ -501,19 +511,33 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                       setSourceSearch('');
                       setExpandedPlatform(id);
                       
-                      // Fetch from GitHub dynamically if expanded and not loaded
                       if (id === 'github' && !dynamicItems['github']) {
                         setIsFetchingGithub(true);
+                        setNeedsGithubUsername(false);
                         try {
-                          const res = await fetch('https://api.github.com/users/swrno/repos?sort=updated&per_page=30');
+                          const ghAccount = connectors?.github?.account;
+                          const res = await fetch('/api/connectors', {
+                            method: 'POST',
+                            headers: authHeaders(),
+                            body: JSON.stringify({
+                              action: 'list-items',
+                              platform: 'github',
+                              ...(ghAccount && !ghAccount.includes('@') ? { username: ghAccount } : {}),
+                            }),
+                          });
                           if (res.ok) {
-                            const repos = await res.json();
-                            setDynamicItems(prev => ({
-                              ...prev,
-                              github: repos.map((r: any) => ({ id: r.full_name, name: r.full_name }))
-                            }));
+                            const data = await res.json();
+                            if (data.live) {
+                              setDynamicItems(prev => ({
+                                ...prev,
+                                github: (data.items || []).map((r: any) => ({ id: r.name, name: r.name, meta: r.meta })),
+                              }));
+                            } else {
+                              // No token available — ask the user for their GitHub username
+                              setNeedsGithubUsername(true);
+                            }
                           }
-                        } catch (e) { console.error('Failed to fetch from GitHub API', e); }
+                        } catch (e) { console.error('Failed to fetch repos from backend:', e); setNeedsGithubUsername(true); }
                         setIsFetchingGithub(false);
                       }
                     }
@@ -523,6 +547,12 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                     const selectedItems = availableItems.filter(i => tempSelectedItems[i.id]);
                     updateSourceItems(active.id, id, selectedItems);
                     setExpandedPlatform(null);
+                    // Show sync banner for GitHub ingestion (takes ~2–5 min)
+                    if (id === 'github' && selectedItems.length > 0) {
+                      if (syncBannerTimerRef.current) clearTimeout(syncBannerTimerRef.current);
+                      setSyncBanner({ visible: true, repoName: selectedItems.map(i => i.name).join(', ') });
+                      syncBannerTimerRef.current = setTimeout(() => setSyncBanner({ visible: false, repoName: '' }), 30_000);
+                    }
                   };
                   
                   const kbIngest = active ? ingestProgress[active.id] : undefined;
@@ -616,14 +646,91 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                           </div>
                           
                           <div className="max-h-[240px] overflow-y-auto p-2">
-                            {filteredItems.length === 0 ? (
-                              <div className="py-6 text-center text-[12px] font-geist text-[#8C8880]">
-                                No items found
-                              </div>
-                            ) : isFetchingGithub && id === 'github' ? (
+                            {isFetchingGithub && id === 'github' ? (
                               <div className="py-6 flex flex-col items-center justify-center text-[12px] font-geist text-[#8C8880]">
                                 <Loader2 size={16} className="animate-spin mb-2 opacity-50" />
-                                Fetching your repositories directly from GitHub...
+                                Loading repositories…
+                              </div>
+                            ) : needsGithubUsername && id === 'github' ? (
+                              <div className="py-4 px-2 flex flex-col gap-3">
+                                <div>
+                                  <p className="text-[12.5px] font-geist font-semibold text-[#F4F0EB] mb-0.5">Connect GitHub</p>
+                                  <p className="text-[11.5px] font-geist text-[#8C8880] leading-relaxed">
+                                    Paste a Personal Access Token to load your repositories and enable full ingestion.{' '}
+                                    <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer" className="text-[#C9A66B] hover:underline">
+                                      Create one →
+                                    </a>
+                                  </p>
+                                </div>
+                                <input
+                                  type="password"
+                                  placeholder="github_pat_…"
+                                  value={githubPatInput}
+                                  onChange={e => { setGithubPatInput(e.target.value); setGithubPatError(''); }}
+                                  className="w-full bg-[#252523] border border-[#3D3A37] rounded-lg px-3 py-2 text-[13px] font-geist text-[#F4F0EB] placeholder:text-[#4A4744] focus:border-[#57534E] outline-none font-mono"
+                                  autoFocus
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="GitHub username (optional — auto-detected)"
+                                  value={githubUsernameInput}
+                                  onChange={e => setGithubUsernameInput(e.target.value)}
+                                  className="w-full bg-[#252523] border border-[#3D3A37] rounded-lg px-3 py-2 text-[13px] font-geist text-[#F4F0EB] placeholder:text-[#4A4744] focus:border-[#57534E] outline-none"
+                                />
+                                {githubPatError && (
+                                  <p className="text-[11px] font-geist text-[#C28379]">{githubPatError}</p>
+                                )}
+                                <button
+                                  disabled={!githubPatInput.trim() || savingGithubPat}
+                                  onClick={async () => {
+                                    if (!githubPatInput.trim()) return;
+                                    setSavingGithubPat(true);
+                                    setGithubPatError('');
+                                    try {
+                                      const res = await fetch('/api/connectors', {
+                                        method: 'POST',
+                                        headers: authHeaders(),
+                                        body: JSON.stringify({
+                                          action: 'save-github-token',
+                                          platform: 'github',
+                                          token: githubPatInput.trim(),
+                                          username: githubUsernameInput.trim() || undefined,
+                                        }),
+                                      });
+                                      const data = await res.json();
+                                      if (!res.ok) { setGithubPatError(data.error || 'Failed to save token'); return; }
+                                      // Token saved — now load repos with it
+                                      setGithubPatInput('');
+                                      setNeedsGithubUsername(false);
+                                      setIsFetchingGithub(true);
+                                      const repoRes = await fetch('/api/connectors', {
+                                        method: 'POST',
+                                        headers: authHeaders(),
+                                        body: JSON.stringify({ action: 'list-items', platform: 'github' }),
+                                      });
+                                      if (repoRes.ok) {
+                                        const repoData = await repoRes.json();
+                                        setDynamicItems(prev => ({
+                                          ...prev,
+                                          github: (repoData.items || []).map((r: any) => ({ id: r.name, name: r.name, meta: r.meta })),
+                                        }));
+                                      }
+                                    } catch (e: any) {
+                                      setGithubPatError(e.message || 'Something went wrong');
+                                    } finally {
+                                      setSavingGithubPat(false);
+                                      setIsFetchingGithub(false);
+                                    }
+                                  }}
+                                  className="w-full py-2 rounded-lg text-[12.5px] font-geist font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                  style={{ background: 'linear-gradient(135deg,#C9A66B,#D8B48C)', color: '#1A1917' }}
+                                >
+                                  {savingGithubPat ? 'Connecting…' : 'Save & Load Repositories'}
+                                </button>
+                              </div>
+                            ) : filteredItems.length === 0 ? (
+                              <div className="py-6 text-center text-[12px] font-geist text-[#8C8880]">
+                                No items found
                               </div>
                             ) : (
                               <>
@@ -699,6 +806,27 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#252523] font-geist animate-fade-in">
+      {/* GitHub sync banner — shown for ~30 s after attaching a repo */}
+      {syncBanner.visible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-start gap-3 px-5 py-4 rounded-2xl shadow-2xl border border-[#3D3A37] bg-[#1E1D1C] max-w-[480px] w-[calc(100%-2rem)] animate-fade-in">
+          <div className="shrink-0 mt-0.5">
+            <Loader2 size={18} className="animate-spin text-[#C9A66B]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-geist font-semibold text-[#F4F0EB]">Syncing your data…</p>
+            <p className="text-[12px] font-geist text-[#8C8880] mt-0.5 leading-relaxed">
+              We're ingesting <span className="text-[#C9A66B] font-medium truncate">{syncBanner.repoName}</span> into your knowledge base.
+              Allow up to <strong className="text-[#F4F0EB]">5 minutes</strong> for full ingestion — you can keep using the app in the meantime.
+            </p>
+          </div>
+          <button
+            onClick={() => { setSyncBanner({ visible: false, repoName: '' }); if (syncBannerTimerRef.current) clearTimeout(syncBannerTimerRef.current); }}
+            className="shrink-0 text-[#6B6762] hover:text-[#F4F0EB] transition-colors mt-0.5"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
       <div className="max-w-[1180px] mx-auto px-6 lg:px-10 py-8 lg:py-10">
 
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-7">

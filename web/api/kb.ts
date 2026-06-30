@@ -188,8 +188,11 @@ export default async function handler(req: Request, res: Response) {
             (async () => {
               try {
                 const conn = await getConnection(user.uid, 'github');
-                if (!conn) throw new Error('No GitHub connection');
-                const ghToken = await getAccessToken(conn);
+                let ghToken = conn ? await getAccessToken(conn) : null;
+                // Fall back to a shared PAT (GITHUB_TOKEN env var) so the ingestion
+                // still works even when the user hasn't completed the OAuth flow.
+                ghToken = ghToken || process.env.GITHUB_TOKEN || null;
+                if (!ghToken) throw new Error('No GitHub connection — connect GitHub in Integrations or set GITHUB_TOKEN');
                 const repoNames = source.items.map((i: any) => i.name);
 
                 console.log(`[KB ${kbId}] Starting deep GitHub snapshot for: ${repoNames.join(', ')}`);
@@ -218,11 +221,31 @@ export default async function handler(req: Request, res: Response) {
                   bumpIngest();
                 }
 
-                // Ingest rich documents individually.
+                // Ingest rich documents into Cognee AND persist a summary entry
+                // into the KB's MongoDB documents array so the direct-retrieval
+                // fallback in app-chat can surface GitHub content even before
+                // Cognee finishes indexing.
+                const mongoDocEntries: any[] = [];
                 for (const doc of documents) {
                   const header = `# Knowledge Base ID: ${kbId}\n# Repo: ${doc.title} [${doc.kind}]\n\n`;
                   await cogneeIngest(header + doc.content, opts);
                   bumpIngest();
+                  mongoDocEntries.push({
+                    id: newId(),
+                    name: doc.title,
+                    type: `github-${doc.kind}`,
+                    size: doc.content.length,
+                    preview: doc.content.slice(0, 240),
+                    content: doc.content.slice(0, 100_000),
+                    status: 'ready',
+                    createdAt: now,
+                  });
+                }
+                if (mongoDocEntries.length > 0) {
+                  await kbCol.updateOne(
+                    { _id: kbId, userId: user.uid },
+                    { $push: { documents: { $each: mongoDocEntries } }, $set: { updatedAt: now } }
+                  );
                 }
 
                 console.log(`[KB ${kbId}] GitHub ingestion complete.`);

@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken } from './auth.js';
 import { ingest as cogneeIngest, formatConnectorPayload } from './cognee.js';
-import { getConnection, getAccessToken } from './connections.js';
+import { getConnection, getAccessToken, saveConnection } from './connections.js';
 import { runInitialSync } from './ingest.js';
 import * as google from './lib/google.js';
 
@@ -30,11 +30,6 @@ const GOOGLE_CONNECTORS = ['gdocs', 'gslides', 'gsheets', 'gcal'];
 const SAMPLE_ITEMS = {
   github: [
     { id: 'gh-1', name: 'acme/frontend-app', meta: 'TypeScript · updated 2h ago' },
-    { id: 'gh-2', name: 'acme/payments-service', meta: 'Go · updated 1d ago' },
-    { id: 'gh-3', name: 'acme/infra-terraform', meta: 'HCL · updated 3d ago' },
-    { id: 'gh-4', name: 'acme/design-system', meta: 'CSS · updated 5d ago' },
-    { id: 'gh-5', name: 'acme/data-pipeline', meta: 'Python · updated 1w ago' },
-    { id: 'gh-6', name: 'acme/mobile-app', meta: 'Swift · updated 2w ago' },
   ],
   gdocs: [
     { id: 'gd-1', name: 'Q3 Product Requirements', meta: 'Doc · shared with you' },
@@ -101,22 +96,56 @@ function timeAgo(iso) {
   return `${Math.floor(d / 7)}w ago`;
 }
 
-async function listItems(platform, userId) {
-  // Prefer a real per-user OAuth connection; fall back to a shared PAT, then samples.
+async function listItems(platform, userId, hint?: { username?: string }) {
+  // Prefer a real per-user OAuth connection; fall back to a shared PAT;
+  // last resort: public API using the stored GitHub username.
   if (platform === 'github') {
-    let token = null;
+    let token: string | null = null;
+    let storedUsername: string | null = hint?.username || null;
     try {
       const conn = await getConnection(userId, 'github');
-      if (conn) token = await getAccessToken(conn);
-    } catch (e) {
+      if (conn) {
+        token = await getAccessToken(conn);
+        storedUsername = storedUsername || (conn as any).providerUsername || null;
+      }
+    } catch (e: any) {
       console.warn('GitHub connection token unavailable:', e.message);
     }
-    token = token || process.env.GITHUB_TOKEN;
+    token = token || process.env.GITHUB_TOKEN || null;
     if (token) {
       try {
         return { items: await fetchGitHubRepos(token), live: true };
-      } catch (e) {
-        console.warn('GitHub live fetch failed, using sample data:', e.message);
+      } catch (e: any) {
+        console.warn('GitHub live fetch failed:', e.message);
+      }
+    }
+    // Last resort: public repos via a stored GitHub username.
+    // Try the username from integration_connections first, then the account field
+    // saved in the connectors collection (if it looks like a username, not an email).
+    if (!storedUsername) {
+      try {
+        const db = await (await import('./mongodb.js')).getDb();
+        const connDoc = await db.collection('connectors').findOne({ userId });
+        const acct: string = connDoc?.connectors?.github?.account || '';
+        if (acct && !acct.includes('@')) storedUsername = acct;
+      } catch { /* ignore */ }
+    }
+    if (storedUsername) {
+      try {
+        const res = await fetch(`https://api.github.com/users/${storedUsername}/repos?per_page=100&sort=updated`);
+        if (res.ok) {
+          const repos = await (res.json() as any);
+          return {
+            items: (repos as any[]).map(r => ({
+              id: r.full_name,
+              name: r.full_name,
+              meta: `${r.language || 'Repo'} · ${r.private ? 'private' : 'public'}${r.pushed_at ? ` · updated ${timeAgo(r.pushed_at)}` : ''}`,
+            })),
+            live: true,
+          };
+        }
+      } catch (e: any) {
+        console.warn('GitHub public API fallback failed:', e.message);
       }
     }
   }
@@ -163,8 +192,53 @@ export default async function handler(req: Request, res: Response) {
       if (!platform) return res.status(400).json({ error: 'platform is required' });
 
       if (action === 'list-items') {
-        const { items, live } = await listItems(platform, user.uid);
+        const { items, live } = await listItems(platform, user.uid, { username: req.body.username });
         return res.status(200).json({ items, live });
+      }
+
+      // Save a user-supplied GitHub PAT (or any provider token) into
+      // integration_connections (encrypted at rest) so getAccessToken() can
+      // return it everywhere — identical to what the OAuth callback does.
+      if (action === 'save-github-token') {
+        const { token: pat, username } = req.body;
+        if (!pat?.trim()) return res.status(400).json({ error: 'token is required' });
+        // Validate the token by fetching the authenticated user.
+        let ghUser: any = null;
+        try {
+          const check = await fetch('https://api.github.com/user', {
+            headers: { Authorization: `Bearer ${pat.trim()}`, Accept: 'application/vnd.github+json' },
+          });
+          if (!check.ok) return res.status(400).json({ error: `GitHub rejected the token (${check.status})` });
+          ghUser = await check.json();
+        } catch (e: any) {
+          return res.status(400).json({ error: `Could not reach GitHub: ${e.message}` });
+        }
+        const ghUsername = ghUser.login || username || '';
+        // Persist encrypted into integration_connections (same shape as OAuth).
+        await saveConnection(
+          user.uid,
+          'github',
+          { accessToken: pat.trim() },
+          { accountId: String(ghUser.id || ''), username: ghUsername },
+        );
+        // Also mark GitHub as connected in the connectors collection.
+        await col.updateOne(
+          { userId: user.uid },
+          {
+            $set: {
+              userId: user.uid,
+              'connectors.github': {
+                connected: true,
+                account: ghUsername,
+                status: 'synced',
+                lastSync: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            },
+          },
+          { upsert: true },
+        );
+        return res.status(200).json({ success: true, username: ghUsername });
       }
 
       if (action === 'save') {
