@@ -13,13 +13,13 @@ import {
   ChevronLeft, ChevronDown, Paperclip, Zap, Terminal, Sparkles, Brain,
   PanelLeftClose, PanelLeftOpen, MoreHorizontal, ThumbsUp, ThumbsDown,
   Mic, Image as ImageIcon, Search, Pencil, RefreshCw, Shield, Users, LogOut, Key,
-  LayoutDashboard, Database, Blocks, MessagesSquare, ArrowRight, ArrowUpRight, Network
+  LayoutDashboard, Database, Blocks, MessagesSquare, ArrowRight, ArrowUpRight
 } from 'lucide-react';
 import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import Dashboard from './Dashboard';
 import KnowledgeBases from './KnowledgeBases';
-import GraphView from './GraphView';
+import ErrorBoundary from './ErrorBoundary';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
 
@@ -1027,6 +1027,10 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  // Scope the assistant to a single knowledge base (null = all connected sources).
+  const [kbList, setKbList] = useState<{ id: string; name: string }[]>([]);
+  const [selectedKbId, setSelectedKbId] = useState<string | null>(null);
+  const [kbMenuOpen, setKbMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<number | string | null>(null);
   const [settings, setSettings] = useState<Settings>({ model: 'gemini-2.5-flash', temperature: 0.7 });
@@ -1066,18 +1070,44 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   };
   // Bumped to v2: invalidates stale demo-era caches that left sources showing
   // "connected" even when nothing is actually connected / the backend is down.
-  const connectorsCacheKey = (token: string | null): string => `hs_connectors_v2_${uidFromToken(token)}`;
+  const CONNECTORS_CACHE_PREFIX = 'hs_connectors_v2_';
+  const connectorsCacheKey = (token: string | null): string => `${CONNECTORS_CACHE_PREFIX}${uidFromToken(token)}`;
+  // Remove every cached connector blob that isn't the given key. This is the
+  // hard guarantee against cross-account leaks: only one user's cache ever lives
+  // on the device, no matter how the previous session ended (logout, Google
+  // "switch account", token refresh, tab reopen).
+  const purgeOtherConnectorCaches = (keepKey: string | null) => {
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k === 'hs_connectors' || (k.startsWith(CONNECTORS_CACHE_PREFIX) && k !== keepKey))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+  };
   const persistConnectorsLocal = (next: Connectors, token?: string | null) => {
-    try { localStorage.setItem(connectorsCacheKey(token || idToken), JSON.stringify(next)); } catch { /* ignore */ }
+    const t = token === undefined ? idToken : token;
+    // Never write under the shared 'anon' bucket — two unidentifiable users
+    // would otherwise read each other's sources.
+    if (uidFromToken(t) === 'anon') return;
+    try { localStorage.setItem(connectorsCacheKey(t), JSON.stringify(next)); } catch { /* ignore */ }
   };
 
   const loadConnectors = async (token: string | null) => {
-    if (!token) { setConnectors({}); return; }
-    // Instant paint from this user's own cache only.
-    try {
-      const cached = JSON.parse(localStorage.getItem(connectorsCacheKey(token)) || '{}');
-      setConnectors(cached && typeof cached === 'object' ? cached : {});
-    } catch { setConnectors({}); }
+    if (!token) { setConnectors({}); purgeOtherConnectorCaches(null); return; }
+    const uid = uidFromToken(token);
+    const key = connectorsCacheKey(token);
+    // Drop any other account's cache up front so it can never flash through.
+    purgeOtherConnectorCaches(key);
+    // Instant paint from this user's own cache only — and only when we can
+    // actually identify the user (an unparseable token must not read a shared
+    // 'anon' bucket that may belong to a different account).
+    if (uid !== 'anon') {
+      try {
+        const cached = JSON.parse(localStorage.getItem(key) || '{}');
+        setConnectors(cached && typeof cached === 'object' ? cached : {});
+      } catch { setConnectors({}); }
+    } else {
+      setConnectors({});
+    }
     try {
       const res = await fetch('/api/connectors', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
@@ -1224,12 +1254,32 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
         method: 'DELETE',
         headers: { Authorization: `Bearer ${idToken}` },
       });
+      // Detach this source from every knowledge base so their graphs rebuild on
+      // their own (the user disconnected it — it must no longer appear).
+      await fetch('/api/kb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ action: 'purge-source', platform: platformId }),
+      });
     } catch (e) { console.warn('Failed to disconnect:', e.message); }
   };
 
   // Clear any previous account's connectors the instant the token changes, then
   // load the current user's (prevents a cross-account flash/leak during the fetch).
   useEffect(() => { setConnectors({}); loadConnectors(idToken); }, [idToken]);
+
+  // Lightweight knowledge-base list for the chat scope picker (id + name only).
+  const loadKbList = async (token: string | null) => {
+    if (!token) { setKbList([]); return; }
+    try {
+      const res = await fetch('/api/kb', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setKbList((data.kbs || []).map((k: { id: string; name: string }) => ({ id: k.id, name: k.name })));
+      }
+    } catch { /* ignore */ }
+  };
+  useEffect(() => { setSelectedKbId(null); loadKbList(idToken); }, [idToken]);
 
   // Returning from a real OAuth handshake: /?screen=integrations&connected=<provider>
   useEffect(() => {
@@ -1752,6 +1802,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           message: userMessage.content,
           history: clearedHistory.map(m => ({ role: m.role, content: m.content })),
           model: currentModel,
+          kbId: selectedKbId || undefined,
         }),
       });
 
@@ -1867,6 +1918,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           message: userMessage.content,
           history: currentMessages.map(m => ({ role: m.role, content: m.content })),
           model: currentModel,
+          kbId: selectedKbId || undefined,
         }),
       });
 
@@ -1955,7 +2007,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
         {[
           { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard },
           { id: 'chat', label: 'Assistant', Icon: MessagesSquare },
-          { id: 'graph', label: 'Knowledge Graph', Icon: Network },
           { id: 'knowledge', label: 'Knowledge', Icon: Database },
           { id: 'integrations', label: 'Integrations', Icon: Blocks },
         ].map(({ id, label, Icon }) => {
@@ -2177,14 +2228,16 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     </div>
   );
 
-  const renderInputBox = () => (
+  const renderInputBox = () => {
+    const selectedKb = kbList.find((k) => k.id === selectedKbId) || null;
+    return (
     <div className="relative flex flex-col bg-[#33302E] px-5 pt-5 pb-4 rounded-[16px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] transition-colors duration-200" style={{ minHeight: '120px' }}>
       <textarea
         ref={inputRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Ask anything..."
+        placeholder={selectedKb ? `Ask within “${selectedKb.name}”…` : 'Ask anything...'}
         disabled={isLoading}
         rows={1}
         className="w-full bg-transparent font-basel text-[15px] placeholder:text-[#6B6762] focus:outline-none resize-none overflow-y-auto text-[#F4F0EB] leading-relaxed flex-1"
@@ -2195,8 +2248,66 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
         }}
       />
       <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center gap-1.5 min-w-0">
+        {/* Knowledge-base scope picker */}
+        <div className="relative shrink-0">
+          {selectedKb ? (
+            <div className="flex items-center gap-0.5 pl-2 pr-1 py-1 rounded-lg text-[12px] font-geist font-medium text-[#C9A66B] bg-[#2A2724] border border-[#5A5043]">
+              <button onClick={() => { if (!kbMenuOpen) loadKbList(idToken); setKbMenuOpen((o) => !o); }} className="flex items-center gap-1.5 max-w-[150px]">
+                <Database size={13} className="shrink-0" />
+                <span className="truncate">{selectedKb.name}</span>
+                <ChevronDown size={12} className={`shrink-0 transition-transform ${kbMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              <button onClick={() => setSelectedKbId(null)} title="Clear scope" className="p-0.5 rounded hover:bg-[#3D3A37] text-[#9C968E] hover:text-[#F4F0EB] transition-colors"><X size={12} /></button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { if (!kbMenuOpen) loadKbList(idToken); setKbMenuOpen((o) => !o); }}
+              title="Ask within a knowledge base"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-geist font-medium text-[#9C968E] hover:text-[#F4F0EB] hover:bg-[#403E3C] transition-colors"
+            >
+              <Plus size={14} />
+              <span className="hidden sm:inline">Knowledge base</span>
+              <ChevronDown size={13} className={`transition-transform ${kbMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+          {kbMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-[40]" onClick={() => setKbMenuOpen(false)} />
+              <div className="absolute bottom-full left-0 mb-2 w-[250px] bg-[#1E1D1C] border border-[#3D3A37] rounded-xl shadow-2xl p-1.5 z-[50] animate-slide-up">
+                <p className="text-[10px] font-geist font-semibold uppercase tracking-[0.12em] text-[#6B6762] px-2.5 py-1.5">Ask within</p>
+                <button
+                  onClick={() => { setSelectedKbId(null); setKbMenuOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${!selectedKbId ? 'bg-[#33302E]' : 'hover:bg-[#2A2826]'}`}
+                >
+                  <Sparkles size={15} className="text-[#9C968E] shrink-0" />
+                  <span className="flex-1 text-[13px] font-geist font-medium text-[#F4F0EB]">All connected sources</span>
+                  {!selectedKbId && <Check size={14} className="text-[#8FAE97] shrink-0" />}
+                </button>
+                {kbList.length > 0 && <div className="my-1 h-px bg-[#33302E] mx-2" />}
+                <div className="max-h-[220px] overflow-y-auto">
+                  {kbList.map((kb) => (
+                    <button
+                      key={kb.id}
+                      onClick={() => { setSelectedKbId(kb.id); setKbMenuOpen(false); }}
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${selectedKbId === kb.id ? 'bg-[#33302E]' : 'hover:bg-[#2A2826]'}`}
+                    >
+                      <Database size={15} className="text-[#9C968E] shrink-0" />
+                      <span className="flex-1 text-[13px] font-geist font-medium text-[#F4F0EB] truncate">{kb.name}</span>
+                      {selectedKbId === kb.id && <Check size={14} className="text-[#8FAE97] shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+                {kbList.length === 0 && (
+                  <p className="px-2.5 py-3 text-[12px] font-geist text-[#8C8880] leading-relaxed">No knowledge bases yet. Create one under <span className="text-[#C7C2BC] font-medium">Knowledge</span>.</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Claude-style model picker */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             onClick={() => setModelMenuOpen((o) => !o)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-geist font-medium text-[#9C968E] hover:text-[#F4F0EB] hover:bg-[#403E3C] transition-colors"
@@ -2228,6 +2339,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             </>
           )}
         </div>
+        </div>
 
         <button
           onClick={handleSend}
@@ -2238,7 +2350,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
         </button>
       </div>
     </div>
-  );
+    );
+  };
 
   // Prefill the assistant with a question coming from the dashboard / KB hub.
   const onAskFromHub = (text: string) => {
@@ -2847,11 +2960,13 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
         {activeScreen === 'admin' ? (
           renderAdminDashboard()
         ) : activeScreen === 'dashboard' ? (
-          <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={setActiveScreen} onAsk={onAskFromHub} platformIcon={platformIcon} />
-        ) : activeScreen === 'graph' ? (
-          <GraphView idToken={idToken} onAsk={onAskFromHub} />
+          <ErrorBoundary label="the dashboard">
+            <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={setActiveScreen} onAsk={onAskFromHub} platformIcon={platformIcon} />
+          </ErrorBoundary>
         ) : activeScreen === 'knowledge' ? (
-          <KnowledgeBases idToken={idToken} onAsk={onAskFromHub} />
+          <ErrorBoundary label="knowledge bases">
+            <KnowledgeBases idToken={idToken} connectors={connectors} platformIcon={platformIcon} onAsk={onAskFromHub} onOpenIntegrations={() => setActiveScreen('integrations')} />
+          </ErrorBoundary>
         ) : activeScreen === 'integrations' ? (
           renderIntegrations()
         ) : (

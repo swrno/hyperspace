@@ -1,8 +1,12 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken } from './auth.js';
-import { ingest as cogneeIngest } from './cognee.js';
+import { ingest as cogneeIngest, cognify, formatConnectorPayload } from './cognee.js';
 import { textFromBase64 } from './lib/pdf.js';
+
+/** Per-KB Cognee tag so a knowledge base's graph is built only from its own
+ *  documents and attached sources (README §4 — graph "based on sources"). */
+const kbNodeSet = (kbId: string) => `kb:${kbId}`;
 
 /**
  * Knowledge Base endpoint.
@@ -51,6 +55,7 @@ export default async function handler(req: Request, res: Response) {
         name: k.name,
         description: k.description || '',
         documents: k.documents || [],
+        sources: k.sources || [],
         createdAt: k.createdAt,
         updatedAt: k.updatedAt,
       }));
@@ -72,6 +77,7 @@ export default async function handler(req: Request, res: Response) {
           name,
           description: (body.kb?.description || '').trim(),
           documents: [],
+          sources: [],
           createdAt: now,
           updatedAt: now,
         };
@@ -106,12 +112,13 @@ export default async function handler(req: Request, res: Response) {
         );
 
         // Stage into Cognee + trigger graph extraction (cognify) so chat can
-        // reason over this document.
+        // reason over this document. Tag with this KB's nodeSet so its graph is
+        // scoped to its own documents and sources.
         if (content.trim()) {
           const header = `# Knowledge Base Document: ${entry.name}\n\n`;
           cogneeIngest(header + content.slice(0, 100000), {
             userId: user.uid,
-            nodeSet: ['kb'],
+            nodeSet: ['kb', kbNodeSet(kbId)],
           }).catch((e) => console.warn('KB Cognee ingest failed (non-fatal):', e.message));
         }
 
@@ -127,6 +134,59 @@ export default async function handler(req: Request, res: Response) {
           { _id: kbId, userId: user.uid },
           { $pull: { documents: { id: docId } }, $set: { updatedAt: now } }
         );
+        return res.status(200).json({ success: true });
+      }
+
+      // ── Attach a globally-authorized source (repo, docs…) to this KB ──────
+      // The KB graph + mindmap are built from its attached sources, so the
+      // selected items are also staged into Cognee under this KB's nodeSet.
+      if (action === 'attach-source') {
+        const { kbId, platform, items = [] } = body;
+        if (!kbId || !platform) return res.status(400).json({ error: 'kbId and platform are required' });
+        const source = {
+          platform,
+          items: (Array.isArray(items) ? items : []).map((i) => ({
+            id: String(i.id), name: String(i.name || i.id).slice(0, 200), meta: i.meta ? String(i.meta).slice(0, 200) : '',
+          })),
+          attachedAt: now,
+        };
+        // Replace any existing source for this platform, then add the new one.
+        await kbCol.updateOne({ _id: kbId, userId: user.uid }, { $pull: { sources: { platform } } });
+        await kbCol.updateOne(
+          { _id: kbId, userId: user.uid },
+          { $push: { sources: source }, $set: { updatedAt: now } }
+        );
+        if (source.items.length) {
+          const payload = formatConnectorPayload(user.uid, user.email, platform, source.items);
+          cogneeIngest(payload, { userId: user.uid, nodeSet: ['kb', kbNodeSet(kbId)] })
+            .catch((e) => console.warn('KB source Cognee ingest failed (non-fatal):', e.message));
+        }
+        return res.status(200).json({ success: true, source });
+      }
+
+      // ── Detach a source from this KB and rebuild its graph ───────────────
+      if (action === 'detach-source') {
+        const { kbId, platform } = body;
+        if (!kbId || !platform) return res.status(400).json({ error: 'kbId and platform are required' });
+        await kbCol.updateOne(
+          { _id: kbId, userId: user.uid },
+          { $pull: { sources: { platform } }, $set: { updatedAt: now } }
+        );
+        // Force a graph rebuild so the removed source's nodes drop out on their own.
+        cognify(user.uid, { force: true }).catch(() => {});
+        return res.status(200).json({ success: true });
+      }
+
+      // ── Remove a platform from EVERY KB (called when a connector is
+      //    disconnected globally) so the per-KB graphs rebuild automatically. ─
+      if (action === 'purge-source') {
+        const { platform } = body;
+        if (!platform) return res.status(400).json({ error: 'platform is required' });
+        await kbCol.updateMany(
+          { userId: user.uid },
+          { $pull: { sources: { platform } }, $set: { updatedAt: now } }
+        );
+        cognify(user.uid, { force: true }).catch(() => {});
         return res.status(200).json({ success: true });
       }
 

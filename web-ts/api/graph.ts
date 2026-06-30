@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken } from './auth.js';
 import { getDatasetGraph } from './cognee.js';
-import { buildStructuralGraph } from './lib/graphbuild.js';
+import { buildStructuralGraph, buildKbGraph } from './lib/graphbuild.js';
 
 // Clean Cognee's "Type_<uuid>" auto labels down to something readable.
 function cleanLabel(n) {
@@ -36,6 +36,18 @@ export default async function handler(req: Request, res: Response) {
 
   try {
     const user = await verifyToken(req);
+
+    // Per-KB graph → built purely from this knowledge base's own documents and
+    // attached sources, so it's always "based on sources" and rebuilds when a
+    // source is attached/detached. (Scoped, runs offline of Cognee.)
+    const kbId = req.query?.kbId;
+    if (kbId) {
+      const db = await getDb();
+      const kb = await db.collection('knowledge_bases').findOne({ _id: kbId, userId: user.uid });
+      if (!kb) return res.status(404).json({ error: 'Knowledge base not found' });
+      const { nodes, edges, stats } = buildKbGraph(kb);
+      return res.status(200).json({ nodes, edges, stats, kbId });
+    }
 
     // Semantic mode → the REAL graph Cognee extracted via cognify (entities +
     // relationships the LLM found), rather than our structural Mongo edges.

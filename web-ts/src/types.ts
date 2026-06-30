@@ -62,7 +62,6 @@ export interface Settings {
 export type ActiveScreen =
   | 'dashboard'
   | 'chat'
-  | 'graph'
   | 'knowledge'
   | 'integrations'
   | 'admin';
@@ -182,10 +181,19 @@ export interface KbDocument {
   contentBase64?: string;
 }
 
+/** A source (repo, docs, channel…) attached to a specific knowledge base. */
+export interface KbSource {
+  platform: string;
+  items: ConnectorItem[];
+  attachedAt?: string;
+}
+
 export interface KnowledgeBase {
   id: string;
   name: string;
   description?: string;
   documents?: KbDocument[];
+  sources?: KbSource[];
   createdAt?: string;
+  updatedAt?: string;
 }

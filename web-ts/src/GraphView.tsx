@@ -19,15 +19,16 @@ const ForceGraph3D = lazy(() => import('react-force-graph-3d'));
 
 /* Node colour by entity type (structural + Cognee semantic types). */
 const TYPE_COLOR: Record<string, string> = {
-  Source: '#E8C9A0', Repository: '#C28379', Commit: '#BBB5A9', CodeChange: '#8FAE97',
+  KnowledgeBase: '#C9A66B', Source: '#E8C9A0', Repository: '#C28379', Commit: '#BBB5A9', CodeChange: '#8FAE97',
   WorkItem: '#8AA9C9', Document: '#A9B8C9', Project: '#9C93B0', Sprint: '#C9A66B',
-  Event: '#9FB9A6', Person: '#A8A29A',
+  Event: '#9FB9A6', Person: '#A8A29A', Channel: '#8FB0AE', Account: '#B58FA8',
+  Slide: '#D8B48C', Spreadsheet: '#8FAE97',
   // Cognee-extracted graph node types
   Entity: '#8AA9C9', EntityType: '#C9A66B', TextSummary: '#9C93B0',
   DocumentChunk: '#BBB5A9', TextDocument: '#C28379', NodeSet: '#8FAE97',
 };
 const colorOf = (t: string) => TYPE_COLOR[t] || '#8C8880';
-const sizeOf = (n: NodeLike) => (n.type === 'Source' ? 13 : n.type === 'Person' ? 7 : 5 + Math.min(n.degree || 0, 9));
+const sizeOf = (n: NodeLike) => (n.type === 'KnowledgeBase' ? 16 : n.type === 'Source' ? 13 : n.type === 'Person' ? 7 : 5 + Math.min(n.degree || 0, 9));
 
 /* Custom label renderer — draws a dark pill behind the text so labels stay
    readable over light-coloured nodes (plain white text vanished on them). */
@@ -81,9 +82,12 @@ function SigmaGraph({ data, hideTypes, onPick, colorFor }: GraphSubProps) {
 
   useEffect(() => {
     const graph = new Graph({ multi: true });
-    const visible = data.nodes.filter((n) => !hideTypes.has(n.type));
+    // Cognee/semantic graphs can repeat node ids or omit them; addNode throws on
+    // a duplicate, which would otherwise crash the whole app. Guard against both.
+    const visible = data.nodes.filter((n) => !hideTypes.has(n.type) && n.id != null);
     const ids = new Set(visible.map((n) => n.id));
     visible.forEach((n, i) => {
+      if (graph.hasNode(n.id)) return;
       const a = (i / Math.max(visible.length, 1)) * Math.PI * 2;
       graph.addNode(n.id, {
         x: Math.cos(a) * 100 + Math.random() * 10,
@@ -167,7 +171,15 @@ function Graph3D({ data, hideTypes, onPick, colorFor }: GraphSubProps) {
     return () => ro.disconnect();
   }, []);
   const gd = useMemo(() => {
-    const nodes = data.nodes.filter((n) => !hideTypes.has(n.type)).map((n) => ({ id: n.id, label: n.label, type: n.type, val: 1 + (n.degree || 0), raw: n }));
+    // Dedupe node ids (semantic graphs can repeat them) so the 3D renderer
+    // doesn't choke / crash the view.
+    const seen = new Set<string>();
+    const nodes: { id: string; label: string; type: string; val: number; raw: GraphNode }[] = [];
+    for (const n of data.nodes) {
+      if (hideTypes.has(n.type) || n.id == null || seen.has(n.id)) continue;
+      seen.add(n.id);
+      nodes.push({ id: n.id, label: n.label, type: n.type, val: 1 + (n.degree || 0), raw: n });
+    }
     const ids = new Set(nodes.map((n) => n.id));
     const links = data.edges.filter((e) => ids.has(e.source) && ids.has(e.target)).map((e) => ({ source: e.source, target: e.target, label: e.label }));
     return { nodes, links };
@@ -207,9 +219,15 @@ function Graph3D({ data, hideTypes, onPick, colorFor }: GraphSubProps) {
 interface GraphViewProps {
   idToken: string | null;
   onAsk?: (q: string) => void;
+  /** When set, the graph is scoped to a single knowledge base (its docs + sources). */
+  kbId?: string;
+  /** Hide the global toolbar chrome (used when embedded inside a KB tab). */
+  embedded?: boolean;
+  /** Bump to force a reload — e.g. after a source is attached/detached. */
+  refreshKey?: number;
 }
 
-export default function GraphView({ idToken, onAsk }: GraphViewProps) {
+export default function GraphView({ idToken, onAsk, kbId, embedded = false, refreshKey = 0 }: GraphViewProps) {
   const [view, setView] = useState<'2d' | '3d'>('2d');
   const [mode, setMode] = useState<'structural' | 'cognee'>('structural');
   const [colorBy, setColorBy] = useState<'type' | 'community'>('type');
@@ -248,15 +266,20 @@ export default function GraphView({ idToken, onAsk }: GraphViewProps) {
     if (!idToken) { setLoading(false); return; }
     setLoading(true);
     try {
-      const res = await fetch(`/api/graph${m === 'cognee' ? '?mode=cognee' : ''}`, { headers: { Authorization: `Bearer ${idToken}` } });
+      // KB-scoped graph ignores the structural/semantic toggle — it's always
+      // built from that KB's own documents + attached sources.
+      const qs = kbId ? `?kbId=${encodeURIComponent(kbId)}` : (m === 'cognee' ? '?mode=cognee' : '');
+      const res = await fetch(`/api/graph${qs}`, { headers: { Authorization: `Bearer ${idToken}` } });
       if (res.ok) setData(await res.json());
     } catch (e) { console.warn('graph load failed', (e as Error).message); }
     finally { setLoading(false); }
   };
-  useEffect(() => { load(mode); /* eslint-disable-next-line */ }, [idToken, mode]);
+  useEffect(() => { load(mode); /* eslint-disable-next-line */ }, [idToken, mode, kbId, refreshKey]);
 
   const syncNow = async () => {
     if (!idToken || syncing) return;
+    // For a KB the "rebuild" is just a re-read of its own sources.
+    if (kbId) { setSyncing(true); await load(mode); setSyncing(false); return; }
     setSyncing(true);
     try {
       await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` }, body: '{}' });
@@ -274,20 +297,22 @@ export default function GraphView({ idToken, onAsk }: GraphViewProps) {
         <div className="min-w-0">
           <h1 className="text-[20px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-none">Knowledge Graph</h1>
           <p className="text-[12px] font-geist text-[#8C8880] mt-1.5 truncate">
-            {data ? `${data.stats.nodes} nodes · ${data.stats.edges} edges` : 'Your unified, cross-tool graph'}
-            {mode === 'cognee' ? ' · Cognee-extracted' : ' · structural'}
+            {data ? `${data.stats.nodes} nodes · ${data.stats.edges} edges` : (kbId ? 'Built from this base’s documents & sources' : 'Your unified, cross-tool graph')}
+            {!kbId && (mode === 'cognee' ? ' · Cognee-extracted' : ' · structural')}
             {communityCount > 1 ? ` · ${communityCount} communities` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Data mode */}
-          <div className="hidden md:flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
-            {(['structural', 'cognee'] as const).map((m) => (
-              <button key={m} onClick={() => setMode(m)} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${mode === m ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>
-                {m === 'structural' ? 'Structural' : 'Semantic'}
-              </button>
-            ))}
-          </div>
+          {/* Data mode (global graph only — a KB graph is always its own sources) */}
+          {!kbId && (
+            <div className="hidden md:flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
+              {(['structural', 'cognee'] as const).map((m) => (
+                <button key={m} onClick={() => setMode(m)} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${mode === m ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>
+                  {m === 'structural' ? 'Structural' : 'Semantic'}
+                </button>
+              ))}
+            </div>
+          )}
           {/* Colour by */}
           <div className="hidden lg:flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
             {(['type', 'community'] as const).map((c) => (
@@ -302,7 +327,7 @@ export default function GraphView({ idToken, onAsk }: GraphViewProps) {
             <button onClick={() => setView('3d')} className={`flex items-center gap-1 px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${view === '3d' ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}><Boxes size={13} /> 3D</button>
           </div>
           <button onClick={syncNow} disabled={syncing} className="btn-bump btn-bump-accent px-3.5 py-2 text-[12.5px]">
-            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {syncing ? 'Syncing…' : 'Sync now'}
+            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} {kbId ? (syncing ? 'Rebuilding…' : 'Rebuild') : (syncing ? 'Syncing…' : 'Sync now')}
           </button>
         </div>
       </div>
@@ -313,9 +338,9 @@ export default function GraphView({ idToken, onAsk }: GraphViewProps) {
         ) : isEmpty ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center gap-2 px-6">
             <Network size={30} className="text-[#4A4744]" strokeWidth={1.5} />
-            <p className="text-[14px] font-geist text-[#8C8880]">{mode === 'cognee' ? 'Cognee is still building this graph' : 'Your graph is empty'}</p>
+            <p className="text-[14px] font-geist text-[#8C8880]">{kbId ? 'This knowledge base has no graph yet' : mode === 'cognee' ? 'Cognee is still building this graph' : 'Your graph is empty'}</p>
             <p className="text-[12px] font-geist text-[#6B6762] max-w-[340px]">
-              {mode === 'cognee' ? 'Entity extraction (cognify) runs in the background after ingestion. Hit Sync now, then check back in a minute.' : 'Connect a source and ingest items — they appear here as connected nodes.'}
+              {kbId ? 'Upload documents or attach a source to this knowledge base — they appear here as connected nodes.' : mode === 'cognee' ? 'Entity extraction (cognify) runs in the background after ingestion. Hit Sync now, then check back in a minute.' : 'Connect a source and ingest items — they appear here as connected nodes.'}
             </p>
           </div>
         ) : view === '3d' ? (

@@ -1,10 +1,30 @@
 import type { Request, Response } from 'express';
+import { getDb } from './mongodb.js';
 import { verifyToken, checkRateLimit, logMessageUsage } from './auth.js';
 import { graphSearch, recallMemory, rememberMemory } from './cognee.js';
 import { retrieveContext } from './retrieval.js';
 import { routeQuery } from './lib/router.js';
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]).catch(() => null);
+
+// Build a grounding block from a single knowledge base — its documents (text)
+// and attached source items — so a scoped chat answers straight from that base.
+function buildKbContext(kb) {
+  const parts = [];
+  const docs = kb.documents || [];
+  if (docs.length) {
+    parts.push(`### Documents (${docs.length})`);
+    for (const d of docs.slice(0, 15)) {
+      const body = String(d.content || d.preview || '').replace(/\s+/g, ' ').slice(0, 1800);
+      parts.push(`**${d.name}**${body ? ` — ${body}` : ''}`);
+    }
+  }
+  for (const s of kb.sources || []) {
+    const items = (s.items || []).map((i) => i.name).filter(Boolean);
+    parts.push(`### Source: ${s.platform} (${items.length})\n${items.slice(0, 50).join(', ') || '(no items selected)'}`);
+  }
+  return parts.join('\n\n') || '(This knowledge base has no documents or sources yet.)';
+}
 
 // Capture Person-Specific Information from the user's message into Cognee
 // memory (README §8) so future answers are personalised.
@@ -137,36 +157,55 @@ export default async function handler(req: Request, res: Response) {
       return res.status(429).json({ error: `Hourly limit reached (${rate.limit}/hr). Please try again later.` });
     }
 
-    const { message, history = [], model } = req.body || {};
+    const { message, history = [], model, kbId } = req.body || {};
     if (!message || !message.trim()) return res.status(400).json({ error: 'Message is required' });
 
-    // Retrieval depth comes from the selected mode (normal / deep / hyper);
-    // a thematic query is auto-upgraded to community-summary search regardless.
+    // Retrieval depth comes from the selected mode (normal / deep / hyper).
     const modeId = resolveMode(model);
     const mode = MODES[modeId];
-    const route = routeQuery(message);
-    const searchType = route.mode === 'global' ? 'GRAPH_SUMMARY_COMPLETION' : mode.searchType;
-
-    // Ground from three sources in parallel (README §6 hybrid retrieval):
-    //  1. Cognee graph search — multi-hop GraphRAG reasoning at the chosen depth.
-    //  2. Local Mongo graph (kb_entities) — deterministic, instant, user-scoped.
-    //  3. Personal memory (PSI) — what hypr knows about this user.
-    const [cogneeAnswer, localContext, memory] = await Promise.all([
-      withTimeout(graphSearch(message, { userId: user.uid, searchType, topK: mode.topK }), mode.timeout),
-      retrieveContext(user.uid, message).catch(() => null),
-      withTimeout(recallMemory(message, { userId: user.uid }), 2500),
-    ]);
-
-    const ctxParts = [];
-    if (memory) ctxParts.push(`## What hypr remembers about you\n${memory}`);
-    if (cogneeAnswer) ctxParts.push(`## Knowledge graph reasoning (${route.mode} search)\n${cogneeAnswer}`);
-    if (localContext) ctxParts.push(`## Connected data (structured index)\n${localContext}`);
-    const kgContext = ctxParts.length ? ctxParts.join('\n\n') : null;
-
     const depthPrompt = `${SYSTEM_PROMPT}\n\nResponse depth: ${MODE_STYLE[modeId]}`;
-    const systemContent = kgContext
-      ? `${depthPrompt}\n\n# Grounding context\nThe following was retrieved from the user's connected tools and knowledge graph. Ground your answer in it and cite concrete identifiers (repos, PR/issue numbers, Jira keys, doc titles). If sources conflict, prefer the knowledge-graph reasoning.\n\n${kgContext}`
-      : depthPrompt;
+
+    // If the user scoped the chat to a single knowledge base, answer straight
+    // from that base's documents + attached sources (no global graph bleed-in).
+    let kbScope = null;
+    if (kbId) {
+      try {
+        const db = await getDb();
+        const kb = await db.collection('knowledge_bases').findOne({ _id: kbId, userId: user.uid });
+        if (kb) kbScope = { name: kb.name, context: buildKbContext(kb) };
+      } catch (e) { console.warn('KB scope load failed:', e.message); }
+    }
+
+    let systemContent;
+    if (kbScope) {
+      const memory = await withTimeout(recallMemory(message, { userId: user.uid }), 2500);
+      const blocks = [];
+      if (memory) blocks.push(`## What hypr remembers about you\n${memory}`);
+      blocks.push(`## Knowledge base "${kbScope.name}"\n${kbScope.context}`);
+      systemContent = `${depthPrompt}\n\n# Scope: knowledge base "${kbScope.name}"\nThe user is asking specifically about this knowledge base. Answer using ONLY the content below. Cite document names and source items. If the answer isn't present, say it isn't in this knowledge base and suggest what to add.\n\n${blocks.join('\n\n')}`;
+    } else {
+      // Otherwise ground from three sources in parallel (README §6 hybrid retrieval):
+      //  1. Cognee graph search — multi-hop GraphRAG reasoning at the chosen depth.
+      //  2. Local Mongo graph (kb_entities) — deterministic, instant, user-scoped.
+      //  3. Personal memory (PSI) — what hypr knows about this user.
+      const route = routeQuery(message);
+      const searchType = route.mode === 'global' ? 'GRAPH_SUMMARY_COMPLETION' : mode.searchType;
+      const [cogneeAnswer, localContext, memory] = await Promise.all([
+        withTimeout(graphSearch(message, { userId: user.uid, searchType, topK: mode.topK }), mode.timeout),
+        retrieveContext(user.uid, message).catch(() => null),
+        withTimeout(recallMemory(message, { userId: user.uid }), 2500),
+      ]);
+
+      const ctxParts = [];
+      if (memory) ctxParts.push(`## What hypr remembers about you\n${memory}`);
+      if (cogneeAnswer) ctxParts.push(`## Knowledge graph reasoning (${route.mode} search)\n${cogneeAnswer}`);
+      if (localContext) ctxParts.push(`## Connected data (structured index)\n${localContext}`);
+      const kgContext = ctxParts.length ? ctxParts.join('\n\n') : null;
+
+      systemContent = kgContext
+        ? `${depthPrompt}\n\n# Grounding context\nThe following was retrieved from the user's connected tools and knowledge graph. Ground your answer in it and cite concrete identifiers (repos, PR/issue numbers, Jira keys, doc titles). If sources conflict, prefer the knowledge-graph reasoning.\n\n${kgContext}`
+        : depthPrompt;
+    }
 
     const messages = [
       { role: 'system', content: systemContent },

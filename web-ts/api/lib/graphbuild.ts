@@ -1,5 +1,82 @@
 import { sourceLabel } from './schema.js';
 
+/** Human label + node type per connector platform, for the per-KB graph. */
+const PLATFORM_LABEL: Record<string, string> = {
+  github: 'GitHub', gdocs: 'Google Docs', gslides: 'Google Slides', gsheets: 'Google Sheets',
+  gcal: 'Google Calendar', jira: 'Jira', slack: 'Slack', salesforce: 'Salesforce',
+};
+const PLATFORM_ITEM_TYPE: Record<string, string> = {
+  github: 'Repository', gdocs: 'Document', gslides: 'Slide', gsheets: 'Spreadsheet',
+  gcal: 'Event', jira: 'Project', slack: 'Channel', salesforce: 'Account',
+};
+
+/**
+ * Build a knowledge graph scoped to a single knowledge base — its own documents
+ * and the sources attached to it. This is what the per-KB Graph + Mindmap views
+ * render, so the graph is always "based on sources" and rebuilds whenever a
+ * source is attached or detached.
+ *
+ *   KnowledgeBase --CONTAINS--> Documents hub --HAS_DOC--> each Document
+ *   KnowledgeBase --CONNECTED--> Source hub  --CONTAINS--> each item (repo/doc/…)
+ */
+export function buildKbGraph(kb: any) {
+  const nodes: any[] = [];
+  const ids = new Set<string>();
+  const addNode = (n: any) => { if (!ids.has(n.id)) { ids.add(n.id); nodes.push(n); } };
+  const edges: any[] = [];
+  const seen = new Set<string>();
+  const addEdge = (source: string, target: string, label: string) => {
+    if (!ids.has(source) || !ids.has(target) || source === target) return;
+    const k = `${source}|${target}|${label}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    edges.push({ source, target, label });
+  };
+
+  const rootId = `kb:${kb._id || kb.id}`;
+  addNode({ id: rootId, label: kb.name || 'Knowledge Base', type: 'KnowledgeBase', source: 'kb' });
+
+  const docs = kb.documents || [];
+  if (docs.length) {
+    const hub = 'kbsrc:documents';
+    addNode({ id: hub, label: 'Documents', type: 'Source', source: 'documents', hub: true });
+    addEdge(rootId, hub, 'CONTAINS');
+    for (const d of docs) {
+      const nid = `kbdoc:${d.id}`;
+      addNode({ id: nid, label: d.name || 'Document', type: 'Document', source: 'documents', status: d.status });
+      addEdge(hub, nid, 'HAS_DOC');
+    }
+  }
+
+  for (const s of kb.sources || []) {
+    const hub = `kbsrc:${s.platform}`;
+    addNode({ id: hub, label: PLATFORM_LABEL[s.platform] || s.platform, type: 'Source', source: s.platform, hub: true });
+    addEdge(rootId, hub, 'CONNECTED');
+    const itype = PLATFORM_ITEM_TYPE[s.platform] || 'Entity';
+    for (const it of s.items || []) {
+      const nid = `kbitem:${s.platform}:${it.id}`;
+      addNode({ id: nid, label: it.name || it.id, type: itype, source: s.platform, url: it.url });
+      addEdge(hub, nid, 'CONTAINS');
+    }
+  }
+
+  const degree: Record<string, number> = {};
+  for (const e of edges) { degree[e.source] = (degree[e.source] || 0) + 1; degree[e.target] = (degree[e.target] || 0) + 1; }
+  for (const n of nodes) n.degree = degree[n.id] || 0;
+
+  return {
+    nodes,
+    edges,
+    stats: {
+      nodes: nodes.length,
+      edges: edges.length,
+      entities: nodes.length,
+      sources: (kb.sources || []).length + (docs.length ? 1 : 0),
+      people: 0,
+    },
+  };
+}
+
 /**
  * Build the structural knowledge graph (nodes + edges) from normalised entities,
  * following the README data model. Shared by /api/graph (visualisation) and
