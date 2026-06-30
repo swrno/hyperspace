@@ -11,6 +11,15 @@ import { entitiesToDocument } from './lib/schema.js';
  *  documents and attached sources (README §4 — graph "based on sources"). */
 const kbNodeSet = (kbId: string) => `kb:${kbId}`;
 
+/** In-memory ingestion progress — keyed by kbId. Cleared 10 min after done. */
+export const ingestProgress = new Map<string, {
+  phase: string;
+  pct: number;
+  done: boolean;
+  error?: string;
+  startedAt: number;
+}>();
+
 /**
  * Knowledge Base endpoint.
  *
@@ -48,6 +57,13 @@ export default async function handler(req: Request, res: Response) {
     const kbCol = db.collection('knowledge_bases');
 
     if (req.method === 'GET') {
+      // Lightweight progress-poll endpoint — no DB hit needed.
+      if (req.query.action === 'ingest-progress' && req.query.kbId) {
+        const p = ingestProgress.get(String(req.query.kbId));
+        if (!p) return res.status(200).json({ found: false });
+        return res.status(200).json({ found: true, ...p });
+      }
+
       const kbs = await kbCol
         .find({ userId: user.uid })
         .sort({ updatedAt: -1 })
@@ -168,6 +184,7 @@ export default async function handler(req: Request, res: Response) {
           if (platform === 'github') {
             // Deep background ingestion — runs fully async so the HTTP response
             // returns immediately while content is streamed into Cognee.
+            ingestProgress.set(kbId, { phase: 'Starting…', pct: 2, done: false, startedAt: Date.now() });
             (async () => {
               try {
                 const conn = await getConnection(user.uid, 'github');
@@ -176,30 +193,46 @@ export default async function handler(req: Request, res: Response) {
                 const repoNames = source.items.map((i: any) => i.name);
 
                 console.log(`[KB ${kbId}] Starting deep GitHub snapshot for: ${repoNames.join(', ')}`);
-                const { entities, documents } = await github.deepSnapshot(ghToken, repoNames);
+                const { entities, documents } = await github.deepSnapshot(ghToken, repoNames, (phase, pct) => {
+                  ingestProgress.set(kbId, { phase, pct: Math.min(pct, 84), done: false, startedAt: Date.now() });
+                });
                 console.log(`[KB ${kbId}] Snapshot complete — ${entities.length} entities, ${documents.length} documents`);
 
                 const opts = { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] };
+                const totalItems = Math.ceil(entities.length / 25) + documents.length;
+                let done = 0;
 
-                // Ingest structured entities (issues, PRs, commits, repo meta) in
-                // batches of 25 so each Cognee text chunk stays manageable.
+                const bumpIngest = () => {
+                  done++;
+                  const pct = 85 + Math.round((done / Math.max(totalItems, 1)) * 13);
+                  ingestProgress.set(kbId, { phase: 'Indexing into knowledge graph…', pct: Math.min(pct, 98), done: false, startedAt: Date.now() });
+                };
+
+                ingestProgress.set(kbId, { phase: 'Indexing into knowledge graph…', pct: 85, done: false, startedAt: Date.now() });
+
+                // Ingest structured entities in batches of 25.
                 for (let i = 0; i < entities.length; i += 25) {
                   const batch = entities.slice(i, i + 25);
                   const text = `# Knowledge Base ID: ${kbId}\n\n` + entitiesToDocument(batch, 'GitHub structured data');
                   await cogneeIngest(text, opts);
+                  bumpIngest();
                 }
 
-                // Ingest rich documents (README, docs, releases, issue threads,
-                // PR discussions) as individual Cognee texts so the retriever can
-                // surface them directly via vector + graph search.
+                // Ingest rich documents individually.
                 for (const doc of documents) {
                   const header = `# Knowledge Base ID: ${kbId}\n# Repo: ${doc.title} [${doc.kind}]\n\n`;
                   await cogneeIngest(header + doc.content, opts);
+                  bumpIngest();
                 }
 
                 console.log(`[KB ${kbId}] GitHub ingestion complete.`);
+                ingestProgress.set(kbId, { phase: 'Complete', pct: 100, done: true, startedAt: Date.now() });
+                // Auto-clean after 10 min so the map doesn't grow forever.
+                setTimeout(() => ingestProgress.delete(kbId), 10 * 60 * 1000);
               } catch (err: any) {
                 console.error(`[KB ${kbId}] GitHub deepSnapshot failed:`, err.message);
+                ingestProgress.set(kbId, { phase: `Failed: ${err.message}`, pct: 0, done: true, error: err.message, startedAt: Date.now() });
+                setTimeout(() => ingestProgress.delete(kbId), 10 * 60 * 1000);
               }
             })();
           }

@@ -1,13 +1,1185 @@
 {
-  "totalNodes": 33,
+  "totalNodes": 57,
   "totalEdges": 0,
   "nodes": [
+    {
+      "id": "21c98468-02ea-5466-9f2c-44bd95e62998",
+      "label": "TextSummary_21c98468-02ea-5466-9f2c-44bd95e62998",
+      "type": "TextSummary",
+      "properties": {
+        "text": "This record logs a GitHub knowledge source with an authorized repository.\n- The knowledge source is GitHub.\n- The knowledge base identifier is 53032dc48ed8417098b3.\n- The only authorized GitHub repository for ingestion is swrno/fino.",
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "source_task": "extract_graph_and_summarize",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_chunk_id": "87d97b6d-b55d-5659-83c3-3e66b2b4bfc7",
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 3,
+        "importance_weight": 0.5,
+        "source_content_hash": "e835f66d898bbe4df14454296d95a556"
+      }
+    },
+    {
+      "id": "87d97b6d-b55d-5659-83c3-3e66b2b4bfc7",
+      "label": "DocumentChunk_87d97b6d-b55d-5659-83c3-3e66b2b4bfc7",
+      "type": "DocumentChunk",
+      "properties": {
+        "text": "# hypr Knowledge Source: GitHub\nKnowledge Base ID: 53032dc48ed8417098b3\nUser: clickswarnendu123@gmail.com  |  User ID: xWbzWCkgtdVYbdJg6zxueq4rDOo2\nConnected at: 2026-06-30T12:03:22.978Z\n\nThe following GitHub items are authorized for ingestion into the knowledge graph:\n\n  - swrno/fino",
+        "version": 1,
+        "cut_type": "sentence_cut",
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "chunk_size": 128,
+        "chunk_index": 0,
+        "document_id": "c478f17d-d1b3-5eee-879b-01bde90b98ae",
+        "source_task": "extract_chunks_from_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "document_name": "text_e835f66d898bbe4df14454296d95a556",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 2,
+        "importance_weight": 0.5,
+        "source_content_hash": "e835f66d898bbe4df14454296d95a556"
+      }
+    },
+    {
+      "id": "c478f17d-d1b3-5eee-879b-01bde90b98ae",
+      "label": "text_e835f66d898bbe4df14454296d95a556",
+      "type": "TextDocument",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ]
+        },
+        "mime_type": "text/plain",
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
+        "importance_weight": 0.5,
+        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_e835f66d898bbe4df14454296d95a556.txt",
+        "source_content_hash": "e835f66d898bbe4df14454296d95a556"
+      }
+    },
+    {
+      "id": "0a71c111-8403-52ff-9f42-9a039f98e9fe",
+      "label": "clickswarnendu123@gmail.com",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "User associated with the ingestion process.",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "f3b9c74f-de8f-5e3e-9414-0539275dcc1d",
+      "label": "hypr knowledge base",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "relations": [],
+        "description": "",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "444245a8-30f7-58b0-b062-106e3d6059ea",
+      "label": "fino",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "5723ae5f-d15c-54f7-9172-a915c5e5e025",
+      "label": "TextSummary_5723ae5f-d15c-54f7-9172-a915c5e5e025",
+      "type": "TextSummary",
+      "properties": {
+        "text": "The chunk records a GitHub knowledge source connection and authorized repository.\n- At 2026-06-30 11:58:23.710 UTC, the user clickswarnendu123@gmail.com (User ID xWbzWCkgtdVYbdJg6zxueq4rDOo2) connected to the hypr knowledge source.\n- The hypr knowledge source is GitHub and is identified by Knowledge Base ID 53032dc48ed8417098b3.\n- The authorized GitHub repository for ingestion into the knowledge graph is swrno/InfuseAI.",
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "source_task": "extract_graph_and_summarize",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_chunk_id": "bee24754-10e9-55e7-a83f-874f74ccfa3e",
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 3,
+        "importance_weight": 0.5,
+        "source_content_hash": "c3d6c7095df214f8b2cf16c24d7a75c5"
+      }
+    },
+    {
+      "id": "bee24754-10e9-55e7-a83f-874f74ccfa3e",
+      "label": "DocumentChunk_bee24754-10e9-55e7-a83f-874f74ccfa3e",
+      "type": "DocumentChunk",
+      "properties": {
+        "text": "# hypr Knowledge Source: GitHub\nKnowledge Base ID: 53032dc48ed8417098b3\nUser: clickswarnendu123@gmail.com  |  User ID: xWbzWCkgtdVYbdJg6zxueq4rDOo2\nConnected at: 2026-06-30T11:58:23.710Z\n\nThe following GitHub items are authorized for ingestion into the knowledge graph:\n\n  - swrno/InfuseAI",
+        "version": 1,
+        "cut_type": "sentence_cut",
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "chunk_size": 130,
+        "chunk_index": 0,
+        "document_id": "195d905f-0ce7-5990-b528-e58f26d61f17",
+        "source_task": "extract_chunks_from_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "document_name": "text_c3d6c7095df214f8b2cf16c24d7a75c5",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 2,
+        "importance_weight": 0.5,
+        "source_content_hash": "c3d6c7095df214f8b2cf16c24d7a75c5"
+      }
+    },
+    {
+      "id": "195d905f-0ce7-5990-b528-e58f26d61f17",
+      "label": "text_c3d6c7095df214f8b2cf16c24d7a75c5",
+      "type": "TextDocument",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ]
+        },
+        "mime_type": "text/plain",
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
+        "importance_weight": 0.5,
+        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_c3d6c7095df214f8b2cf16c24d7a75c5.txt",
+        "source_content_hash": "c3d6c7095df214f8b2cf16c24d7a75c5"
+      }
+    },
+    {
+      "id": "cd14708c-968c-535d-8fc0-e6d2bf442474",
+      "label": "swarnendu resume cz.pdf",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "relations": [],
+        "description": "Knowledge base containing Swarnendu Bhandari's resume.",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "63464398-823d-5d1d-9161-6a977814c9df",
+      "label": "kb",
+      "type": "NodeSet",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": []
+        },
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "importance_weight": 0.5,
+        "source_content_hash": "a3b3f808d75eed0fe5c5727a48d463c8"
+      }
+    },
+    {
+      "id": "585fcd5a-8f7d-56c2-8866-3bc0cf8eaa50",
+      "label": "TextSummary_585fcd5a-8f7d-56c2-8866-3bc0cf8eaa50",
+      "type": "TextSummary",
+      "properties": {
+        "text": "The input lists GitHub repositories authorized for ingestion into the knowledge graph.\n- At 2026-06-30 12:01:51 UTC, the user clickswarnendu123@gmail.com connected to the hypr knowledge source on GitHub.\n- The repositories swrno/fino and swrno/InfuseAI are authorized for ingestion into the knowledge graph.",
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "source_task": "extract_graph_and_summarize",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_chunk_id": "c68f5f52-6423-5f0d-be2e-2a5427e2f5b5",
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 3,
+        "importance_weight": 0.5,
+        "source_content_hash": "bfeeb46cb50515c3fbcbf276f91d24d5"
+      }
+    },
+    {
+      "id": "c68f5f52-6423-5f0d-be2e-2a5427e2f5b5",
+      "label": "DocumentChunk_c68f5f52-6423-5f0d-be2e-2a5427e2f5b5",
+      "type": "DocumentChunk",
+      "properties": {
+        "text": "# hypr Knowledge Source: GitHub\nKnowledge Base ID: 53032dc48ed8417098b3\nUser: clickswarnendu123@gmail.com  |  User ID: xWbzWCkgtdVYbdJg6zxueq4rDOo2\nConnected at: 2026-06-30T12:01:51.038Z\n\nThe following GitHub items are authorized for ingestion into the knowledge graph:\n\n  - swrno/fino\n  - swrno/InfuseAI",
+        "version": 1,
+        "cut_type": "sentence_cut",
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "chunk_size": 140,
+        "chunk_index": 0,
+        "document_id": "4481ed17-cc0d-546b-bd24-f142d948d794",
+        "source_task": "extract_chunks_from_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "document_name": "text_bfeeb46cb50515c3fbcbf276f91d24d5",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 2,
+        "importance_weight": 0.5,
+        "source_content_hash": "bfeeb46cb50515c3fbcbf276f91d24d5"
+      }
+    },
+    {
+      "id": "4481ed17-cc0d-546b-bd24-f142d948d794",
+      "label": "text_bfeeb46cb50515c3fbcbf276f91d24d5",
+      "type": "TextDocument",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ]
+        },
+        "mime_type": "text/plain",
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
+        "importance_weight": 0.5,
+        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_bfeeb46cb50515c3fbcbf276f91d24d5.txt",
+        "source_content_hash": "bfeeb46cb50515c3fbcbf276f91d24d5"
+      }
+    },
+    {
+      "id": "4f580c31-d11e-5788-8679-0440b7b08570",
+      "label": "53032dc48ed8417098b3",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "relations": [],
+        "description": "GitHub Knowledge Base",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "ce7d5775-8cac-5252-9652-d5cf41d74382",
+      "label": "kb:53032dc48ed8417098b3",
+      "type": "NodeSet",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": []
+        },
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "importance_weight": 0.5,
+        "source_content_hash": "a3b3f808d75eed0fe5c5727a48d463c8"
+      }
+    },
+    {
+      "id": "3067f986-1d65-5c8c-b86b-200fa9e3a693",
+      "label": "swarnendu bhandari",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "Data Scientist Intern, contact +91 8101199607, GitHub handle @swarnendu_, based in Murshidabad, WB, IN.",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "690530c7-c3ae-5e3b-a756-0336fb5e19c3",
+      "label": "TextSummary_690530c7-c3ae-5e3b-a756-0336fb5e19c3",
+      "type": "TextSummary",
+      "properties": {
+        "text": "Swarnendu Bhandari's résumé outlines his education, projects, awards, and technical skills.\n- 2020: Swarnendu Bhandari completed the Class X board exam at Panchthupi T.N. Institution with 84.7%.\n- 2022: Swarnendu Bhandari completed the Class XII board exam at Krishnath College School with 93.8%.\n- Nov 2022 – present: Swarnendu Bhandari is pursuing an integrated B.Tech + M.Tech at IIT Kharagpur with a CGPA of 8.26/10.\n- Feb 2025 – Sep 2025: Swarnendu Bhandari developed Dmaid.cloud, an AI‑powered Mermaid diagram editor that uses Llama 4 and DeepSeek R1 LLMs, supports over 20 diagram types, and provides Google Sign‑In via Firebase.\n- Dec 2025 – present: Swarnendu Bhandari leads the InfuseAI project as platform architect and team leader, designing a Retrieval‑Augmented Generation pipeline, cloud‑native architecture, and developer SDK with Pinecone.\n- Jan 2026: Swarnendu Bhandari won the Best Deep Tech Idea award at the Entrepreneurship Launchpad Programme (RMSoEE, IIT Kharagpur) for the InfuseAI concept.\n- Jan 2026: Swarnendu Bhandari secured the Vercel Track winner position at AI Agents Assemble 2025 (WeMakeDevs) and received $2,000 funding for InfuseAI.\n- Swarnendu Bhandari is proficient in frameworks and libraries such as Next.js, React.js, Prisma, Numpy, Pandas, Express.js, OpenAPI Spec, Mongoose, and Socket.io.\n- Swarnendu Bhandari knows programming languages including Typescript, Python, C, Rust, Java, Javascript, and Solidity.\n- Swarnendu Bhandari uses tools and platforms like Git, GitHub, Docker, Bash, Postman, Linux, Firebase, Google Gemini APIs, Cloudflare, and MongoDB Atlas.\n- Swarnendu Bhandari can be contacted at +91 8101199607 or clickswarnendu123@gmail.com and is based in Kharagpur, West Bengal, India.",
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "source_task": "extract_graph_and_summarize",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_chunk_id": "b1b11f8b-0367-533d-a5c5-3f63f31ee07e",
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 3,
+        "importance_weight": 0.5,
+        "source_content_hash": "a3b3f808d75eed0fe5c5727a48d463c8"
+      }
+    },
+    {
+      "id": "b1b11f8b-0367-533d-a5c5-3f63f31ee07e",
+      "label": "DocumentChunk_b1b11f8b-0367-533d-a5c5-3f63f31ee07e",
+      "type": "DocumentChunk",
+      "properties": {
+        "text": "# Knowledge Base Document: Swarnendu_Resume.pdf\nKnowledge Base ID: 53032dc48ed8417098b3\n\nSWARNENDU BHANDARI\n+91 8101199607 \tclickswarnendu123@gmail.com \tswarnendu_ \tGitHub \tKharagpur, WB, IN\nEDUCATIONS\nYear \tDegree \tInstitute \tCGPA/MARKS\nNov 2022 - Present \tB. Tech + M. Tech (Integrated) \tIIT Kharagpur \t8.26 / 10\n2022 - 2022 \tCLASS XII BOARD EXAM \tKrishnath College School \t93.8%\n2020 - 2020 \tCLASS X BOARD EXAM \tPanchthupi T.N. Institution \t84.7%\nPROJECTS\n|\tInfuseAI | AI Platform for Creating AI Apps under 10 minutes \tWebsite Github\nGroup Project | Role: Platform Architect & Team Leader\nDec 2025 - Present\nLed ideation and framing for a production-ready AI platform enabling rapid deployment of knowledge-grounded applications.\nDesigned and architected a Retrieval-Augmented Generation (RAG) pipeline, optimized for accuracy, latency, and workloads.\nImplemented cloud-native RAG architecture, encompassing data ingestion, vector indexing, retrieval, and LLM orchestration.\nDeveloped a developer SDK for seamless integration of AI assistants into external applications with minimal setup.\nDefined system architecture and API contracts, ensuring modularity, extensibility, and multi-tenant support.\nAuthored comprehensive technical documentation on architecture, SDK usage, deployment workflows, and best practices.\nTechnologies / Tools Used : RAG, LLMs, SDK Development, Pinecone\n|\tOrbit AI Workspace \tGithub Vercel\nEngineered a scalable travel platform using Next.js 16 (App Router) and TypeScript; implemented a complex\nMongoDB/Mongoose backend for managing holiday packages and user customizations.\nDeveloped a premium landing page and dashboard with micro-animations and parallax effects using Framer Motion and Tailwind\nCSS, focusing on glassmorphism and responsive design.\nImplemented a robust security layer with AuthGuard components, ensuring secure data persistence and protected access to user\ndashboards via Firebase.\nBuilt an interactive Package Customizer component using Zustand for state management, enabling users to select inclusions,\nadjust trip durations, and receive real-time pricing updates.\nOptimized application performance with debounced data fetching and isolated CSS architecture; integrated collaborative features\nusing the Tambo AI SDK and Tiptap for dynamic content editing.\nTechnologies / Tools Used : MongoDB, Tambo, Next.js, System Designing\n|\tDmaid.cloud | AI Powered Mermaid Diagram Editor \tWebsite Github \tFeb 2025 - Sep 2025\nDeveloped an AI-powered, canvas-based Mermaid diagram editor supporting interactive creation of 20+ types of diagrams.\nIntegrated Llama 4 and DeepSeek R1 LLMs for AI-driven Mermaid diagram generation using context-aware prompting.\nEnabled direct embedding of Mermaid diagrams into 3 formats (SVG, HTML and Markdown) through the frontend interface.\nProgrammed undo/redo functionality using stack data structures, supporting up to 300 states through state management.\nIntegrated Google Sign-In authentication using Firebase, enabling secure user onboarding and access control for 50+ users.\nChosen from over 200+ project ideas to present at GradCapital; earned strong feedback and investment interest from the VC.\nTechnologies / Tools Used : Mermaid, LLMs, Codemirror\nAWARDS & ACHIEVEMENTS\n`Best Deep Tech Idea` Award | Entrepreneurship Launchpad Programme | RMSoEE, IIT Kharagpur \tJan 2026\nPresented the deep-tech startup concept Infuse AI to investors, industry experts, and RMSOEE faculty during final pitch sessions.\nAwarded 'Best Deep Tech Idea' by the Head of School and Vivek Wadhwa (CEO, Vionix Biosciences) for technical depth.\nLed a four-member team, driving ideation, development, pitch strategy, and investor communication throughout the programme.\nVercel Track Winner | AI Agents Assemble 2025 | WeMakeDevs Community \tJan 2026\nSecured Position for 'Vercel Track' at AI Agents Assemble 2025, developing InfuseAI among 324 projects.\nCreated a scalable RAG pipeline with a management dashboard and developer SDK; received $2,000 funding.\nSKILLS\nFrameworks Libraries : \tNext.js, React.js, Prisma, Numpy, Pandas, Express.js, OpenAPI Spec, Mongoose, Socket.io\nProgramming Languages : \tTypescript, Python, C, Rust, Java, Javascript, Solidity\nTools Platforms : \tGit, GitHub, Docker, Bash, Postman, Linux, Firebase, Google Gemini APIs, Cloudflare, MongoDB\nAtlas, LLM APIs\n\n-- 1 of 1 --",
+        "version": 1,
+        "cut_type": "sentence_cut",
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "chunk_size": 1622,
+        "chunk_index": 0,
+        "document_id": "d5f1c5b3-1597-5e6b-9843-8072457ff211",
+        "source_task": "extract_chunks_from_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "document_name": "text_a3b3f808d75eed0fe5c5727a48d463c8",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 2,
+        "importance_weight": 0.5,
+        "source_content_hash": "a3b3f808d75eed0fe5c5727a48d463c8"
+      }
+    },
+    {
+      "id": "d5f1c5b3-1597-5e6b-9843-8072457ff211",
+      "label": "text_a3b3f808d75eed0fe5c5727a48d463c8",
+      "type": "TextDocument",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ]
+        },
+        "mime_type": "text/plain",
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
+        "importance_weight": 0.5,
+        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_a3b3f808d75eed0fe5c5727a48d463c8.txt",
+        "source_content_hash": "a3b3f808d75eed0fe5c5727a48d463c8"
+      }
+    },
+    {
+      "id": "f98912a6-35e6-59b6-a075-ebf2dc7f648f",
+      "label": "knowledgebase",
+      "type": "EntityType",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "relations": [],
+        "description": "knowledgebase",
+        "source_task": "extract_graph_from_data",
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "8ec9f32c-442f-5a24-bb57-1163909fafd4",
+      "label": "swarnendu resume knowledge base",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "Knowledge base containing Swarnendu Bhandari's resume (Swarnendu_Resume.pdf).",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "2f820ff9-c0ca-5a27-ad22-38a70c244627",
+      "label": "TextSummary_2f820ff9-c0ca-5a27-ad22-38a70c244627",
+      "type": "TextSummary",
+      "properties": {
+        "text": "This record details the authorized GitHub repository for ingestion and the associated user connection.\n- The system connected on 2026-06-30 at 12:01:45.592 UTC.\n- The user with email clickswarnendu123@gmail.com and user ID xWbzWCkgtdVYbdJg6zxueq4rDOo2 is associated with the connection.\n- The GitHub repository swrno/fino is authorized for ingestion into the knowledge graph.",
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "source_task": "extract_graph_and_summarize",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_chunk_id": "8210deca-f5cc-51fe-8507-a015df419c62",
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 3,
+        "importance_weight": 0.5,
+        "source_content_hash": "a85ce34da96dc7998722a60f2d3b9866"
+      }
+    },
+    {
+      "id": "8210deca-f5cc-51fe-8507-a015df419c62",
+      "label": "DocumentChunk_8210deca-f5cc-51fe-8507-a015df419c62",
+      "type": "DocumentChunk",
+      "properties": {
+        "text": "# hypr Knowledge Source: GitHub\nKnowledge Base ID: 53032dc48ed8417098b3\nUser: clickswarnendu123@gmail.com  |  User ID: xWbzWCkgtdVYbdJg6zxueq4rDOo2\nConnected at: 2026-06-30T12:01:45.592Z\n\nThe following GitHub items are authorized for ingestion into the knowledge graph:\n\n  - swrno/fino",
+        "version": 1,
+        "cut_type": "sentence_cut",
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "chunk_size": 128,
+        "chunk_index": 0,
+        "document_id": "70554aa9-04b8-56e1-acfe-a2f6352e4f0a",
+        "source_task": "extract_chunks_from_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "document_name": "text_a85ce34da96dc7998722a60f2d3b9866",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 2,
+        "importance_weight": 0.5,
+        "source_content_hash": "a85ce34da96dc7998722a60f2d3b9866"
+      }
+    },
+    {
+      "id": "70554aa9-04b8-56e1-acfe-a2f6352e4f0a",
+      "label": "text_a85ce34da96dc7998722a60f2d3b9866",
+      "type": "TextDocument",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ]
+        },
+        "mime_type": "text/plain",
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
+        "importance_weight": 0.5,
+        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_a85ce34da96dc7998722a60f2d3b9866.txt",
+        "source_content_hash": "a85ce34da96dc7998722a60f2d3b9866"
+      }
+    },
+    {
+      "id": "5c1b5422-6c5d-5e69-b3b4-ee9eae7d1af1",
+      "label": "repository",
+      "type": "EntityType",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "relations": [],
+        "description": "repository",
+        "source_task": "extract_graph_from_data",
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "3d897781-1f4f-59f0-9622-97d2f17ed585",
+      "label": "document",
+      "type": "EntityType",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "relations": [],
+        "description": "document",
+        "source_task": "extract_graph_from_data",
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "4c04039b-300c-54bb-8257-3f3e2f494e70",
+      "label": "TextSummary_4c04039b-300c-54bb-8257-3f3e2f494e70",
+      "type": "TextSummary",
+      "properties": {
+        "text": "Swarnendu Bhandari's resume outlines his education, work experience, projects, awards, and technical skills.\n- In April 2019 to April 2020, Swarnendu completed the Class X board exam at Panchthupi T.N. Institution with 84.7% marks.\n- In July 2020 to July 2022, Swarnendu completed the Class XII board exam at Krishnath College School with 93.8% marks.\n- From November 2022 to May 2027, Swarnendu is pursuing an integrated B.Tech + M.Tech at IIT Kharagpur, holding a CGPA of 8.33/10.\n- From February 2025 to September 2025, Swarnendu developed Dmaid.cloud, an AI‑powered Mermaid diagram editor that integrates Llama 4 and DeepSeek R1, supports 20+ diagram types, and uses Firebase Google Sign‑In for user authentication.\n- From December 2025 to the present, Swarnendu leads the InfuseAI project as Platform Architect and Team Leader, designing a cloud‑native Retrieval‑Augmented Generation platform, a developer SDK, and multi‑tenant architecture.\n- In January 2026, Swarnendu’s InfuseAI received the Best Deep Tech Idea award at the Entrepreneurship Launchpad Programme of RMSoEE, IIT Kharagpur.\n- In January 2026, Swarnendu’s InfuseAI won the Vercel Track at AI Agents Assemble 2025, earning a $2,000 prize.\n- From May 2027 to July 2027, Swarnendu interned as a Data Scientist at Fidelity Investments AI Center of Excellence in Bangalore, where he built Neo4j knowledge‑graph pipelines, GPT‑5.2 extraction workflows, a RAGAS‑based evaluation framework, and a production Streamlit application.\n- Swarnendu is proficient with frameworks and libraries such as Next.js, React.js, Prisma, NumPy, pandas, Express.js, OpenAPI Spec, Mongoose, and Socket.io.\n- Swarnendu is skilled in programming languages including TypeScript, Python, C, Rust, Java, JavaScript, and Solidity.\n- Swarnendu utilizes tools and platforms like Git, Docker, Bash, Postman, Linux, Firebase, Google Gemini APIs, Cloudflare, MongoDB Atlas, and various LLM APIs.",
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "source_task": "extract_graph_and_summarize",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_chunk_id": "8b66583b-c456-5557-84c1-68850f7d4b40",
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 3,
+        "importance_weight": 0.5,
+        "source_content_hash": "e7cd68a1590de84353e81422b0b12b23"
+      }
+    },
+    {
+      "id": "8b66583b-c456-5557-84c1-68850f7d4b40",
+      "label": "DocumentChunk_8b66583b-c456-5557-84c1-68850f7d4b40",
+      "type": "DocumentChunk",
+      "properties": {
+        "text": "# Knowledge Base Document: Swarnendu Resume CZ.pdf\nKnowledge Base ID: 53032dc48ed8417098b3\n\nSWARNENDU BHANDARI\nBachelor of Technology (Honours) And Master of Technology | Minor in Computer Science & Engg.\n+91 8101199607 \tclickswarnendu123@gmail.com \tswarnendu_ \tGitHub \tMurshidabad, WB, IN\nEDUCATIONS\nYear \tDegree \tInstitute \tCGPA/MARKS\nNov 2022 - May 2027 \tB. Tech + M. Tech (Integrated) \tIIT Kharagpur \t8.33 / 10\nJul 2020 - Jul 2022 \tCLASS XII BOARD EXAM \tKrishnath College School \t93.8%\nApr 2019 - Apr 2020 \tCLASS X BOARD EXAM \tPanchthupi T.N. Institution \t84.7%\nWORK EXPERIENCE\n|\n•\nData Scientist Internship\nFidelity Investments | Artificial Intelligence Center of Excellence (AI CoE)\nMay 2027 - Jul 2027\nOn-site Bangalore, KA\nWorked on Intent-less Virtual Assistant Proof of Concept for the Workplace Investing AI Center of Excellence (AI CoE) Team.\nBuilt knowledge graph pipelines from documents using Neo4j, Cypher, ontology-driven schema, scalable ingestion architecture.\nDeveloped GPT-5.2 extraction workflows for entity extraction from unstructured data, converting to graph-ready relationships.\nBuilt multi-hop retrieval layer over multi-tenant Neo4j graph, with optimized schema, query patterns for enterprise-scale.\nBuilt RAGAS-based evaluation framework to benchmark GraphRAG response quality, Entities Recall, and faithfulnes metrics.\nBuilt production Streamlit app with document viewer for explainability, using PyMuPDF for chunking, bounding-box traceability.\nTechnologies / Skills Used : Neo4j, Cypher, Knowledge Graphs, Ontologies, Python, GPT-5.2, LLM Pipelines\nPROJECTS\n|\tInfuseAI | AI Platform for Creating AI Apps under 10 minutes \tWebsite Github\nGroup Project | Role: Platform Architect & Team Leader\nDec 2025 - Present\nLed the ideation and development of a production-ready AI platform for rapid deployment of knowledge-grounded applications.\nDesigned a Retrieval-Augmented Generation (RAG) pipeline, optimized for accuracy, latency, and workload management.\nImplemented a cloud-native RAG architecture, integrating data ingestion, vector indexing, retrieval, and LLM orchestration.\nDeveloped a developer SDK for seamless integration of AI assistants into external applications with minimal setup.\nDefined system architecture and API contracts, ensuring modularity, extensibility, and multi-tenant support.\n|\tDmaid.cloud | AI Powered Mermaid Diagram Editor \tGithub \tFeb 2025 - Sep 2025\nDeveloped an AI-powered, canvas-based Mermaid diagram editor supporting interactive creation of 20+ types of diagrams.\nIntegrated Llama 4 and DeepSeek R1 LLMs for AI-driven Mermaid diagram generation using context-aware prompting.\nEnabled direct embedding of Mermaid diagrams into 3 formats (SVG, HTML, and Markdown) through the frontend interface.\nProgrammed undo/redo functionality using stack data structures, supporting up to 300 states through state management.\nIntegrated Google Sign-In authentication using Firebase, enabling secure user onboarding and access control for 50+ users.\nAWARDS & ACHIEVEMENTS\n`Best Deep Tech Idea` Award | Entrepreneurship Launchpad Programme | RMSoEE, IIT Kharagpur \tJan 2026\nPresented the deep-tech startup concept Infuse AI to investors, industry experts, and RMSOEE faculty during final pitch sessions.\nAwarded Best Deep Tech Idea by the Head of School and Vivek Wadhwa (CEO, Vionix Biosciences) for technical depth.\nLed a four-member team, driving ideation, development, pitch strategy, and investor communication throughout the programme.\nVercel Track Winner | AI Agents Assemble 2025 | WeMakeDevs Community \tJan 2026\nSecured a position in the Vercel Track at AI Agents Assemble 2025, developing InfuseAI among 324 projects.\nCreated a scalable RAG pipeline, management dashboard, and developer SDK; earned $2,000 in prize money.\nSKILLS\nFrameworks & Libraries : \tNext.js, React.js, Prisma, Numpy, Pandas, Express.js, OpenAPI Spec, Mongoose, Socket.io\nProgramming Languages : \tTypescript, Python, C, Rust, Java, Javascript, Solidity\nTools & Platforms : \tGit, GitHub, Docker, Bash, Postman, Linux, Firebase, Google Gemini APIs, Cloudflare, MongoDB\nAtlas, LLM APIs\n\n-- 1 of 1 --",
+        "version": 1,
+        "cut_type": "sentence_cut",
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "chunk_size": 1577,
+        "chunk_index": 0,
+        "document_id": "d759c7e5-1a75-590d-8618-0ef41c9c2eda",
+        "source_task": "extract_chunks_from_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "document_name": "text_e7cd68a1590de84353e81422b0b12b23",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 2,
+        "importance_weight": 0.5,
+        "source_content_hash": "e7cd68a1590de84353e81422b0b12b23"
+      }
+    },
+    {
+      "id": "d759c7e5-1a75-590d-8618-0ef41c9c2eda",
+      "label": "text_e7cd68a1590de84353e81422b0b12b23",
+      "type": "TextDocument",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ]
+        },
+        "mime_type": "text/plain",
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
+        "importance_weight": 0.5,
+        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_e7cd68a1590de84353e81422b0b12b23.txt",
+        "source_content_hash": "e7cd68a1590de84353e81422b0b12b23"
+      }
+    },
+    {
+      "id": "4b8391e1-eabc-5351-8da6-c5be6f771e2c",
+      "label": "swarnendu resume cz.pdf",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "PDF resume of Swarnendu Bhandari.",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "99a82eec-bb35-5bb5-9ed2-e73fc7a756de",
+      "label": "person",
+      "type": "EntityType",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "relations": [],
+        "description": "person",
+        "source_task": "extract_graph_from_data",
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "f24484a4-43a3-511d-a474-a206a29b0a28",
+      "label": "dmaid.cloud",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "AI‑powered Mermaid diagram editor with Llama 4 and DeepSeek R1 integration and Google Sign‑In.",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "136ee2ac-5084-51be-9aab-fb54cdb0558a",
+      "label": "TextSummary_136ee2ac-5084-51be-9aab-fb54cdb0558a",
+      "type": "TextSummary",
+      "properties": {
+        "text": "The chunk records a GitHub knowledge source connection and an authorized repository.\n- On 2026-06-30, user clickswarnendu123@gmail.com (User ID xWbzWCkgtdVYbdJg6zxueq4rDOo2) connected to the knowledge source at 12:03:14.531Z.\n- The knowledge source is GitHub with Knowledge Base ID 53032dc48ed8417098b3.\n- The repository swrno/InfuseAI is authorized for ingestion into the knowledge graph.",
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "source_task": "extract_graph_and_summarize",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_chunk_id": "7b4de186-1d55-50fc-a6c0-e96ce2b8f42b",
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 3,
+        "importance_weight": 0.5,
+        "source_content_hash": "ba0e320962560f13cac4a434a6a0d73f"
+      }
+    },
+    {
+      "id": "7b4de186-1d55-50fc-a6c0-e96ce2b8f42b",
+      "label": "DocumentChunk_7b4de186-1d55-50fc-a6c0-e96ce2b8f42b",
+      "type": "DocumentChunk",
+      "properties": {
+        "text": "# hypr Knowledge Source: GitHub\nKnowledge Base ID: 53032dc48ed8417098b3\nUser: clickswarnendu123@gmail.com  |  User ID: xWbzWCkgtdVYbdJg6zxueq4rDOo2\nConnected at: 2026-06-30T12:03:14.531Z\n\nThe following GitHub items are authorized for ingestion into the knowledge graph:\n\n  - swrno/InfuseAI",
+        "version": 1,
+        "cut_type": "sentence_cut",
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "chunk_size": 130,
+        "chunk_index": 0,
+        "document_id": "ce7a8568-9d43-5de4-856f-12974e3c4d10",
+        "source_task": "extract_chunks_from_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "document_name": "text_ba0e320962560f13cac4a434a6a0d73f",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 2,
+        "importance_weight": 0.5,
+        "source_content_hash": "ba0e320962560f13cac4a434a6a0d73f"
+      }
+    },
+    {
+      "id": "ce7a8568-9d43-5de4-856f-12974e3c4d10",
+      "label": "text_ba0e320962560f13cac4a434a6a0d73f",
+      "type": "TextDocument",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ]
+        },
+        "mime_type": "text/plain",
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
+        "importance_weight": 0.5,
+        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_ba0e320962560f13cac4a434a6a0d73f.txt",
+        "source_content_hash": "ba0e320962560f13cac4a434a6a0d73f"
+      }
+    },
+    {
+      "id": "7934aae3-6488-53f2-9f70-28329b683d4e",
+      "label": "infuseai",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "Repository swrno/InfuseAI authorized for ingestion.",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "dc5e2c2b-8d27-5c8f-8d18-6936c67d1c52",
+      "label": "TextSummary_dc5e2c2b-8d27-5c8f-8d18-6936c67d1c52",
+      "type": "TextSummary",
+      "properties": {
+        "text": "The input describes a Hypr knowledge source from GitHub with user and connection details, authorizing the repository swrno/fino for ingestion.\n- The knowledge source is GitHub as indicated by Hypr.\n- The knowledge base ID is 53032dc48ed8417098b3.\n- The user email is clickswarnendu123@gmail.com and the user ID is xWbzWCkgtdVYbdJg6zxueq4rDOo2.\n- The connection timestamp is 2026-06-30T12:04:06.771Z.\n- The GitHub repository swrno/fino is authorized for ingestion into the knowledge graph.",
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "source_task": "extract_graph_and_summarize",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_chunk_id": "aff76e9f-e575-5277-833d-d7833f7d1317",
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 3,
+        "importance_weight": 0.5,
+        "source_content_hash": "85616557bc99385cf4a57cedc4e9130e"
+      }
+    },
+    {
+      "id": "aff76e9f-e575-5277-833d-d7833f7d1317",
+      "label": "DocumentChunk_aff76e9f-e575-5277-833d-d7833f7d1317",
+      "type": "DocumentChunk",
+      "properties": {
+        "text": "# hypr Knowledge Source: GitHub\nKnowledge Base ID: 53032dc48ed8417098b3\nUser: clickswarnendu123@gmail.com  |  User ID: xWbzWCkgtdVYbdJg6zxueq4rDOo2\nConnected at: 2026-06-30T12:04:06.771Z\n\nThe following GitHub items are authorized for ingestion into the knowledge graph:\n\n  - swrno/fino",
+        "version": 1,
+        "cut_type": "sentence_cut",
+        "metadata": {
+          "index_fields": [
+            "text"
+          ]
+        },
+        "chunk_size": 128,
+        "chunk_index": 0,
+        "document_id": "9c693e09-b311-5c0f-8169-46a74d2cc6a8",
+        "source_task": "extract_chunks_from_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "document_name": "text_85616557bc99385cf4a57cedc4e9130e",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 2,
+        "importance_weight": 0.5,
+        "source_content_hash": "85616557bc99385cf4a57cedc4e9130e"
+      }
+    },
+    {
+      "id": "ecb8da1f-685a-5bef-9ead-f9794f47578b",
+      "label": "account",
+      "type": "EntityType",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "relations": [],
+        "description": "account",
+        "source_task": "extract_graph_from_data",
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "9c693e09-b311-5c0f-8169-46a74d2cc6a8",
+      "label": "text_85616557bc99385cf4a57cedc4e9130e",
+      "type": "TextDocument",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ]
+        },
+        "mime_type": "text/plain",
+        "source_task": "classify_documents",
+        "source_user": "isoumyadey@gmail.com",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_node_set": "kb, kb:53032dc48ed8417098b3",
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 1,
+        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
+        "importance_weight": 0.5,
+        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_85616557bc99385cf4a57cedc4e9130e.txt",
+        "source_content_hash": "85616557bc99385cf4a57cedc4e9130e"
+      }
+    },
+    {
+      "id": "56fb26cb-720d-538c-b315-f38801ac6a7c",
+      "label": "clickswarnendu123@gmail.com",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
     {
       "id": "52ddfd5d-52a0-5dab-86db-4653bf852473",
       "label": "TextSummary_52ddfd5d-52a0-5dab-86db-4653bf852473",
       "type": "TextSummary",
       "properties": {
-        "text": "The input describes Swarnendu's professional experience and a project he created.\n- Swarnendu worked as a Data Science Intern at Fidelity Investments.\n- Swarnendu built an AI platform called InfuseAI.",
+        "text": "This document describes Swarnendu's recent professional experience.\n- Swarnendu worked at Fidelity Investments as a Data Science Intern.\n- Swarnendu built an AI platform named InfuseAI.",
         "version": 1,
         "metadata": {
           "index_fields": [
@@ -122,7 +1294,7 @@
             "name"
           ]
         },
-        "description": "Data Science Intern at Fidelity Investments.",
+        "description": "Data Science Intern at Fidelity Investments who built the AI platform InfuseAI.",
         "source_task": "extract_graph_from_data",
         "belongs_to_set": [
           "document"
@@ -148,7 +1320,59 @@
             "name"
           ]
         },
-        "description": "AI platform for creating AI apps in under 10 minutes; includes RAG pipeline, SDK, and multi‑tenant architecture.",
+        "description": "AI platform built by Swarnendu.",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "document"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "6de39068-05a4-5bd7-b4ec-2898f115fdeb",
+      "label": "fidelity investments",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "Employer of Swarnendu as a Data Science Intern.",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "document"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "bd1ad090-f53d-5d50-9825-bbfe1671b535",
+      "label": "github.com/infuseai",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "GitHub repository for the InfuseAI project.",
         "source_task": "extract_graph_from_data",
         "belongs_to_set": [
           "kb",
@@ -162,96 +1386,7 @@
       }
     },
     {
-      "id": "690530c7-c3ae-5e3b-a756-0336fb5e19c3",
-      "label": "TextSummary_690530c7-c3ae-5e3b-a756-0336fb5e19c3",
-      "type": "TextSummary",
-      "properties": {
-        "text": "Swarnendu Bhandari is a technology student and developer with experience in AI platforms, web applications, and diagram editors, featuring notable projects and awards.\n- In 2020, Swarnendu Bhandari scored 84.7% in the Class X board exam at Panchthupi T.N. Institution.\n- In 2022, Swarnendu Bhandari achieved 93.8% in the Class XII board exam at Krishnath College School.\n- From November 2022 to the present, Swarnendu Bhandari is pursuing an integrated B.Tech and M.Tech at IIT Kharagpur with a CGPA of 8.26/10.\n- Between February 2025 and September 2025, Swarnendu Bhandari developed Dmaid.cloud, an AI‑powered Mermaid diagram editor that integrates Llama 4 and DeepSeek R1 LLMs and supports exporting diagrams to SVG, HTML, and Markdown.\n- Starting in December 2025, Swarnendu Bhandari leads the InfuseAI project as Platform Architect and Team Leader, designing a cloud‑native Retrieval‑Augmented Generation pipeline, a developer SDK, and extensive documentation.\n- Swarnendu Bhandari engineered the Orbit AI Workspace travel platform using Next.js 16, TypeScript, and MongoDB, implementing security with Firebase AuthGuard and state management with Zustand.\n- In January 2026, Swarnendu Bhandari received the Best Deep Tech Idea award at the Entrepreneurship Launchpad Programme (RMSoEE, IIT Kharagpur) for the InfuseAI concept.\n- In January 2026, Swarnendu Bhandari won the Vercel Track at AI Agents Assemble 2025 hosted by WeMakeDevs Community, securing $2,000 funding for InfuseAI.\n- Swarnendu Bhandari is proficient in frameworks and libraries such as Next.js, React.js, Prisma, and MongoDB, programming languages including TypeScript, Python, and Rust, and tools like Docker, GitHub, and Firebase.",
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "text"
-          ]
-        },
-        "source_task": "extract_graph_and_summarize",
-        "source_user": "isoumyadey@gmail.com",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_chunk_id": "b1b11f8b-0367-533d-a5c5-3f63f31ee07e",
-        "source_node_set": "kb, kb:53032dc48ed8417098b3",
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 3,
-        "importance_weight": 0.5,
-        "source_content_hash": "a3b3f808d75eed0fe5c5727a48d463c8"
-      }
-    },
-    {
-      "id": "b1b11f8b-0367-533d-a5c5-3f63f31ee07e",
-      "label": "DocumentChunk_b1b11f8b-0367-533d-a5c5-3f63f31ee07e",
-      "type": "DocumentChunk",
-      "properties": {
-        "text": "# Knowledge Base Document: Swarnendu_Resume.pdf\nKnowledge Base ID: 53032dc48ed8417098b3\n\nSWARNENDU BHANDARI\n+91 8101199607 \tclickswarnendu123@gmail.com \tswarnendu_ \tGitHub \tKharagpur, WB, IN\nEDUCATIONS\nYear \tDegree \tInstitute \tCGPA/MARKS\nNov 2022 - Present \tB. Tech + M. Tech (Integrated) \tIIT Kharagpur \t8.26 / 10\n2022 - 2022 \tCLASS XII BOARD EXAM \tKrishnath College School \t93.8%\n2020 - 2020 \tCLASS X BOARD EXAM \tPanchthupi T.N. Institution \t84.7%\nPROJECTS\n|\tInfuseAI | AI Platform for Creating AI Apps under 10 minutes \tWebsite Github\nGroup Project | Role: Platform Architect & Team Leader\nDec 2025 - Present\nLed ideation and framing for a production-ready AI platform enabling rapid deployment of knowledge-grounded applications.\nDesigned and architected a Retrieval-Augmented Generation (RAG) pipeline, optimized for accuracy, latency, and workloads.\nImplemented cloud-native RAG architecture, encompassing data ingestion, vector indexing, retrieval, and LLM orchestration.\nDeveloped a developer SDK for seamless integration of AI assistants into external applications with minimal setup.\nDefined system architecture and API contracts, ensuring modularity, extensibility, and multi-tenant support.\nAuthored comprehensive technical documentation on architecture, SDK usage, deployment workflows, and best practices.\nTechnologies / Tools Used : RAG, LLMs, SDK Development, Pinecone\n|\tOrbit AI Workspace \tGithub Vercel\nEngineered a scalable travel platform using Next.js 16 (App Router) and TypeScript; implemented a complex\nMongoDB/Mongoose backend for managing holiday packages and user customizations.\nDeveloped a premium landing page and dashboard with micro-animations and parallax effects using Framer Motion and Tailwind\nCSS, focusing on glassmorphism and responsive design.\nImplemented a robust security layer with AuthGuard components, ensuring secure data persistence and protected access to user\ndashboards via Firebase.\nBuilt an interactive Package Customizer component using Zustand for state management, enabling users to select inclusions,\nadjust trip durations, and receive real-time pricing updates.\nOptimized application performance with debounced data fetching and isolated CSS architecture; integrated collaborative features\nusing the Tambo AI SDK and Tiptap for dynamic content editing.\nTechnologies / Tools Used : MongoDB, Tambo, Next.js, System Designing\n|\tDmaid.cloud | AI Powered Mermaid Diagram Editor \tWebsite Github \tFeb 2025 - Sep 2025\nDeveloped an AI-powered, canvas-based Mermaid diagram editor supporting interactive creation of 20+ types of diagrams.\nIntegrated Llama 4 and DeepSeek R1 LLMs for AI-driven Mermaid diagram generation using context-aware prompting.\nEnabled direct embedding of Mermaid diagrams into 3 formats (SVG, HTML and Markdown) through the frontend interface.\nProgrammed undo/redo functionality using stack data structures, supporting up to 300 states through state management.\nIntegrated Google Sign-In authentication using Firebase, enabling secure user onboarding and access control for 50+ users.\nChosen from over 200+ project ideas to present at GradCapital; earned strong feedback and investment interest from the VC.\nTechnologies / Tools Used : Mermaid, LLMs, Codemirror\nAWARDS & ACHIEVEMENTS\n`Best Deep Tech Idea` Award | Entrepreneurship Launchpad Programme | RMSoEE, IIT Kharagpur \tJan 2026\nPresented the deep-tech startup concept Infuse AI to investors, industry experts, and RMSOEE faculty during final pitch sessions.\nAwarded 'Best Deep Tech Idea' by the Head of School and Vivek Wadhwa (CEO, Vionix Biosciences) for technical depth.\nLed a four-member team, driving ideation, development, pitch strategy, and investor communication throughout the programme.\nVercel Track Winner | AI Agents Assemble 2025 | WeMakeDevs Community \tJan 2026\nSecured Position for 'Vercel Track' at AI Agents Assemble 2025, developing InfuseAI among 324 projects.\nCreated a scalable RAG pipeline with a management dashboard and developer SDK; received $2,000 funding.\nSKILLS\nFrameworks Libraries : \tNext.js, React.js, Prisma, Numpy, Pandas, Express.js, OpenAPI Spec, Mongoose, Socket.io\nProgramming Languages : \tTypescript, Python, C, Rust, Java, Javascript, Solidity\nTools Platforms : \tGit, GitHub, Docker, Bash, Postman, Linux, Firebase, Google Gemini APIs, Cloudflare, MongoDB\nAtlas, LLM APIs\n\n-- 1 of 1 --",
-        "version": 1,
-        "cut_type": "sentence_cut",
-        "metadata": {
-          "index_fields": [
-            "text"
-          ]
-        },
-        "chunk_size": 1622,
-        "chunk_index": 0,
-        "document_id": "d5f1c5b3-1597-5e6b-9843-8072457ff211",
-        "source_task": "extract_chunks_from_documents",
-        "source_user": "isoumyadey@gmail.com",
-        "document_name": "text_a3b3f808d75eed0fe5c5727a48d463c8",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_node_set": "kb, kb:53032dc48ed8417098b3",
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 2,
-        "importance_weight": 0.5,
-        "source_content_hash": "a3b3f808d75eed0fe5c5727a48d463c8"
-      }
-    },
-    {
-      "id": "d5f1c5b3-1597-5e6b-9843-8072457ff211",
-      "label": "text_a3b3f808d75eed0fe5c5727a48d463c8",
-      "type": "TextDocument",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ]
-        },
-        "mime_type": "text/plain",
-        "source_task": "classify_documents",
-        "source_user": "isoumyadey@gmail.com",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_node_set": "kb, kb:53032dc48ed8417098b3",
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 1,
-        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
-        "importance_weight": 0.5,
-        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_a3b3f808d75eed0fe5c5727a48d463c8.txt",
-        "source_content_hash": "a3b3f808d75eed0fe5c5727a48d463c8"
-      }
-    },
-    {
-      "id": "cffcdb26-cbad-5352-8840-82852071d537",
+      "id": "4a7f9ef1-ae64-5621-8e42-1393b012745e",
       "label": "infuseai",
       "type": "Entity",
       "properties": {
@@ -264,7 +1399,8 @@
             "name"
           ]
         },
-        "description": "AI Platform for Creating AI Apps under 10 minutes.",
+        "relations": [],
+        "description": "AI platform for creating AI apps under 10 minutes; Role: Platform Architect & Team Leader.",
         "source_task": "extract_graph_from_data",
         "belongs_to_set": [
           "kb",
@@ -275,46 +1411,6 @@
         "source_pipeline": "cognify_pipeline",
         "topological_rank": 0,
         "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "63464398-823d-5d1d-9161-6a977814c9df",
-      "label": "kb",
-      "type": "NodeSet",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": []
-        },
-        "source_task": "classify_documents",
-        "source_user": "isoumyadey@gmail.com",
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_node_set": "kb, kb:53032dc48ed8417098b3",
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 1,
-        "importance_weight": 0.5,
-        "source_content_hash": "e7cd68a1590de84353e81422b0b12b23"
-      }
-    },
-    {
-      "id": "ce7d5775-8cac-5252-9652-d5cf41d74382",
-      "label": "kb:53032dc48ed8417098b3",
-      "type": "NodeSet",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": []
-        },
-        "source_task": "classify_documents",
-        "source_user": "isoumyadey@gmail.com",
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_node_set": "kb, kb:53032dc48ed8417098b3",
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 1,
-        "importance_weight": 0.5,
-        "source_content_hash": "e7cd68a1590de84353e81422b0b12b23"
       }
     },
     {
@@ -342,8 +1438,8 @@
       }
     },
     {
-      "id": "0a71c111-8403-52ff-9f42-9a039f98e9fe",
-      "label": "swarnendu bhandari",
+      "id": "34df0c21-1607-5c3c-8bbd-b9a8f54ecb1b",
+      "label": "github.com/orbit-ai-workspace",
       "type": "Entity",
       "properties": {
         "version": 1,
@@ -355,7 +1451,7 @@
             "name"
           ]
         },
-        "description": "Software engineer, contact email clickswarnendu123@gmail.com.",
+        "description": "GitHub repository for the Orbit AI Workspace project.",
         "source_task": "extract_graph_from_data",
         "belongs_to_set": [
           "kb",
@@ -369,7 +1465,7 @@
       }
     },
     {
-      "id": "536a9816-d0d1-5271-bc0a-828a75c7a432",
+      "id": "3887cc41-aa8c-5254-bd51-87939a3f9ec6",
       "label": "orbit ai workspace",
       "type": "Entity",
       "properties": {
@@ -382,7 +1478,8 @@
             "name"
           ]
         },
-        "description": "Scalable travel platform built with Next.js, TypeScript, and MongoDB.",
+        "relations": [],
+        "description": "Scalable travel platform built with Next.js, TypeScript, MongoDB, and Firebase.",
         "source_task": "extract_graph_from_data",
         "belongs_to_set": [
           "kb",
@@ -396,7 +1493,34 @@
       }
     },
     {
-      "id": "917a91b9-a15b-5bc9-a4ac-ef8c36bdef2c",
+      "id": "eaabff3e-6b4d-542d-a61a-d88572212602",
+      "label": "github.com/dmaid.cloud",
+      "type": "Entity",
+      "properties": {
+        "version": 1,
+        "metadata": {
+          "index_fields": [
+            "name"
+          ],
+          "identity_fields": [
+            "name"
+          ]
+        },
+        "description": "GitHub repository for the Dmaid.cloud project.",
+        "source_task": "extract_graph_from_data",
+        "belongs_to_set": [
+          "kb",
+          "kb:53032dc48ed8417098b3"
+        ],
+        "ontology_valid": false,
+        "feedback_weight": 0.5,
+        "source_pipeline": "cognify_pipeline",
+        "topological_rank": 0,
+        "importance_weight": 0.5
+      }
+    },
+    {
+      "id": "53668a2a-3fe7-5d6b-ab54-2d992c324df5",
       "label": "dmaid.cloud",
       "type": "Entity",
       "properties": {
@@ -409,171 +1533,8 @@
             "name"
           ]
         },
-        "description": "AI‑powered Mermaid diagram editor with LLM integration.",
-        "source_task": "extract_graph_from_data",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "5c1b5422-6c5d-5e69-b3b4-ee9eae7d1af1",
-      "label": "repository",
-      "type": "EntityType",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
         "relations": [],
-        "description": "repository",
-        "source_task": "extract_graph_from_data",
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "99a82eec-bb35-5bb5-9ed2-e73fc7a756de",
-      "label": "person",
-      "type": "EntityType",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "relations": [],
-        "description": "person",
-        "source_task": "extract_graph_from_data",
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "4c04039b-300c-54bb-8257-3f3e2f494e70",
-      "label": "TextSummary_4c04039b-300c-54bb-8257-3f3e2f494e70",
-      "type": "TextSummary",
-      "properties": {
-        "text": "Swarnendu Bhandari's resume outlines his education, projects, internships, awards, and technical skills.\n- Swarnendu Bhandari completed Class X board exam at Panchthupi T.N. Institution in April 2020 with 84.7% marks.\n- Swarnendu Bhandari completed Class XII board exam at Krishnath College School in July 2022 with 93.8% marks.\n- Swarnendu Bhandari is pursuing an integrated B.Tech and M.Tech at IIT Kharagpur from November 2022 to May 2027, achieving a CGPA of 8.33/10.\n- Swarnendu Bhandari developed the AI-powered Mermaid diagram editor Dmaid.cloud from February 2025 to September 2025, incorporating Llama 4 and DeepSeek R1 LLMs and supporting over 20 diagram types.\n- Swarnendu Bhandari led the InfuseAI project as platform architect and team leader starting December 2025, designing a cloud-native Retrieval‑Augmented Generation pipeline and developer SDK.\n- Swarnendu Bhandari received the Best Deep Tech Idea Award from the Entrepreneurship Launchpad Programme at RMSoEE, IIT Kharagpur in January 2026 for the InfuseAI concept.\n- Swarnendu Bhandari won the Vercel Track at AI Agents Assemble 2025 organized by WeMakeDevs in January 2026, earning $2,000 prize money.\n- Swarnendu Bhandari completed a Data Scientist internship at Fidelity Investments’ Artificial Intelligence Center of Excellence in Bangalore from May 2027 to July 2027, building Neo4j knowledge‑graph pipelines and a production Streamlit app.",
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "text"
-          ]
-        },
-        "source_task": "extract_graph_and_summarize",
-        "source_user": "isoumyadey@gmail.com",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_chunk_id": "8b66583b-c456-5557-84c1-68850f7d4b40",
-        "source_node_set": "kb, kb:53032dc48ed8417098b3",
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 3,
-        "importance_weight": 0.5,
-        "source_content_hash": "e7cd68a1590de84353e81422b0b12b23"
-      }
-    },
-    {
-      "id": "8b66583b-c456-5557-84c1-68850f7d4b40",
-      "label": "DocumentChunk_8b66583b-c456-5557-84c1-68850f7d4b40",
-      "type": "DocumentChunk",
-      "properties": {
-        "text": "# Knowledge Base Document: Swarnendu Resume CZ.pdf\nKnowledge Base ID: 53032dc48ed8417098b3\n\nSWARNENDU BHANDARI\nBachelor of Technology (Honours) And Master of Technology | Minor in Computer Science & Engg.\n+91 8101199607 \tclickswarnendu123@gmail.com \tswarnendu_ \tGitHub \tMurshidabad, WB, IN\nEDUCATIONS\nYear \tDegree \tInstitute \tCGPA/MARKS\nNov 2022 - May 2027 \tB. Tech + M. Tech (Integrated) \tIIT Kharagpur \t8.33 / 10\nJul 2020 - Jul 2022 \tCLASS XII BOARD EXAM \tKrishnath College School \t93.8%\nApr 2019 - Apr 2020 \tCLASS X BOARD EXAM \tPanchthupi T.N. Institution \t84.7%\nWORK EXPERIENCE\n|\n•\nData Scientist Internship\nFidelity Investments | Artificial Intelligence Center of Excellence (AI CoE)\nMay 2027 - Jul 2027\nOn-site Bangalore, KA\nWorked on Intent-less Virtual Assistant Proof of Concept for the Workplace Investing AI Center of Excellence (AI CoE) Team.\nBuilt knowledge graph pipelines from documents using Neo4j, Cypher, ontology-driven schema, scalable ingestion architecture.\nDeveloped GPT-5.2 extraction workflows for entity extraction from unstructured data, converting to graph-ready relationships.\nBuilt multi-hop retrieval layer over multi-tenant Neo4j graph, with optimized schema, query patterns for enterprise-scale.\nBuilt RAGAS-based evaluation framework to benchmark GraphRAG response quality, Entities Recall, and faithfulnes metrics.\nBuilt production Streamlit app with document viewer for explainability, using PyMuPDF for chunking, bounding-box traceability.\nTechnologies / Skills Used : Neo4j, Cypher, Knowledge Graphs, Ontologies, Python, GPT-5.2, LLM Pipelines\nPROJECTS\n|\tInfuseAI | AI Platform for Creating AI Apps under 10 minutes \tWebsite Github\nGroup Project | Role: Platform Architect & Team Leader\nDec 2025 - Present\nLed the ideation and development of a production-ready AI platform for rapid deployment of knowledge-grounded applications.\nDesigned a Retrieval-Augmented Generation (RAG) pipeline, optimized for accuracy, latency, and workload management.\nImplemented a cloud-native RAG architecture, integrating data ingestion, vector indexing, retrieval, and LLM orchestration.\nDeveloped a developer SDK for seamless integration of AI assistants into external applications with minimal setup.\nDefined system architecture and API contracts, ensuring modularity, extensibility, and multi-tenant support.\n|\tDmaid.cloud | AI Powered Mermaid Diagram Editor \tGithub \tFeb 2025 - Sep 2025\nDeveloped an AI-powered, canvas-based Mermaid diagram editor supporting interactive creation of 20+ types of diagrams.\nIntegrated Llama 4 and DeepSeek R1 LLMs for AI-driven Mermaid diagram generation using context-aware prompting.\nEnabled direct embedding of Mermaid diagrams into 3 formats (SVG, HTML, and Markdown) through the frontend interface.\nProgrammed undo/redo functionality using stack data structures, supporting up to 300 states through state management.\nIntegrated Google Sign-In authentication using Firebase, enabling secure user onboarding and access control for 50+ users.\nAWARDS & ACHIEVEMENTS\n`Best Deep Tech Idea` Award | Entrepreneurship Launchpad Programme | RMSoEE, IIT Kharagpur \tJan 2026\nPresented the deep-tech startup concept Infuse AI to investors, industry experts, and RMSOEE faculty during final pitch sessions.\nAwarded Best Deep Tech Idea by the Head of School and Vivek Wadhwa (CEO, Vionix Biosciences) for technical depth.\nLed a four-member team, driving ideation, development, pitch strategy, and investor communication throughout the programme.\nVercel Track Winner | AI Agents Assemble 2025 | WeMakeDevs Community \tJan 2026\nSecured a position in the Vercel Track at AI Agents Assemble 2025, developing InfuseAI among 324 projects.\nCreated a scalable RAG pipeline, management dashboard, and developer SDK; earned $2,000 in prize money.\nSKILLS\nFrameworks & Libraries : \tNext.js, React.js, Prisma, Numpy, Pandas, Express.js, OpenAPI Spec, Mongoose, Socket.io\nProgramming Languages : \tTypescript, Python, C, Rust, Java, Javascript, Solidity\nTools & Platforms : \tGit, GitHub, Docker, Bash, Postman, Linux, Firebase, Google Gemini APIs, Cloudflare, MongoDB\nAtlas, LLM APIs\n\n-- 1 of 1 --",
-        "version": 1,
-        "cut_type": "sentence_cut",
-        "metadata": {
-          "index_fields": [
-            "text"
-          ]
-        },
-        "chunk_size": 1577,
-        "chunk_index": 0,
-        "document_id": "d759c7e5-1a75-590d-8618-0ef41c9c2eda",
-        "source_task": "extract_chunks_from_documents",
-        "source_user": "isoumyadey@gmail.com",
-        "document_name": "text_e7cd68a1590de84353e81422b0b12b23",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_node_set": "kb, kb:53032dc48ed8417098b3",
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 2,
-        "importance_weight": 0.5,
-        "source_content_hash": "e7cd68a1590de84353e81422b0b12b23"
-      }
-    },
-    {
-      "id": "d759c7e5-1a75-590d-8618-0ef41c9c2eda",
-      "label": "text_e7cd68a1590de84353e81422b0b12b23",
-      "type": "TextDocument",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ]
-        },
-        "mime_type": "text/plain",
-        "source_task": "classify_documents",
-        "source_user": "isoumyadey@gmail.com",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_node_set": "kb, kb:53032dc48ed8417098b3",
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 1,
-        "external_metadata": "{\n    \"node_set\": [\n        \"kb\",\n        \"kb:53032dc48ed8417098b3\"\n    ]\n}",
-        "importance_weight": 0.5,
-        "raw_data_location": "file:///app/cognee/data/.cognee_data/0610c5b7-3a67-48bf-ac6d-19da99772b30/text_e7cd68a1590de84353e81422b0b12b23.txt",
-        "source_content_hash": "e7cd68a1590de84353e81422b0b12b23"
-      }
-    },
-    {
-      "id": "f3b9c74f-de8f-5e3e-9414-0539275dcc1d",
-      "label": "swarnendu resume kb",
-      "type": "Entity",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "description": "Knowledge base containing Swarnendu Bhandari's resume.",
+        "description": "AI‑powered Mermaid diagram editor integrating Llama‑4 and DeepSeek‑R1 LLMs.",
         "source_task": "extract_graph_from_data",
         "belongs_to_set": [
           "kb",
@@ -587,85 +1548,7 @@
       }
     },
     {
-      "id": "f98912a6-35e6-59b6-a075-ebf2dc7f648f",
-      "label": "knowledgebase",
-      "type": "EntityType",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "relations": [],
-        "description": "knowledgebase",
-        "source_task": "extract_graph_from_data",
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "29e1e10e-4208-569d-9316-4e4045f21f61",
-      "label": "infuseai/infuseai",
-      "type": "Entity",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "description": "GitHub repository for the InfuseAI platform.",
-        "source_task": "extract_graph_from_data",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "f1a29c35-fce8-5706-97c5-8719ca15c88f",
-      "label": "dmaidcloud/dmaid.cloud",
-      "type": "Entity",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "description": "GitHub repository for the Dmaid.cloud Mermaid diagram editor.",
-        "source_task": "extract_graph_from_data",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "bcbcb3e1-98e8-570a-9c14-9c01ee0eabb3",
+      "id": "340b2443-20d0-56be-95f4-6d6e24fd68b7",
       "label": "swarnendu bhandari",
       "type": "Entity",
       "properties": {
@@ -678,195 +1561,12 @@
             "name"
           ]
         },
-        "description": "Data Scientist intern with expertise in knowledge graphs, LLM pipelines, and AI platform development.",
+        "description": "Software engineer; email clickswarnendu123@gmail.com; GitHub username swarnendu_; phone +91 8101199607.",
         "source_task": "extract_graph_from_data",
         "belongs_to_set": [
           "kb",
           "kb:53032dc48ed8417098b3"
         ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "f24484a4-43a3-511d-a474-a206a29b0a28",
-      "label": "dmaid.cloud",
-      "type": "Entity",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "description": "AI‑powered Mermaid diagram editor with LLM‑driven diagram generation and Google Sign‑In.",
-        "source_task": "extract_graph_from_data",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "ee72d1ac-84e7-5d9f-af29-c24b12f35e49",
-      "label": "fidelity investments virtual assistant poc",
-      "type": "Entity",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "description": "Intent‑less virtual assistant proof‑of‑concept built for Fidelity AI CoE, using Neo4j knowledge graphs and LLM pipelines.",
-        "source_task": "extract_graph_from_data",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "ecf676c5-f4c9-5820-a347-3022458a39ce",
-      "label": "clickswarnendu123@gmail.com",
-      "type": "Entity",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "description": "Email address of Swarnendu Bhandari.",
-        "source_task": "extract_graph_from_data",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "ecb8da1f-685a-5bef-9ead-f9794f47578b",
-      "label": "account",
-      "type": "EntityType",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "relations": [],
-        "description": "account",
-        "source_task": "extract_graph_from_data",
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "a33f994e-c845-5cc7-ac63-b66fcd1e12b1",
-      "label": "swarnendu_",
-      "type": "Entity",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "description": "GitHub account of Swarnendu Bhandari.",
-        "source_task": "extract_graph_from_data",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "fd767559-74f8-5de2-b8a8-ccc909e21598",
-      "label": "swarnendu resume cz.pdf",
-      "type": "Entity",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "description": "Resume document for Swarnendu Bhandari.",
-        "source_task": "extract_graph_from_data",
-        "belongs_to_set": [
-          "kb",
-          "kb:53032dc48ed8417098b3"
-        ],
-        "ontology_valid": false,
-        "feedback_weight": 0.5,
-        "source_pipeline": "cognify_pipeline",
-        "topological_rank": 0,
-        "importance_weight": 0.5
-      }
-    },
-    {
-      "id": "3d897781-1f4f-59f0-9622-97d2f17ed585",
-      "label": "document",
-      "type": "EntityType",
-      "properties": {
-        "version": 1,
-        "metadata": {
-          "index_fields": [
-            "name"
-          ],
-          "identity_fields": [
-            "name"
-          ]
-        },
-        "relations": [],
-        "description": "document",
-        "source_task": "extract_graph_from_data",
         "ontology_valid": false,
         "feedback_weight": 0.5,
         "source_pipeline": "cognify_pipeline",

@@ -265,15 +265,27 @@ export interface GitHubDocument {
  * Returns `entities` (normalised, for structural graph) and `documents`
  * (rich text blobs, for direct Cognee ingestion / RAG retrieval).
  */
-export async function deepSnapshot(token: string, repoFullNames: string[]): Promise<{ entities: any[]; documents: GitHubDocument[] }> {
+export async function deepSnapshot(
+  token: string,
+  repoFullNames: string[],
+  onProgress?: (phase: string, pct: number) => void,
+): Promise<{ entities: any[]; documents: GitHubDocument[] }> {
   const entities: any[] = [];
   const documents: GitHubDocument[] = [];
 
-  for (const full of repoFullNames) {
+  const prog = (phase: string, pct: number) => onProgress?.(phase, pct);
+  const n = repoFullNames.length || 1;
+
+  for (let ri = 0; ri < repoFullNames.length; ri++) {
+    const full = repoFullNames[ri];
+    const base = Math.round((ri / n) * 100);
+    const slice = Math.round(100 / n); // each repo gets an equal slice
+
     const [owner, repo] = full.split('/');
     if (!owner || !repo) continue;
 
     // ── 1. Repo metadata ────────────────────────────────────────────────────
+    prog('Fetching repository metadata…', base + Math.round(slice * 0.05));
     const metaRes = await ghFetch(`${API}/repos/${owner}/${repo}`, token);
     if (!metaRes.ok) continue;
     const meta = await (metaRes.json() as any);
@@ -281,9 +293,11 @@ export async function deepSnapshot(token: string, repoFullNames: string[]): Prom
     const branch = meta.default_branch || 'main';
 
     // ── 2. File tree + content ──────────────────────────────────────────────
+    prog('Scanning file tree…', base + Math.round(slice * 0.12));
     const tree = await fetchRepoTree(owner, repo, branch, token);
     const filesToFetch = selectImportantFiles(tree);
 
+    prog('Downloading documentation & configs…', base + Math.round(slice * 0.20));
     const fileContents: { path: string; content: string }[] = [];
     for (const path of filesToFetch) {
       const content = await fetchFileContent(owner, repo, path, token);
@@ -324,6 +338,7 @@ export async function deepSnapshot(token: string, repoFullNames: string[]): Prom
     }
 
     // ── 3. Releases ─────────────────────────────────────────────────────────
+    prog('Loading releases & changelog…', base + Math.round(slice * 0.32));
     const releases = await fetchReleases(owner, repo, token);
     if (releases.length) {
       documents.push({
@@ -335,6 +350,7 @@ export async function deepSnapshot(token: string, repoFullNames: string[]): Prom
     }
 
     // ── 4. Contributors ─────────────────────────────────────────────────────
+    prog('Loading contributors…', base + Math.round(slice * 0.38));
     const contributors = await fetchContributors(owner, repo, token);
     if (contributors.length) {
       documents.push({
@@ -345,13 +361,16 @@ export async function deepSnapshot(token: string, repoFullNames: string[]): Prom
     }
 
     // ── 5. Issues + discussion threads ──────────────────────────────────────
+    prog('Fetching issues & discussions…', base + Math.round(slice * 0.45));
     const rawIssues = await paginate(`/repos/${owner}/${repo}/issues?state=all&per_page=100`, token, { maxPages: 5 });
     const issuesOnly = (rawIssues as any[]).filter((i) => !i.pull_request);
     for (const i of issuesOnly) entities.push(normalizeGithubIssue(i, full));
 
     // Build enriched issue documents (with comment threads)
     const issueBatches: string[] = [];
-    for (const i of issuesOnly.slice(0, 100)) {
+    for (let ii = 0; ii < Math.min(issuesOnly.length, 100); ii++) {
+      const i = issuesOnly[ii];
+      if (ii % 20 === 0) prog(`Fetching issues… (${ii + 1}/${Math.min(issuesOnly.length, 100)})`, base + Math.round(slice * (0.45 + 0.20 * (ii / 100))));
       let block = `### #${i.number}: ${i.title} [${i.state}]\n${i.body ? i.body.slice(0, 1500) : '(no description)'}`;
       if (i.comments > 0) {
         const comments = await fetchIssueComments(owner, repo, i.number, token);
@@ -371,11 +390,14 @@ export async function deepSnapshot(token: string, repoFullNames: string[]): Prom
     }
 
     // ── 6. Pull Requests + reviews ──────────────────────────────────────────
+    prog('Fetching pull requests & reviews…', base + Math.round(slice * 0.65));
     const rawPRs = await paginate(`/repos/${owner}/${repo}/pulls?state=all&per_page=100`, token, { maxPages: 3 });
     for (const p of rawPRs as any[]) entities.push(normalizeGithubPR(p, full));
 
     const prBatches: string[] = [];
-    for (const p of (rawPRs as any[]).slice(0, 60)) {
+    for (let pi = 0; pi < Math.min((rawPRs as any[]).length, 60); pi++) {
+      const p = (rawPRs as any[])[pi];
+      if (pi % 15 === 0) prog(`Fetching PRs… (${pi + 1}/${Math.min((rawPRs as any[]).length, 60)})`, base + Math.round(slice * (0.65 + 0.12 * (pi / 60))));
       const status = p.merged_at ? 'merged' : p.state;
       let block = `### PR #${p.number}: ${p.title} [${status}]\n` +
         `Branch: ${p.head?.ref} → ${p.base?.ref}\n${p.body ? p.body.slice(0, 1200) : '(no description)'}`;
@@ -396,6 +418,7 @@ export async function deepSnapshot(token: string, repoFullNames: string[]): Prom
     }
 
     // ── 7. Recent commits (entities only) ───────────────────────────────────
+    prog('Loading commit history…', base + Math.round(slice * 0.82));
     const commits = await paginate(`/repos/${owner}/${repo}/commits?per_page=100`, token, { maxPages: 3 });
     for (const c of commits as any[]) entities.push(normalizeGithubCommit(c, full));
   }

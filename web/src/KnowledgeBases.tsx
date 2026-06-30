@@ -17,6 +17,17 @@ type DocInput =
 type DetailTab = 'documents' | 'sources' | 'insights' | 'graph' | 'mindmap';
 
 
+// Folder card accent palette — warm, dark tones that match the app's graph colours.
+// Deliberately no green (green is used for status indicators elsewhere).
+const FOLDER_ACCENTS = [
+  { tab: '#1B3149', tabEnd: '#162640', border: '#2D4561', iconBg: 'rgba(138,169,201,0.10)', iconBorder: 'rgba(138,169,201,0.22)', iconColor: '#8AA9C9' },  // steel blue
+  { tab: '#38290E', tabEnd: '#2C1F0A', border: '#5A3E18', iconBg: 'rgba(201,166,107,0.10)', iconBorder: 'rgba(201,166,107,0.22)', iconColor: '#C9A66B' },  // warm gold
+  { tab: '#3A2020', tabEnd: '#2C1818', border: '#5A3030', iconBg: 'rgba(194,131,121,0.10)', iconBorder: 'rgba(194,131,121,0.22)', iconColor: '#C28379' },  // dusty rose
+  { tab: '#24204A', tabEnd: '#1C1938', border: '#3D3866', iconBg: 'rgba(156,147,176,0.10)', iconBorder: 'rgba(156,147,176,0.22)', iconColor: '#9C93B0' },  // soft lavender
+  { tab: '#1A2E38', tabEnd: '#14232C', border: '#2B4450', iconBg: 'rgba(127,168,181,0.10)', iconBorder: 'rgba(127,168,181,0.22)', iconColor: '#7FA8B5' },  // slate teal
+  { tab: '#32260F', tabEnd: '#261D0B', border: '#503C1C', iconBg: 'rgba(216,180,140,0.10)', iconBorder: 'rgba(216,180,140,0.22)', iconColor: '#D8B48C' },  // sand
+];
+
 const MOCK_PLATFORM_ITEMS: Record<string, {id: string, name: string}[]> = {
   github: [],
   google_drive: [{ id: 'gd-1', name: 'Q3 Roadmaps.pdf' }, { id: 'gd-2', name: 'All Hands Deck.pptx' }, { id: 'gd-3', name: 'Customer Interview Notes.docx' }],
@@ -111,6 +122,10 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   // Dynamic items fetched from external APIs
   const [dynamicItems, setDynamicItems] = useState<Record<string, {id: string, name: string}[]>>({});
   const [isFetchingGithub, setIsFetchingGithub] = useState(false);
+
+  // Ingestion progress polling — keyed by kbId
+  const [ingestProgress, setIngestProgress] = useState<Record<string, { phase: string; pct: number; done: boolean; error?: string }>>({});
+  const ingestPollRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   const authHeaders = (extra: Record<string, string> = {}): Record<string, string> => ({
     'Content-Type': 'application/json',
@@ -235,6 +250,25 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
 
   // ── Sources: attach a globally-authorized connector's items to this KB, or
   //    detach it. Both rebuild the KB graph (graphRefresh) on their own. ──────
+  const startIngestPolling = (kbId: string) => {
+    // Clear any existing interval for this KB first
+    if (ingestPollRef.current[kbId]) clearInterval(ingestPollRef.current[kbId]);
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/kb?action=ingest-progress&kbId=${kbId}`, { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.found) return;
+        setIngestProgress(prev => ({ ...prev, [kbId]: { phase: data.phase, pct: data.pct, done: data.done, error: data.error } }));
+        if (data.done) {
+          clearInterval(poll);
+          delete ingestPollRef.current[kbId];
+        }
+      } catch { /* non-fatal */ }
+    }, 2000);
+    ingestPollRef.current[kbId] = poll;
+  };
+
   const updateSourceItems = async (kbId: string, platform: string, items: KbSource['items']) => {
     try {
       if (items.length === 0) {
@@ -246,6 +280,8 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
         setKbs(kbs.map((k) =>
           k.id === kbId ? { ...k, sources: (k.sources || []).filter((s) => s.platform !== platform), updatedAt: new Date().toISOString() } : k
         ));
+        // Clear any lingering progress for this KB
+        setIngestProgress(prev => { const n = { ...prev }; delete n[kbId]; return n; });
       } else {
         const res = await fetch('/api/kb', {
           method: 'POST',
@@ -257,6 +293,11 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
         setKbs(kbs.map((k) =>
           k.id === kbId ? { ...k, sources: [...(k.sources || []).filter((s) => s.platform !== platform), data.source], updatedAt: new Date().toISOString() } : k
         ));
+        // Start polling progress for GitHub ingestion
+        if (platform === 'github' && items.length > 0) {
+          setIngestProgress(prev => ({ ...prev, [kbId]: { phase: 'Starting…', pct: 2, done: false } }));
+          startIngestPolling(kbId);
+        }
       }
       setGraphRefresh((x) => x + 1);
     } catch (e) {
@@ -484,6 +525,9 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                     setExpandedPlatform(null);
                   };
                   
+                  const kbIngest = active ? ingestProgress[active.id] : undefined;
+                  const showProgress = !isExpanded && id === 'github' && !!kbIngest && attachedItems.length > 0;
+
                   return (
                     <div key={id} className={`card-elev rounded-2xl overflow-hidden transition-all h-fit ${isExpanded ? 'border-[#57534E]' : ''}`}>
                       <div className="flex items-center gap-3.5 px-4 py-3.5 cursor-pointer hover:bg-[#2A2826] transition-colors" onClick={handleExpand}>
@@ -493,27 +537,66 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-[14px] font-geist font-semibold text-[#F4F0EB]">{PLATFORM_NAMES[id] || id}</span>
-                            {attachedItems.length > 0 && (
+                            {attachedItems.length > 0 && !showProgress && (
                               <span className="flex items-center gap-1 text-[10px] font-geist font-semibold text-[#8FAE97] bg-[#1E2A22] border border-[#2E4636] px-1.5 py-0.5 rounded-md">
                                 <Check size={10} /> Attached
                               </span>
                             )}
+                            {showProgress && !kbIngest!.done && (
+                              <span className="flex items-center gap-1 text-[10px] font-geist font-semibold text-[#C9A66B] bg-[#2A2210] border border-[#3D3018] px-1.5 py-0.5 rounded-md">
+                                <Loader2 size={9} className="animate-spin" /> Ingesting…
+                              </span>
+                            )}
+                            {showProgress && kbIngest!.done && !kbIngest!.error && (
+                              <span className="flex items-center gap-1 text-[10px] font-geist font-semibold text-[#8FAE97] bg-[#1E2A22] border border-[#2E4636] px-1.5 py-0.5 rounded-md">
+                                <Check size={10} /> Indexed
+                              </span>
+                            )}
                           </div>
                           <p className="text-[11.5px] font-geist text-[#8C8880] mt-0.5 truncate">
-                            {attachedItems.length === 0 ? 'Click to select items' : `${attachedItems.length} item(s) attached`}
+                            {showProgress && !kbIngest!.done
+                              ? kbIngest!.phase
+                              : attachedItems.length === 0 ? 'Click to select items' : `${attachedItems.length} item(s) attached`}
                           </p>
                         </div>
                         <ChevronDown size={18} className={`text-[#6B6762] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                       </div>
-                      
+
                       {/* Show attached items as chips when not expanded */}
                       {!isExpanded && attachedItems.length > 0 && (
-                        <div className="px-4 pb-3.5 pt-0 flex flex-wrap gap-2">
-                          {attachedItems.map(item => (
-                            <span key={item.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#1E1D1C] border border-[#3D3A37] rounded-md text-[11px] font-geist text-[#C7C2BC]">
-                              {item.name}
-                            </span>
-                          ))}
+                        <div className="px-4 pb-3.5 pt-0 flex flex-col gap-2">
+                          <div className="flex flex-wrap gap-2">
+                            {attachedItems.map(item => (
+                              <span key={item.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-[#1E1D1C] border border-[#3D3A37] rounded-md text-[11px] font-geist text-[#C7C2BC]">
+                                {item.name}
+                              </span>
+                            ))}
+                          </div>
+                          {/* Ingestion progress bar */}
+                          {showProgress && (
+                            <div className="mt-1">
+                              <div className="w-full h-1.5 bg-[#2A2826] rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{
+                                    width: `${kbIngest!.pct}%`,
+                                    background: kbIngest!.error
+                                      ? '#C28379'
+                                      : kbIngest!.done
+                                        ? '#8FAE97'
+                                        : 'linear-gradient(90deg, #C9A66B, #D8B48C)',
+                                  }}
+                                />
+                              </div>
+                              <p className="text-[10.5px] font-geist text-[#6B6762] mt-1 truncate">
+                                {kbIngest!.error
+                                  ? `Error: ${kbIngest!.error}`
+                                  : kbIngest!.done
+                                    ? 'Knowledge base ready — graph & search active'
+                                    : `${kbIngest!.pct}% · ${kbIngest!.phase}`}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                       
@@ -652,26 +735,61 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((kb: KnowledgeBase) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-6">
+            {filtered.map((kb: KnowledgeBase, idx: number) => {
               const n = (kb.documents || []).length;
+              const accent = FOLDER_ACCENTS[idx % FOLDER_ACCENTS.length];
               return (
-                <button key={kb.id} onClick={() => navigate(`/kb/${kb.id}`)}
-                  className="card-elev card-elev-hover rounded-2xl p-5 text-left flex flex-col gap-4 group">
-                  <div className="flex items-start justify-between">
-                    <span className="w-11 h-11 rounded-xl bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center">
-                      <Database size={20} className="text-[#9C968E]" />
-                    </span>
-                    <span className="text-[11px] font-geist font-semibold text-[#C7C2BC] bg-[#1E1D1C] border border-[#3D3A37] px-2 py-1 rounded-md tabular-nums">
-                      {n} doc{n === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-[16px] font-geist font-semibold text-[#F4F0EB] tracking-tight truncate">{kb.name}</h3>
-                    <p className="text-[12.5px] font-geist text-[#8C8880] mt-1 line-clamp-2 min-h-[18px]">{kb.description || 'No description'}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-geist text-[#6B6762] pt-3 border-t border-[#33302E]">
-                    <Calendar size={12} /> Created {fmtDate(kb.createdAt)}
+                <button
+                  key={kb.id}
+                  onClick={() => navigate(`/kb/${kb.id}`)}
+                  className="group text-left w-full transition-all duration-200 hover:-translate-y-1.5 focus:outline-none"
+                >
+                  {/* Folder tab — sits above the body, aligned top-left */}
+                  <div
+                    className="ml-3.5 h-[22px] rounded-t-[11px] border border-b-0 transition-colors duration-200"
+                    style={{
+                      width: '44%',
+                      background: `linear-gradient(to bottom, ${accent.tab} 0%, ${accent.tabEnd} 100%)`,
+                      borderColor: accent.border,
+                    }}
+                  />
+                  {/* Folder body */}
+                  <div
+                    className="rounded-b-2xl rounded-tr-2xl p-5 flex flex-col gap-3.5 transition-all duration-200"
+                    style={{
+                      background: 'linear-gradient(180deg, #2c2a28 0%, #262422 100%)',
+                      border: `1px solid ${accent.border}`,
+                      boxShadow: '0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 24px rgba(0,0,0,0.22)',
+                    }}
+                  >
+                    {/* Icon row */}
+                    <div className="flex items-start justify-between">
+                      <span
+                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        style={{ background: accent.iconBg, border: `1px solid ${accent.iconBorder}` }}
+                      >
+                        <Database size={18} style={{ color: accent.iconColor }} />
+                      </span>
+                      <span className="text-[10.5px] font-geist font-semibold text-[#C7C2BC] bg-[#1E1D1C] border border-[#3D3A37] px-2 py-0.5 rounded-md tabular-nums mt-0.5">
+                        {n} doc{n === 1 ? '' : 's'}
+                      </span>
+                    </div>
+
+                    {/* Name + description */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[15px] font-geist font-semibold text-[#F4F0EB] tracking-tight truncate group-hover:text-white transition-colors">
+                        {kb.name}
+                      </h3>
+                      <p className="text-[12px] font-geist text-[#8C8880] mt-1 line-clamp-2 leading-relaxed">
+                        {kb.description || 'No description'}
+                      </p>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="flex items-center gap-1.5 text-[11px] font-geist text-[#6B6762] pt-3 border-t border-[#33302E]">
+                      <Calendar size={11} /> Created {fmtDate(kb.createdAt)}
+                    </div>
                   </div>
                 </button>
               );
