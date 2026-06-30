@@ -441,14 +441,14 @@ export async function pollSince(token, repoFullNames, sinceIso) {
 
     // New commits since the last sync (captures pushes).
     const commits = await paginate(
-      `/repos/${owner}/${repo}/commits?per_page=50${sinceIso ? `&since=${encodeURIComponent(sinceIso)}` : ''}`,
+      `/repos/${owner}/${repo}/commits?per_page=200${sinceIso ? `&since=${encodeURIComponent(sinceIso)}` : ''}`,
       token,
       { maxPages: 1 }
     );
     for (const c of commits) entities.push(normalizeGithubCommit(c, full));
 
     const issues = await paginate(
-      `/repos/${owner}/${repo}/issues?state=all&sort=updated&direction=desc&per_page=50${since}`,
+      `/repos/${owner}/${repo}/issues?state=all&sort=updated&direction=desc&per_page=200${since}`,
       token,
       { maxPages: 2 }
     );
@@ -459,7 +459,7 @@ export async function pollSince(token, repoFullNames, sinceIso) {
 
     // PRs API has no `since`; sort by updated and keep the freshest page.
     const prs = await paginate(
-      `/repos/${owner}/${repo}/pulls?state=all&sort=updated&direction=desc&per_page=50`,
+      `/repos/${owner}/${repo}/pulls?state=all&sort=updated&direction=desc&per_page=200`,
       token,
       { maxPages: 1 }
     );

@@ -72,14 +72,26 @@ const SAMPLE_ITEMS = {
   ],
 };
 
-/** Live GitHub repo listing when a token is present (PAT or OAuth access token). */
+/** Live GitHub repo listing — paginates through all pages (up to 500 repos). */
 async function fetchGitHubRepos(token) {
-  const res = await fetch('https://api.github.com/user/repos?per_page=50&sort=updated&affiliation=owner,collaborator,organization_member', {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
-  });
-  if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-  const repos = await (res.json() as any);
-  return repos.map(r => ({
+  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
+  const allRepos: any[] = [];
+  let page = 1;
+  const maxPages = 5; // 5 × 100 = 500 repos max
+
+  while (page <= maxPages) {
+    const url = `https://api.github.com/user/repos?per_page=100&page=${page}&sort=updated&affiliation=owner,collaborator,organization_member`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+    const batch = (await res.json()) as any[];
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    allRepos.push(...batch);
+    // GitHub returns fewer than per_page items on the last page
+    if (batch.length < 100) break;
+    page++;
+  }
+
+  return allRepos.map(r => ({
     id: `gh-${r.id}`,
     name: r.full_name,
     meta: `${r.language || 'Repo'} · ${r.private ? 'private' : 'public'}${r.pushed_at ? ` · updated ${timeAgo(r.pushed_at)}` : ''}`,

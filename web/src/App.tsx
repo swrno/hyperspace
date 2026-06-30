@@ -10,7 +10,7 @@ import type {
 import {
   Send, Trash2, Download, Sun, Moon, Copy, Menu, X,
   Bot, User as UserIcon, Check, Plus, Settings as SettingsIcon, Edit2, MessageSquare,
-  ChevronLeft, ChevronDown, Paperclip, Zap, Terminal, Brain,
+  ChevronLeft, ChevronDown, ChevronRight, Paperclip, Zap, Terminal, Brain,
   PanelLeftClose, PanelLeftOpen, MoreHorizontal, ThumbsUp, ThumbsDown,
   Mic, Image as ImageIcon, Search, Pencil, RefreshCw, Shield, Users, LogOut, Key,
   LayoutDashboard, Database, Blocks, MessagesSquare, ArrowRight, ArrowUpRight,
@@ -980,6 +980,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const appInputRef = useRef<HTMLTextAreaElement>(null);
   const appMessagesEndRef = useRef<HTMLDivElement>(null);
   const [appCopiedId, setAppCopiedId] = useState<number | string | null>(null);
+  const [appModelDropdownOpen, setAppModelDropdownOpen] = useState(false);
   const [appSettingsForm, setAppSettingsForm] = useState<{
     systemPrompt: string; model: string; temperature: number; maxTokens: number;
   } | null>(null);
@@ -2837,6 +2838,15 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     const app = applications.find(a => a.id === activeAppId);
     if (!app) return null;
 
+    const APP_MODELS = [
+      { id: 'qwen/qwen3.6-27b',                          name: 'Qwen 3.6',        desc: 'Most efficient for everyday tasks',   badge: null },
+      { id: 'qwen/qwen3-32b',                            name: 'Qwen 3-32B',      desc: 'For complex reasoning tasks',         badge: 'Pro' },
+      { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout',   desc: 'Fastest for quick answers',           badge: null },
+      { id: 'openai/gpt-oss-120b',                       name: 'GPT OSS 120B',    desc: 'For your toughest challenges',        badge: 'Pro' },
+    ];
+
+    const activeModel = APP_MODELS.find(m => m.id === app.model) ?? APP_MODELS[0];
+
     const renderAppInputBox = () => (
       <div className="relative flex flex-col bg-[#2A2826] px-4 pt-4 pb-3 rounded-[12px] border border-[#3D3A37] transition-colors duration-200">
         <textarea
@@ -2846,6 +2856,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
+              setAppModelDropdownOpen(false);
               handleAppSend(app.id);
             }
           }}
@@ -2859,7 +2870,66 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 150) + 'px';
           }}
         />
-        <div className="flex items-center justify-end mt-2">
+        <div className="flex items-center justify-between mt-2">
+          {/* Model picker */}
+          <div className="relative">
+            <button
+              onClick={() => setAppModelDropdownOpen(o => !o)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E1D1C] border border-[#3D3A37] rounded-lg text-[12px] font-medium text-[#C9C5C0] hover:border-[#57534E] hover:text-[#F4F0EB] transition-colors"
+            >
+              <span>{activeModel.name}</span>
+              <ChevronDown size={11} className={`transition-transform ${appModelDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {appModelDropdownOpen && (
+              <>
+                {/* backdrop */}
+                <div className="fixed inset-0 z-40" onClick={() => setAppModelDropdownOpen(false)} />
+                {/* dropdown */}
+                <div className="absolute bottom-full left-0 mb-2 w-[280px] bg-[#1E1D1C] border border-[#3D3A37] rounded-[14px] shadow-2xl z-50 overflow-hidden">
+                  <div className="p-1.5">
+                    {APP_MODELS.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          updateApp(app.id, { model: m.id });
+                          setAppModelDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-left transition-colors ${
+                          m.id === app.model ? 'bg-[#2A2826]' : 'hover:bg-[#252523]'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13.5px] font-semibold text-[#F4F0EB]">{m.name}</span>
+                            {m.badge && (
+                              <span className="px-1.5 py-0.5 bg-[#C9A66B]/15 text-[#C9A66B] text-[9px] font-bold uppercase tracking-wider rounded-md border border-[#C9A66B]/25">
+                                {m.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11.5px] text-[#6B6762] mt-0.5">{m.desc}</p>
+                        </div>
+                        {m.id === app.model && (
+                          <Check size={14} className="text-[#C9A66B] shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-[#3D3A37] px-3 py-2.5">
+                    <button
+                      onClick={() => setAppModelDropdownOpen(false)}
+                      className="w-full flex items-center justify-between text-[12px] text-[#8C8880] hover:text-[#F4F0EB] transition-colors py-1"
+                    >
+                      <span>More models in Settings</span>
+                      <ChevronRight size={12} />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
           <button
             onClick={() => handleAppSend(app.id)}
             disabled={appIsLoading || !appInput.trim()}
