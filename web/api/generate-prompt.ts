@@ -34,7 +34,7 @@ export default async function generatePromptHandler(req: Request, res: Response)
       throw new Error(`Groq API Error: ${groqRes.status} ${errTxt}`);
     }
 
-    const groqData = await groqRes.json();
+    const groqData = await (groqRes.json() as any);
     const generatedPrompt = groqData.choices?.[0]?.message?.content || '';
 
     return res.status(200).json({ prompt: generatedPrompt.trim() });

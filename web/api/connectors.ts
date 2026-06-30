@@ -201,7 +201,7 @@ export default async function handler(req: Request, res: Response) {
             console.warn(`Initial sync failed for ${platform} (non-fatal):`, e.message)
           );
         } else if (selectedItems.length > 0) {
-          const payload = formatConnectorPayload(user.uid, user.email, platform, selectedItems);
+          const payload = formatConnectorPayload(undefined, user.uid, user.email, platform, selectedItems);
           cogneeIngest(payload, { userId: user.uid, nodeSet: [platform] })
             .catch(e => console.warn('Cognee ingest failed (non-fatal):', e.message));
         }

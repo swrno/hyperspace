@@ -2947,7 +2947,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                                 <div className="w-[28px] h-[28px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-0.5">
                                   <img src="/particles.png" className="w-[14px] h-[14px] opacity-80" alt="ai" />
                                 </div>
-                                <div className="flex-1 min-w-0 font-basel text-[14px] text-[#E8E6E3] prose-invert">
+                                <div className="flex-1 min-w-0 font-basel text-[14px] text-[#E8E6E3] prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-[#1E1D1C] prose-pre:border prose-pre:border-[#3D3A37]">
                                   {(() => {
                                     const parsed = parseMessageWithThink(msg.content);
                                     const displayReasoning = msg.reasoning || parsed.reasoning;

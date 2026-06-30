@@ -92,7 +92,7 @@ export default async function appChatHandler(req: Request, res: Response) {
       throw new Error(`Groq API Error: ${groqRes.status}`);
     }
 
-    const groqData = await groqRes.json();
+    const groqData = await (groqRes.json() as any);
     const replyContent = groqData.choices?.[0]?.message?.content || '';
 
     // Save messages to MongoDB
