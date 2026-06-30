@@ -4,11 +4,10 @@ The promise of Enterprise AI is simple: give an LLM access to your company’s i
 This post details a production-grade blueprint that solves workspace search by transforming fragmented data silos into a dynamically synced, self-correcting Knowledge Graph using **Cognee**, **LangGraph**, and **Groq**.
 
 ## User Journey:
-User Journey:
 
 1. User will sign up.
-2. Authorise his Github (Will be able to select the repo), Google Docs (Will be abloe to select the files he wanted to ingest). 
-3. After he selects we will start the Continous Ingesation pipeline through Backend SQS and we will convert them to KG. 
+2. Authorise his Github (Will be able to select the repo), Google Docs (Will be able to select the files he wanted to ingest).
+3. After he selects we will start the Continous Ingesation pipeline through Backend SQS and we will convert them to KG.
 4. Updation on every 1 Hr. (Optional)
 5. Chat Interface Real time with Langchain and Cognee GraphDB.
 
