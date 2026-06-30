@@ -40,30 +40,32 @@ export default async function handler(req: Request, res: Response) {
     // Per-KB graph → built purely from this knowledge base's own documents and
     // attached sources, so it's always "based on sources" and rebuilds when a
     // source is attached/detached. (Scoped, runs offline of Cognee.)
-    const kbId = req.query?.kbId;
+    const kbId = req.query?.kbId as string | undefined;
+
+    // Semantic mode → the REAL graph Cognee extracted via cognify (entities +
+    // relationships the LLM found), rather than our structural Mongo edges.
+    if (req.query?.mode === 'cognee') {
+      const g = await getDatasetGraph(user.uid, kbId);
+      const rawNodes = g?.nodes || [];
+      const rawEdges = g?.edges || [];
+      const nodes = rawNodes.map((n: any) => ({ id: n.id, label: cleanLabel(n), type: n.type || 'Node', source: 'cognee', url: null }));
+      const edges = rawEdges
+        .map((e: any) => ({ source: e.source ?? e.source_node_id, target: e.target ?? e.target_node_id, label: e.label || e.relationship_name || '' }))
+        .filter((e: any) => e.source && e.target);
+      const degree: Record<string, number> = {};
+      for (const e of edges) { degree[e.source] = (degree[e.source] || 0) + 1; degree[e.target] = (degree[e.target] || 0) + 1; }
+      for (const n of nodes) n.degree = degree[n.id] || 0;
+      const types = [...new Set(nodes.map((n) => n.type))];
+      return res.status(200).json({ nodes, edges, mode: 'cognee', stats: { nodes: nodes.length, edges: edges.length, entities: nodes.length, sources: types.length, people: 0 } });
+    }
+
+    // Structural mode per-KB graph
     if (kbId) {
       const db = await getDb();
       const kb = await db.collection('knowledge_bases').findOne({ _id: kbId, userId: user.uid });
       if (!kb) return res.status(404).json({ error: 'Knowledge base not found' });
       const { nodes, edges, stats } = buildKbGraph(kb);
       return res.status(200).json({ nodes, edges, stats, kbId });
-    }
-
-    // Semantic mode → the REAL graph Cognee extracted via cognify (entities +
-    // relationships the LLM found), rather than our structural Mongo edges.
-    if (req.query?.mode === 'cognee') {
-      const g = await getDatasetGraph(user.uid, kbId as string || undefined);
-      const rawNodes = g?.nodes || [];
-      const rawEdges = g?.edges || [];
-      const nodes = rawNodes.map((n) => ({ id: n.id, label: cleanLabel(n), type: n.type || 'Node', source: 'cognee', url: null }));
-      const edges = rawEdges
-        .map((e) => ({ source: e.source ?? e.source_node_id, target: e.target ?? e.target_node_id, label: e.label || e.relationship_name || '' }))
-        .filter((e) => e.source && e.target);
-      const degree = {};
-      for (const e of edges) { degree[e.source] = (degree[e.source] || 0) + 1; degree[e.target] = (degree[e.target] || 0) + 1; }
-      for (const n of nodes) n.degree = degree[n.id] || 0;
-      const types = [...new Set(nodes.map((n) => n.type))];
-      return res.status(200).json({ nodes, edges, mode: 'cognee', stats: { nodes: nodes.length, edges: edges.length, entities: nodes.length, sources: types.length, people: 0 } });
     }
 
     const db = await getDb();
