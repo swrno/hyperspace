@@ -395,17 +395,40 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
 
         {/* Selected node panel */}
         {selected && (
-          <div className="absolute top-4 right-4 w-[260px] bg-[#1E1D1C]/95 backdrop-blur border border-[#3D3A37] rounded-xl p-4 z-10 animate-slide-up">
-            <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="absolute top-4 right-4 w-[300px] max-h-[calc(100%-2rem)] flex flex-col bg-[#1E1D1C]/95 backdrop-blur border border-[#3D3A37] rounded-xl z-10 animate-slide-up overflow-hidden">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-2 p-4 pb-2 shrink-0">
               <span className="flex items-center gap-2 text-[10px] font-geist font-semibold uppercase tracking-[0.1em]" style={{ color: colorOf(selected.type) }}>
                 <span className="w-2 h-2 rounded-full" style={{ background: colorOf(selected.type) }} /> {selected.type}
               </span>
               <button onClick={() => setSelected(null)} className="text-[#6B6762] hover:text-[#F4F0EB]"><X size={14} /></button>
             </div>
-            <p className="text-[14px] font-geist font-semibold text-[#F4F0EB] leading-snug break-words">{selected.label}</p>
-            {selected.status && <p className="text-[11.5px] font-geist text-[#8C8880] mt-1">Status: {selected.status}</p>}
-            <p className="text-[11.5px] font-geist text-[#8C8880] mt-0.5">Connections: {selected.degree || 0}</p>
-            <div className="flex gap-2 mt-3">
+            <p className="px-4 text-[14px] font-geist font-semibold text-[#F4F0EB] leading-snug break-words shrink-0">{selected.label}</p>
+            <p className="px-4 mt-1 text-[11.5px] font-geist text-[#8C8880] shrink-0">Connections: {selected.degree || 0}{selected.status ? ` · ${selected.status}` : ''}</p>
+
+            {/* Properties */}
+            {selected.properties && Object.keys(selected.properties).length > 0 && (
+              <div className="mt-3 mx-4 border-t border-[#3D3A37] pt-3 overflow-y-auto flex-1">
+                <p className="text-[10px] font-geist font-semibold uppercase tracking-[0.12em] text-[#6B6762] mb-2">Properties</p>
+                <div className="flex flex-col gap-2">
+                  {Object.entries(selected.properties)
+                    .filter(([k]) => !['version', 'feedback_weight', 'importance_weight', 'ontology_valid', 'metadata'].includes(k))
+                    .map(([k, v]) => {
+                      const display = Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v ?? '');
+                      const truncated = display.length > 280 ? display.slice(0, 280) + '…' : display;
+                      return (
+                        <div key={k} className="flex flex-col gap-0.5">
+                          <span className="text-[10px] font-geist font-medium text-[#6B6762] uppercase tracking-wide">{k.replace(/_/g, ' ')}</span>
+                          <span className="text-[11.5px] font-geist text-[#C7C2BC] break-words leading-relaxed">{truncated}</span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 p-4 pt-3 shrink-0">
               <button onClick={() => onAsk?.(`Tell me about "${selected.label}" and what it connects to in my knowledge graph.`)} className="btn-bump btn-bump-accent flex-1 py-2 text-[12px]">Ask hypr</button>
               {selected.url && <a href={selected.url} target="_blank" rel="noreferrer" className="btn-bump btn-bump-dark px-3 py-2 text-[12px]">Open</a>}
             </div>

@@ -3251,8 +3251,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                   className="px-4 py-2.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-[12px] font-medium transition-colors w-full"
                   onClick={() => {
                     if (confirm(`Are you sure you want to delete ${app.name}?`)) {
-                      setApplications(prev => prev.filter(a => a.id !== app.id));
-                      setActiveAppId(null);
+                      deleteApp(app.id);
                     }
                   }}
                 >

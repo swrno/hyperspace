@@ -116,26 +116,38 @@ export async function ingest(text, { userId, kbId, nodeSet }: any = {}) {
 
 // ── 3. Search (multi-hop grounded retrieval) ─────────────────────────────────
 
+/** Recursively extract strings from any nested Cognee search result value. */
+function extractStrings(val: unknown): string[] {
+  if (!val) return [];
+  if (typeof val === 'string') return val.trim() ? [val.trim()] : [];
+  if (Array.isArray(val)) return val.flatMap(extractStrings);
+  if (typeof val === 'object') {
+    const v = val as Record<string, unknown>;
+    // Try common field names Cognee uses across API versions.
+    for (const k of ['search_result', 'result', 'text', 'content', 'value', 'answer']) {
+      if (v[k]) return extractStrings(v[k]);
+    }
+  }
+  return [];
+}
+
 /**
  * Graph search. Default GRAPH_COMPLETION returns a synthesised, multi-hop
  * answer grounded in the extracted graph. Returns a string (or null).
  */
 export async function graphSearch(query, { userId, kbId, searchType = 'GRAPH_COMPLETION', topK = 10 }: any = {}) {
   if (!configured() || !query?.trim()) return null;
+  const dataset = resolveDataset({ userId, kbId });
   try {
-    const res = await jpost('/api/v1/search', {
-      searchType,
-      query,
-      datasets: [resolveDataset({ userId, kbId })],
-      topK,
-      includeReferences: false,
-    });
-    if (!res.ok) return null;
+    const res = await jpost('/api/v1/search', { searchType, query, datasets: [dataset], topK, includeReferences: false });
+    if (!res.ok) {
+      console.warn(`Cognee graphSearch (${searchType}) non-OK for dataset ${dataset}:`, res.status, await res.text().catch(() => ''));
+      return null;
+    }
     const data = await (res.json() as any);
-    if (!Array.isArray(data)) return null;
-    const parts = data.flatMap((r) => r.search_result || r.result || []).filter((s) => typeof s === 'string' && s.trim());
+    const parts = extractStrings(data);
     return parts.length ? [...new Set(parts)].join('\n\n') : null;
-  } catch (e) { console.warn('Cognee graphSearch error:', e.message); return null; }
+  } catch (e: any) { console.warn('Cognee graphSearch error:', e.message); return null; }
 }
 
 /**
@@ -144,22 +156,16 @@ export async function graphSearch(query, { userId, kbId, searchType = 'GRAPH_COM
  */
 export async function vectorSearch(query, { userId, kbId, topK = 10 }: any = {}) {
   if (!configured() || !query?.trim()) return [];
+  const dataset = resolveDataset({ userId, kbId });
   try {
-    const res = await jpost('/api/v1/search', {
-      searchType: 'CHUNKS',
-      query,
-      datasets: [resolveDataset({ userId, kbId })],
-      topK,
-      includeReferences: false,
-    });
-    if (!res.ok) return [];
+    const res = await jpost('/api/v1/search', { searchType: 'CHUNKS', query, datasets: [dataset], topK, includeReferences: false });
+    if (!res.ok) {
+      console.warn(`Cognee vectorSearch non-OK for dataset ${dataset}:`, res.status, await res.text().catch(() => ''));
+      return [];
+    }
     const data = await (res.json() as any);
-    if (!Array.isArray(data)) return [];
-    return data
-      .flatMap((r) => r.search_result || r.result || r.text || [])
-      .filter((s) => typeof s === 'string' && s.trim())
-      .map((s) => s.trim());
-  } catch (e) { console.warn('Cognee vectorSearch error:', e.message); return []; }
+    return [...new Set(extractStrings(data))];
+  } catch (e: any) { console.warn('Cognee vectorSearch error:', e.message); return []; }
 }
 
 // ── Reciprocal Rank Fusion (RRF) ─────────────────────────────────────────────

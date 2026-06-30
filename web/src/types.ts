@@ -175,6 +175,7 @@ export interface GraphNode {
   degree?: number;
   status?: string;
   url?: string;
+  properties?: Record<string, any>;
 }
 
 export interface GraphEdge {

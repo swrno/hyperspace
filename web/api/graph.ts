@@ -5,10 +5,51 @@ import { getDatasetGraph } from './cognee.js';
 import { buildStructuralGraph, buildKbGraph } from './lib/graphbuild.js';
 
 // Clean Cognee's "Type_<uuid>" auto labels down to something readable.
-function cleanLabel(n) {
+function cleanLabel(n: any) {
   const raw = n.properties?.name || n.properties?.text?.split('\n')[0] || n.label || n.type || 'node';
   const m = /^(\w+)_[0-9a-f]{8}(-[0-9a-f]+)+$/i.exec(raw);
   return (m ? m[1] : raw).slice(0, 60);
+}
+
+/**
+ * Cognee's /datasets/{id}/graph API frequently returns 0 edges even after
+ * cognify has run. Derive structural edges from well-known property fields
+ * so the visualisation shows a connected graph instead of isolated dots.
+ *
+ * Rules (in priority order):
+ *   TextSummary.source_chunk_id  → SUMMARIZES  → DocumentChunk
+ *   DocumentChunk.document_id    → PART_OF      → TextDocument
+ *   *.belongs_to_set (labels)    → BELONGS_TO   → matching NodeSet node
+ */
+function deriveEdgesFromProperties(rawNodes: any[]): { source: string; target: string; label: string }[] {
+  const edges: { source: string; target: string; label: string }[] = [];
+  const nodeIds = new Set(rawNodes.map((n) => n.id));
+  // NodeSet nodes indexed by their label so we can resolve belongs_to_set strings.
+  const nodeSetByLabel = new Map<string, string>(
+    rawNodes.filter((n) => n.type === 'NodeSet').map((n) => [n.label, n.id])
+  );
+
+  for (const n of rawNodes) {
+    const p = n.properties || {};
+
+    if (n.type === 'TextSummary' && p.source_chunk_id && nodeIds.has(p.source_chunk_id)) {
+      edges.push({ source: n.id, target: p.source_chunk_id, label: 'SUMMARIZES' });
+    }
+
+    if (n.type === 'DocumentChunk' && p.document_id && nodeIds.has(p.document_id)) {
+      edges.push({ source: n.id, target: p.document_id, label: 'PART_OF' });
+    }
+
+    const sets: string[] = Array.isArray(p.belongs_to_set) ? p.belongs_to_set : [];
+    for (const setLabel of sets) {
+      const setId = nodeSetByLabel.get(setLabel);
+      if (setId && setId !== n.id) {
+        edges.push({ source: n.id, target: setId, label: 'BELONGS_TO' });
+      }
+    }
+  }
+
+  return edges;
 }
 
 /**
@@ -48,10 +89,17 @@ export default async function handler(req: Request, res: Response) {
       const g = await getDatasetGraph(user.uid, kbId);
       const rawNodes = g?.nodes || [];
       const rawEdges = g?.edges || [];
-      const nodes = rawNodes.map((n: any) => ({ id: n.id, label: cleanLabel(n), type: n.type || 'Node', source: 'cognee', url: null }));
-      const edges = rawEdges
+      const nodes = rawNodes.map((n: any) => ({ id: n.id, label: cleanLabel(n), type: n.type || 'Node', source: 'cognee', url: null, properties: n.properties || {} }));
+      let edges = rawEdges
         .map((e: any) => ({ source: e.source ?? e.source_node_id, target: e.target ?? e.target_node_id, label: e.label || e.relationship_name || '' }))
         .filter((e: any) => e.source && e.target);
+
+      // Cognee's /datasets/{id}/graph endpoint often returns 0 edges even when
+      // relationships exist — synthesize them from well-known property fields.
+      if (edges.length === 0 && rawNodes.length > 0) {
+        edges = deriveEdgesFromProperties(rawNodes);
+      }
+
       const degree: Record<string, number> = {};
       for (const e of edges) { degree[e.source] = (degree[e.source] || 0) + 1; degree[e.target] = (degree[e.target] || 0) + 1; }
       for (const n of nodes) n.degree = degree[n.id] || 0;
@@ -72,9 +120,9 @@ export default async function handler(req: Request, res: Response) {
     const ents = await db.collection('kb_entities').find({ userId: user.uid }).limit(600).toArray();
     const { nodes, edges, stats } = buildStructuralGraph(ents);
     return res.status(200).json({ nodes, edges, stats });
-  } catch (error) {
-    console.error('Error in /api/graph:', error.message);
-    const status = error.message.includes('Authorization') ? 418 : 500;
-    return res.status(status).json({ error: error.message || 'Failed to build graph' });
+  } catch (err: any) {
+    console.error('Error in /api/graph:', err.message);
+    const status = String(err.message).includes('Authorization') ? 418 : 500;
+    return res.status(status).json({ error: err.message || 'Failed to build graph' });
   }
 }
