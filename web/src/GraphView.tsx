@@ -263,28 +263,38 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
   }, [communities]);
 
   const load = async (m: 'structural' | 'cognee' = mode) => {
-    if (!idToken) { setLoading(false); return; }
     setLoading(true);
-    try {
-      // KB-scoped graph ignores the structural/semantic toggle — it's always
-      // built from that KB's own documents + attached sources.
-      const qs = kbId ? `?kbId=${encodeURIComponent(kbId)}` : (m === 'cognee' ? '?mode=cognee' : '');
-      const res = await fetch(`/api/graph${qs}`, { headers: { Authorization: `Bearer ${idToken}` } });
-      if (res.ok) setData(await res.json());
-    } catch (e) { console.warn('graph load failed', (e as Error).message); }
-    finally { setLoading(false); }
+    setTimeout(() => {
+      // Mock Graph Data for local-first UI
+      setData({
+        nodes: [
+          { id: '1', label: 'Knowledge Base', type: 'Concept', degree: 3 },
+          { id: '2', label: 'Document A', type: 'Document', degree: 2 },
+          { id: '3', label: 'Source File', type: 'File', degree: 1 },
+          { id: '4', label: 'Integration', type: 'System', degree: 2 },
+          { id: '5', label: 'Data Point', type: 'Entity', degree: 1 },
+        ],
+        edges: [
+          { source: '1', target: '2', label: 'contains' },
+          { source: '2', target: '3', label: 'references' },
+          { source: '1', target: '4', label: 'uses' },
+          { source: '4', target: '5', label: 'extracts' },
+          { source: '2', target: '5', label: 'mentions' },
+        ],
+        stats: { nodes: 5, edges: 5 }
+      });
+      setLoading(false);
+    }, 600);
   };
   useEffect(() => { load(mode); /* eslint-disable-next-line */ }, [idToken, mode, kbId, refreshKey]);
 
   const syncNow = async () => {
-    if (!idToken || syncing) return;
-    // For a KB the "rebuild" is just a re-read of its own sources.
-    if (kbId) { setSyncing(true); await load(mode); setSyncing(false); return; }
+    if (syncing) return;
     setSyncing(true);
-    try {
-      await fetch('/api/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` }, body: '{}' });
-      for (const d of [3000, 7000, 12000]) setTimeout(() => load(mode), d);
-    } finally { setTimeout(() => setSyncing(false), 12000); }
+    setTimeout(() => {
+      load(mode);
+      setSyncing(false);
+    }, 1500);
   };
 
   const presentTypes = useMemo(() => [...new Set((data?.nodes || []).map((n) => n.type))], [data]);

@@ -151,21 +151,7 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   useEffect(() => { kbsRef.current = kbs; }, [kbs]);
   useEffect(() => {
     if (!activeId || !idToken) return;
-    const fingerprint = (k?: KnowledgeBase) => JSON.stringify({ d: k?.documents?.map((x) => x.id), s: k?.sources?.map((x) => `${x.platform}:${x.items?.length}`) });
-    const tick = async () => {
-      if (typeof document !== 'undefined' && document.hidden) return;
-      try {
-        const res = await fetch('/api/kb', { headers: { Authorization: `Bearer ${idToken}` } });
-        if (!res.ok) return;
-        const next: KnowledgeBase[] = (await res.json()).kbs || [];
-        const before = kbsRef.current.find((k) => k.id === activeId);
-        const after = next.find((k) => k.id === activeId);
-        if (after && fingerprint(before) !== fingerprint(after)) setGraphRefresh((x) => x + 1);
-        setKbs(next);
-      } catch { /* ignore */ }
-    };
-    const id = setInterval(tick, 12000);
-    return () => clearInterval(id);
+    // Removed backend syncing loop to support local-first mock UI
   }, [activeId, idToken]);
 
   const createKb = async () => {

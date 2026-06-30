@@ -262,12 +262,29 @@ export default function KbInsights({ idToken, kb, refreshKey = 0 }: { idToken: s
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (!idToken) { setLoading(false); return; }
-      try {
-        const res = await fetch(`/api/graph?kbId=${encodeURIComponent(kb.id)}`, { headers: { Authorization: `Bearer ${idToken}` } });
-        if (res.ok && alive) setGraph(await res.json());
-      } catch { /* ignore */ }
-      finally { if (alive) setLoading(false); }
+      setLoading(true);
+      setTimeout(() => {
+        if (alive) {
+          setGraph({
+            nodes: [
+              { id: '1', label: 'Knowledge Base', type: 'Concept', degree: 3 },
+              { id: '2', label: 'Document A', type: 'Document', degree: 2 },
+              { id: '3', label: 'Source File', type: 'File', degree: 1 },
+              { id: '4', label: 'Integration', type: 'System', degree: 2 },
+              { id: '5', label: 'Data Point', type: 'Entity', degree: 1 },
+            ],
+            edges: [
+              { source: '1', target: '2', label: 'contains' },
+              { source: '2', target: '3', label: 'references' },
+              { source: '1', target: '4', label: 'uses' },
+              { source: '4', target: '5', label: 'extracts' },
+              { source: '2', target: '5', label: 'mentions' },
+            ],
+            stats: { nodes: 5, edges: 5 }
+          });
+          setLoading(false);
+        }
+      }, 500);
     })();
     return () => { alive = false; };
   }, [idToken, kb.id, refreshKey]);

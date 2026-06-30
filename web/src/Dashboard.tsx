@@ -168,15 +168,21 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   const loadStats = async () => {
-    if (!idToken) { setLoading(false); return; }
-    try {
-      const res = await fetch('/api/stats', { headers: { Authorization: `Bearer ${idToken}` } });
-      if (res.ok) setStats(await res.json());
-    } catch (e) {
-      console.warn('Failed to load stats:', (e as Error).message);
-    } finally {
+    setLoading(true);
+    setTimeout(() => {
+      setStats({
+        total: 1240,
+        documents: 42,
+        knowledgeBases: 3,
+        connections: [],
+        bySource: [{ key: 'github', n: 12 }, { key: 'gdocs', n: 4 }],
+        byType: [{ key: 'Document', n: 20 }, { key: 'Code', n: 85 }],
+        timeline: [],
+        graph: { nodes: 1540, edges: 3200 },
+        recent: []
+      });
       setLoading(false);
-    }
+    }, 400);
   };
 
   // Poll while anything is actively ingesting so counts climb in real time.
