@@ -132,16 +132,28 @@ function extractStrings(val: unknown): string[] {
 }
 
 /**
+ * Resolve the dataset identifier to use in search calls.
+ * Cognee Cloud requires the UUID, not the human name, in the `datasets` field.
+ * Falls back to the name-based identifier so offline / self-hosted setups keep
+ * working even if the datasets list endpoint isn't available.
+ */
+async function resolveSearchDataset({ userId, kbId }: any): Promise<string> {
+  const name = resolveDataset({ userId, kbId });
+  const id = await datasetIdFor(userId, kbId).catch(() => null);
+  return id || name;
+}
+
+/**
  * Graph search. Default GRAPH_COMPLETION returns a synthesised, multi-hop
  * answer grounded in the extracted graph. Returns a string (or null).
  */
 export async function graphSearch(query, { userId, kbId, searchType = 'GRAPH_COMPLETION', topK = 10 }: any = {}) {
   if (!configured() || !query?.trim()) return null;
-  const dataset = resolveDataset({ userId, kbId });
+  const dataset = await resolveSearchDataset({ userId, kbId });
   try {
     const res = await jpost('/api/v1/search', { searchType, query, datasets: [dataset], topK, includeReferences: false });
     if (!res.ok) {
-      console.warn(`Cognee graphSearch (${searchType}) non-OK for dataset ${dataset}:`, res.status, await res.text().catch(() => ''));
+      console.warn(`Cognee graphSearch (${searchType}) non-OK [${dataset}]:`, res.status, await res.text().catch(() => ''));
       return null;
     }
     const data = await (res.json() as any);
@@ -156,11 +168,11 @@ export async function graphSearch(query, { userId, kbId, searchType = 'GRAPH_COM
  */
 export async function vectorSearch(query, { userId, kbId, topK = 10 }: any = {}) {
   if (!configured() || !query?.trim()) return [];
-  const dataset = resolveDataset({ userId, kbId });
+  const dataset = await resolveSearchDataset({ userId, kbId });
   try {
     const res = await jpost('/api/v1/search', { searchType: 'CHUNKS', query, datasets: [dataset], topK, includeReferences: false });
     if (!res.ok) {
-      console.warn(`Cognee vectorSearch non-OK for dataset ${dataset}:`, res.status, await res.text().catch(() => ''));
+      console.warn(`Cognee vectorSearch non-OK [${dataset}]:`, res.status, await res.text().catch(() => ''));
       return [];
     }
     const data = await (res.json() as any);
@@ -202,13 +214,30 @@ export async function hybridSearch(query, { userId, kbId, topK = 10 }: any = {})
 
 // ── 4. The extracted graph (for visualisation) ───────────────────────────────
 
+// Cache dataset name → id for 5 min so search calls don't re-fetch the list
+// on every message.
+const datasetIdCache = new Map<string, { id: string; ts: number }>();
+const DATASET_CACHE_TTL = 5 * 60 * 1000;
+
 async function datasetIdFor(userId, kbId?) {
-  const res = await fetch(`${cogneeBase()}/api/v1/datasets/`, { headers: { 'X-API-Key': cogneeKey() } });
-  if (!res.ok) return null;
-  const list = await (res.json() as any);
   const name = resolveDataset({ userId, kbId });
-  const found = (Array.isArray(list) ? list : []).find((d) => d.name === name || d.dataset_name === name);
-  return found?.id || found?.dataset_id || null;
+  const cached = datasetIdCache.get(name);
+  if (cached && Date.now() - cached.ts < DATASET_CACHE_TTL) return cached.id;
+
+  try {
+    const res = await fetch(`${cogneeBase()}/api/v1/datasets/`, { headers: { 'X-API-Key': cogneeKey() } });
+    if (!res.ok) return null;
+    const list = await (res.json() as any);
+    const found = (Array.isArray(list) ? list : []).find((d) => d.name === name || d.dataset_name === name);
+    const id = found?.id || found?.dataset_id || null;
+    if (id) datasetIdCache.set(name, { id, ts: Date.now() });
+    return id;
+  } catch { return null; }
+}
+
+/** Exported so callers can resolve a dataset name → Cognee UUID. */
+export async function resolveDatasetId(userId: string, kbId?: string): Promise<string | null> {
+  return datasetIdFor(userId, kbId);
 }
 
 /** Real Cognee-extracted graph. If kbId is given, returns the KB-scoped graph. */

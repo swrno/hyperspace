@@ -53,6 +53,46 @@ export default async function appChatHandler(req: Request, res: Response) {
       } catch (err) {
         console.warn('Failed to retrieve from Cognee KBs:', err);
       }
+
+      // ── Fallback: direct MongoDB KB document retrieval ──────────────────
+      // Cognee may not have indexed the data yet (cognify is async + debounced)
+      // or the dataset search may return nothing. Always ground the answer in
+      // the raw KB documents that ARE stored in MongoDB so the LLM has real
+      // context regardless of Cognee's state.
+      if (!retrievedContext) {
+        try {
+          const db = await getDb();
+          const kbs = await db.collection('knowledge_bases')
+            .find({ _id: { $in: linkedKbIds }, userId })
+            .toArray();
+
+          // Keyword score so the most-relevant docs surface first.
+          const queryTokens = message.toLowerCase().split(/\W+/).filter((w: string) => w.length > 3);
+          const scored: { text: string; score: number }[] = [];
+
+          for (const kb of kbs) {
+            for (const doc of (kb.documents || [])) {
+              if (!doc.content?.trim()) continue;
+              const hay = `${doc.name} ${doc.content}`.toLowerCase();
+              const score = queryTokens.reduce((n: number, t: string) => n + (hay.includes(t) ? 1 : 0), 0);
+              // Always include when there are ≤3 docs; otherwise keyword-gate.
+              if (score > 0 || (kb.documents || []).length <= 3) {
+                scored.push({
+                  score,
+                  text: `[KB: ${kb.name}] ${doc.name}:\n${doc.content.slice(0, 3000)}`,
+                });
+              }
+            }
+          }
+
+          scored.sort((a, b) => b.score - a.score);
+          if (scored.length > 0) {
+            retrievedContext = scored.slice(0, 5).map(s => s.text).join('\n\n---\n\n');
+          }
+        } catch (err) {
+          console.warn('KB direct fallback retrieval failed:', err);
+        }
+      }
     }
 
     let finalSystemPrompt = systemPrompt || 'You are a helpful AI assistant.';
