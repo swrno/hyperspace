@@ -1,0 +1,473 @@
+{
+  "style": {
+    "font-family": "sans-serif",
+    "background-color": "#ffffff",
+    "background-image": "",
+    "background-size": "100%",
+    "node-color": "#ffffff",
+    "border-width": 4,
+    "border-color": "#000000",
+    "radius": 50,
+    "node-padding": 5,
+    "node-margin": 2,
+    "outside-position": "auto",
+    "node-icon-image": "",
+    "node-background-image": "",
+    "icon-position": "inside",
+    "icon-size": 64,
+    "caption-position": "inside",
+    "caption-max-width": 200,
+    "caption-color": "#000000",
+    "caption-font-size": 50,
+    "caption-font-weight": "normal",
+    "label-position": "inside",
+    "label-display": "pill",
+    "label-color": "#000000",
+    "label-background-color": "#ffffff",
+    "label-border-color": "#000000",
+    "label-border-width": 4,
+    "label-font-size": 40,
+    "label-padding": 5,
+    "label-margin": 4,
+    "directionality": "directed",
+    "detail-position": "inline",
+    "detail-orientation": "parallel",
+    "arrow-width": 5,
+    "arrow-color": "#000000",
+    "margin-start": 5,
+    "margin-end": 5,
+    "margin-peer": 20,
+    "attachment-start": "normal",
+    "attachment-end": "normal",
+    "relationship-icon-image": "",
+    "type-color": "#000000",
+    "type-background-color": "#ffffff",
+    "type-border-color": "#000000",
+    "type-border-width": 0,
+    "type-font-size": 16,
+    "type-padding": 5,
+    "property-position": "outside",
+    "property-alignment": "colon",
+    "property-color": "#000000",
+    "property-font-size": 16,
+    "property-font-weight": "normal"
+  },
+  "nodes": [
+    {
+      "id": "n0",
+      "position": { "x": 141.26843690841991, "y": -416.36433681382425 },
+      "caption": "Knowledge Base",
+      "style": {},
+      "labels": ["KnowledgeBase"],
+      "properties": {
+        "name": "",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n1",
+      "position": { "x": -290.35892911984945, "y": 81.80194791066579 },
+      "caption": "Chunk 1",
+      "style": {},
+      "labels": ["Chunk"],
+      "properties": {
+        "chunk_text_content": "",
+        "embedding": "",
+        "summery": "",
+        "chunk_id": "",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n2",
+      "position": { "x": -241.5194270125168, "y": 469.7828475450156 },
+      "caption": "Entity1",
+      "style": { "node-color": "#73d8ff" },
+      "labels": ["Entity", "People"],
+      "properties": {
+        "name": "",
+        "description": "",
+        "embedding": "embedding(name+description)",
+        "type": "People",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n3",
+      "position": { "x": 46.07396457195731, "y": 53.09779337813748 },
+      "caption": "Chunk 2",
+      "style": {},
+      "labels": ["Chunk"],
+      "properties": {
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n4",
+      "position": { "x": 141.26843690841991, "y": 611.7974607801042 },
+      "caption": "Entity 2",
+      "style": { "node-color": "#73d8ff" },
+      "labels": ["Entity", "Organisation"],
+      "properties": {
+        "type": "Organisation",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n5",
+      "position": { "x": 313.69688616962486, "y": -194.77866044141376 },
+      "caption": "Repo 1",
+      "style": {},
+      "labels": ["Repo"],
+      "properties": {
+        "name": "",
+        "owner": "",
+        "description": "",
+        "kb_id": "",
+        "repo_id": ""
+      }
+    },
+    {
+      "id": "n6",
+      "position": { "x": 292.0295644719016, "y": 146.28660689988118 },
+      "caption": "PR1",
+      "style": {},
+      "labels": ["PR"],
+      "properties": {
+        "pr_text_content": "",
+        "pr_description": "",
+        "embedding": "",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n7",
+      "position": { "x": 586.9751107987842, "y": 156.407820106075 },
+      "caption": "Issue",
+      "style": {},
+      "labels": ["Issue"],
+      "properties": {
+        "issue_text_content": "",
+        "title": "",
+        "embedding": "",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n8",
+      "position": { "x": 767.902267247963, "y": 429.0787251439346 },
+      "caption": "Entity 3",
+      "style": { "node-color": "#73d8ff" },
+      "labels": ["Entity", "Product"],
+      "properties": {
+        "type": "Product",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n9",
+      "position": { "x": 560.792381270341, "y": 611.7974607801042 },
+      "caption": "Entity 4",
+      "style": { "node-color": "#73d8ff" },
+      "labels": ["Entity", "Location"],
+      "properties": {
+        "type": "Location",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n10",
+      "position": { "x": 767.902267247963, "y": -3.7124514854579047 },
+      "caption": "Commit",
+      "style": {},
+      "labels": ["Commit"],
+      "properties": {
+        "commit_text_content": "",
+        "embedding": "",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n11",
+      "position": { "x": 268.94421584937805, "y": 400.48551552564726 },
+      "caption": "PR comment",
+      "style": {},
+      "labels": ["PRComment"],
+      "properties": {
+        "comment": "",
+        "owner": "",
+        "embedding": "",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n12",
+      "position": { "x": -120.91515453463538, "y": -240.3739336166005 },
+      "caption": "Document 1",
+      "style": {},
+      "labels": ["Document"],
+      "properties": {
+        "kb_id": "",
+        "name": "",
+        "description": ""
+      }
+    },
+    {
+      "id": "n13",
+      "position": { "x": 774.903673967518, "y": -331.8786043385569 },
+      "caption": "Calender 1",
+      "style": {},
+      "labels": ["Calendar"],
+      "properties": {
+        "name": "",
+        "description": "",
+        "embedding": "embedding(name+description)",
+        "calender_id": "",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n14",
+      "position": { "x": 964.6637383239824, "y": 516.5866937190616 },
+      "caption": "Entity 5",
+      "style": { "node-color": "#73d8ff" },
+      "labels": ["Entity", "Concept"],
+      "properties": {
+        "type": "Concept",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n15",
+      "position": { "x": 446.2928344353599, "y": 156.40782010607498 },
+      "caption": "File",
+      "style": {},
+      "labels": ["File"],
+      "properties": {
+        "file_type": ".md, .py, .js,.ts",
+        "file_text_content": "",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n16",
+      "position": { "x": 1116.3336266326482, "y": 344.7189078992273 },
+      "caption": "Entity 6",
+      "style": { "node-color": "#73d8ff" },
+      "labels": ["Entity", "Event"],
+      "properties": {
+        "type": "Event",
+        "kb_id": ""
+      }
+    },
+    {
+      "id": "n17",
+      "position": { "x": 1138.9393984825442, "y": 32.15712017646939 },
+      "caption": "Calender Event",
+      "style": {},
+      "labels": ["CalendarEvent"],
+      "properties": {
+        "date": "",
+        "time": "",
+        "name": "",
+        "description": "",
+        "embedding": "embedding(name+desc)",
+        "kb_id": ""
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "id": "n1",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n1",
+      "toId": "n2"
+    },
+    {
+      "id": "n3",
+      "type": "PREVIOUS",
+      "style": {},
+      "properties": {},
+      "fromId": "n3",
+      "toId": "n1"
+    },
+    {
+      "id": "n4",
+      "type": "NEXT",
+      "style": {},
+      "properties": {},
+      "fromId": "n1",
+      "toId": "n3"
+    },
+    {
+      "id": "n5",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n3",
+      "toId": "n4"
+    },
+    {
+      "id": "n6",
+      "type": "HAS_REPO",
+      "style": {},
+      "properties": {},
+      "fromId": "n0",
+      "toId": "n5"
+    },
+    {
+      "id": "n7",
+      "type": "HAS_PR",
+      "style": {},
+      "properties": {},
+      "fromId": "n5",
+      "toId": "n6"
+    },
+    {
+      "id": "n8",
+      "type": "HAS_ISSUE",
+      "style": {},
+      "properties": {},
+      "fromId": "n5",
+      "toId": "n7"
+    },
+    {
+      "id": "n9",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n7",
+      "toId": "n8"
+    },
+    {
+      "id": "n10",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n6",
+      "toId": "n9"
+    },
+    {
+      "id": "n11",
+      "type": "RELATES_TO",
+      "style": {},
+      "properties": { "description": "" },
+      "fromId": "n9",
+      "toId": "n4"
+    },
+    {
+      "id": "n12",
+      "type": "HAS_COMMIT",
+      "style": {},
+      "properties": {},
+      "fromId": "n5",
+      "toId": "n10"
+    },
+    {
+      "id": "n13",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n10",
+      "toId": "n8"
+    },
+    {
+      "id": "n14",
+      "type": "HAS_COMMENT",
+      "style": {},
+      "properties": {},
+      "fromId": "n6",
+      "toId": "n11"
+    },
+    {
+      "id": "n15",
+      "type": "HAS_DOC",
+      "style": {},
+      "properties": {},
+      "fromId": "n0",
+      "toId": "n12"
+    },
+    {
+      "id": "n16",
+      "type": "HAS_CHUNK",
+      "style": {},
+      "properties": {},
+      "fromId": "n12",
+      "toId": "n1"
+    },
+    {
+      "id": "n17",
+      "type": "HAS_CHUNK",
+      "style": {},
+      "properties": {},
+      "fromId": "n12",
+      "toId": "n3"
+    },
+    {
+      "id": "n18",
+      "type": "HAS_CALENDAR",
+      "style": {},
+      "properties": {},
+      "fromId": "n0",
+      "toId": "n13"
+    },
+    {
+      "id": "n19",
+      "type": "HAS_EVENT",
+      "style": {},
+      "properties": {},
+      "fromId": "n13",
+      "toId": "n17"
+    },
+    {
+      "id": "n20",
+      "type": "HAS_FILE",
+      "style": {},
+      "properties": {},
+      "fromId": "n5",
+      "toId": "n15"
+    },
+    {
+      "id": "n21",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n15",
+      "toId": "n8"
+    },
+    {
+      "id": "n22",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n10",
+      "toId": "n16"
+    },
+    {
+      "id": "n23",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n13",
+      "toId": "n16"
+    },
+    {
+      "id": "n24",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n17",
+      "toId": "n14"
+    },
+    {
+      "id": "n25",
+      "type": "HAS_ENTITY",
+      "style": {},
+      "properties": {},
+      "fromId": "n17",
+      "toId": "n16"
+    }
+  ]
+}

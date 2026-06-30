@@ -1,11 +1,10 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken } from './auth.js';
-import { ingest as cogneeIngest, cognify, formatConnectorPayload } from './cognee.js';
+import { ingest as cogneeIngest, cognify, formatConnectorPayload, ingestGitHubEntity } from './cognee.js';
 import { textFromBase64 } from './lib/pdf.js';
 import { getConnection, getAccessToken } from './connections.js';
 import * as github from './lib/github.js';
-import { entitiesToDocument } from './lib/schema.js';
 
 /** Per-KB Cognee tag so a knowledge base's graph is built only from its own
  *  documents and attached sources (README §4 — graph "based on sources"). */
@@ -202,7 +201,7 @@ export default async function handler(req: Request, res: Response) {
                 console.log(`[KB ${kbId}] Snapshot complete — ${entities.length} entities, ${documents.length} documents`);
 
                 const opts = { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] };
-                const totalItems = Math.ceil(entities.length / 25) + documents.length;
+                const totalItems = entities.length + documents.length;
                 let done = 0;
 
                 const bumpIngest = () => {
@@ -213,12 +212,54 @@ export default async function handler(req: Request, res: Response) {
 
                 ingestProgress.set(kbId, { phase: 'Indexing into knowledge graph…', pct: 85, done: false, startedAt: Date.now() });
 
-                // Ingest structured entities in batches of 25.
-                for (let i = 0; i < entities.length; i += 25) {
-                  const batch = entities.slice(i, i + 25);
-                  const text = `# Knowledge Base ID: ${kbId}\n\n` + entitiesToDocument(batch, 'GitHub structured data');
-                  await cogneeIngest(text, opts);
+                // First pass: ingest Repo nodes and build repoRef → neo4j id map.
+                const repoIdMap = new Map<string, string>();
+                for (const entity of entities) {
+                  if (entity.type !== 'Repository') continue;
+                  await ingestGitHubEntity('Repo', {
+                    id: entity.id,
+                    name: entity.title,
+                    owner: entity.authorRef ?? '',
+                    description: entity.body ?? '',
+                    url: entity.url,
+                  }, { kbId, userId: user.uid });
+                  if (entity.repoRef) repoIdMap.set(entity.repoRef, entity.id);
                   bumpIngest();
+                }
+
+                // Second pass: ingest PR, Issue, Commit nodes linked to their Repo.
+                for (const entity of entities) {
+                  if (entity.type === 'CodeChange') {
+                    const repoId = entity.repoRef ? repoIdMap.get(entity.repoRef) : undefined;
+                    await ingestGitHubEntity('PR', {
+                      id: entity.id,
+                      number: entity.raw?.number,
+                      title: entity.title,
+                      pr_text_content: entity.title + (entity.body ? '\n' + entity.body : ''),
+                      pr_description: entity.body ?? '',
+                      url: entity.url,
+                    }, { kbId, userId: user.uid, repoId });
+                    bumpIngest();
+                  } else if (entity.type === 'WorkItem') {
+                    const repoId = entity.repoRef ? repoIdMap.get(entity.repoRef) : undefined;
+                    await ingestGitHubEntity('Issue', {
+                      id: entity.id,
+                      number: entity.raw?.number,
+                      title: entity.title,
+                      issue_text_content: entity.title + (entity.body ? '\n' + entity.body : ''),
+                      url: entity.url,
+                    }, { kbId, userId: user.uid, repoId });
+                    bumpIngest();
+                  } else if (entity.type === 'Commit') {
+                    const repoId = entity.repoRef ? repoIdMap.get(entity.repoRef) : undefined;
+                    await ingestGitHubEntity('Commit', {
+                      id: entity.id,
+                      sha: entity.raw?.sha ?? entity.externalId ?? entity.id,
+                      commit_text_content: entity.body || entity.title,
+                      url: entity.url,
+                    }, { kbId, userId: user.uid, repoId });
+                    bumpIngest();
+                  }
                 }
 
                 // Ingest rich documents into Cognee AND persist a summary entry
