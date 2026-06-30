@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Database, Plus, ArrowLeft, FileText, Upload, Trash2, X,
   Loader2, FolderPlus, Search, FileStack, Calendar,
-  Blocks, Plug, ArrowUpRight, Check, ChevronDown,
+  Blocks, Plug, ArrowUpRight, Check, ChevronDown, Network, Pencil,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { Connectors, KbDocument, KbSource, KnowledgeBase, PlatformIconFn } from './types';
 import ErrorBoundary from './ErrorBoundary';
+import GraphView from './GraphView';
 
 /** Shape sent to the backend when uploading a document. */
 type DocInput =
@@ -101,6 +102,9 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   const [newDesc, setNewDesc] = useState('');
   const [creating, setCreating] = useState(false);
 
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
+
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -176,6 +180,12 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   const deleteKb = async (id: string) => {
     saveKbs(kbs.filter((k) => k.id !== id));
     if (activeId === id) setActiveId(null);
+  };
+
+  const renameKb = async (id: string, newName: string) => {
+    if (!newName.trim()) return;
+    saveKbs(kbs.map((k) => (k.id === id ? { ...k, name: newName.trim(), updatedAt: new Date().toISOString() } : k)));
+    setIsEditingName(false);
   };
 
   const addDoc = async (kbId: string, doc: DocInput) => {
@@ -282,8 +292,25 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                 <span className="w-11 h-11 rounded-xl bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center shrink-0">
                   <Database size={20} className="text-[#9C968E]" />
                 </span>
-                <div className="min-w-0">
-                  <h1 className="text-[22px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-none truncate">{active.name}</h1>
+                <div className="min-w-0 flex flex-col">
+                  {isEditingName ? (
+                    <input
+                      autoFocus
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') renameKb(active.id, editNameValue);
+                        if (e.key === 'Escape') setIsEditingName(false);
+                      }}
+                      onBlur={() => renameKb(active.id, editNameValue)}
+                      className="bg-[#1E1D1C] border border-[#57534E] rounded-md px-2 py-0.5 text-[20px] font-geist font-semibold text-[#F4F0EB] outline-none max-w-[300px]"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-2 group cursor-pointer" onClick={() => { setEditNameValue(active.name); setIsEditingName(true); }}>
+                      <h1 className="text-[22px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-none truncate">{active.name}</h1>
+                      <Pencil size={14} className="text-[#6B6762] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  )}
                   <p className="text-[12.5px] font-geist text-[#8C8880] mt-1.5 truncate">
                     {active.description || 'No description'} · {docs.length} doc{docs.length === 1 ? '' : 's'} · {kbSources.length} source{kbSources.length === 1 ? '' : 's'}{sourceItemCount ? ` · ${sourceItemCount} item${sourceItemCount === 1 ? '' : 's'}` : ''}
                   </p>
@@ -540,8 +567,19 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
               </div>
             )}
           </div>
+          <div className="w-full h-px bg-[#3D3A37] my-10" />
 
-
+          {/* Graph Section */}
+          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 pb-10">
+            <div className="flex items-center justify-between gap-3 mb-6">
+              <h2 className="text-[18px] font-geist font-semibold text-[#F4F0EB] tracking-tight flex items-center gap-2">
+                <Network size={20} className="text-[#C9A66B]" /> Cognee Graph
+              </h2>
+            </div>
+            <div className="card-elev rounded-2xl overflow-hidden h-[500px] relative border border-[#3D3A37]">
+              <GraphView idToken={idToken} kbId={active.id} embedded={true} refreshKey={graphRefresh} />
+            </div>
+          </div>
 
         </div>
       </div>

@@ -264,6 +264,23 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
 
   const load = async (m: 'structural' | 'cognee' = mode) => {
     setLoading(true);
+    
+    if (m === 'cognee') {
+      try {
+        const res = await fetch(`/api/graph?mode=cognee${kbId ? `&kbId=${kbId}` : ''}`, {
+          headers: idToken ? { Authorization: `Bearer ${idToken}` } : {}
+        });
+        if (res.ok) {
+          const fetchedData = await res.json();
+          setData(fetchedData);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to fetch real Cognee graph', e);
+      }
+    }
+
     setTimeout(() => {
       let kbNodes = [
         { id: '1', label: 'Knowledge Base', type: 'Concept', degree: 3 },
@@ -332,21 +349,19 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
           <h1 className="text-[20px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-none">Knowledge Graph</h1>
           <p className="text-[12px] font-geist text-[#8C8880] mt-1.5 truncate">
             {data ? `${data.stats.nodes} nodes · ${data.stats.edges} edges` : (kbId ? 'Built from this base’s documents & sources' : 'Your unified, cross-tool graph')}
-            {!kbId && (mode === 'cognee' ? ' · Cognee-extracted' : ' · structural')}
+            {mode === 'cognee' ? ' · Cognee-extracted' : ' · structural'}
             {communityCount > 1 ? ` · ${communityCount} communities` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Data mode (global graph only — a KB graph is always its own sources) */}
-          {!kbId && (
-            <div className="hidden md:flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
-              {(['structural', 'cognee'] as const).map((m) => (
-                <button key={m} onClick={() => setMode(m)} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${mode === m ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>
-                  {m === 'structural' ? 'Structural' : 'Semantic'}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Data mode selector */}
+          <div className="hidden md:flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
+            {(['structural', 'cognee'] as const).map((m) => (
+              <button key={m} onClick={() => setMode(m)} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${mode === m ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>
+                {m === 'structural' ? 'Structural' : 'Semantic'}
+              </button>
+            ))}
+          </div>
           {/* Colour by */}
           <div className="hidden lg:flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
             {(['type', 'community'] as const).map((c) => (
