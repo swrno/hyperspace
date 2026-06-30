@@ -1065,11 +1065,11 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   const authorizePlatform = async (platformId: string) => {
     setConnectorBusy(true);
-    // Real OAuth: redirect to provider. Backend stores connection and bounces back.
-    if (OAUTH_PLATFORMS.includes(platformId) && idToken) {
-      window.location.href = `/api/auth/${platformId}/authorize?token=${encodeURIComponent(idToken)}`;
-      return;
-    }
+    // Real OAuth disabled for UI mockup mode.
+    // if (OAUTH_PLATFORMS.includes(platformId) && idToken) {
+    //   window.location.href = `/api/auth/${platformId}/authorize?token=${encodeURIComponent(idToken)}`;
+    //   return;
+    // }
     // Simulated: mark as connected after a short delay
     setTimeout(() => {
       saveConnector(platformId, {
@@ -1389,43 +1389,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     document.title = 'hypr - Enterprise Knowledge Engine';
   }, []);
 
-  // DevTools and Reverse-Engineering Protection Hook
-  useEffect(() => {
-    // Disable context menu (right click)
-    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
-    document.addEventListener('contextmenu', handleContextMenu);
-
-    // Block F12, Ctrl+Shift+I/J/C, and Ctrl+U
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.keyCode === 123 || // F12
-        (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) || // Ctrl+Shift+I/J/C
-        (e.ctrlKey && e.keyCode === 85) // Ctrl+U (View Source)
-      ) {
-        e.preventDefault();
-        window.location.reload();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
-    // Detect DevTools by layout sizing delta
-    const threshold = 160;
-    const checkDevTools = () => {
-      const widthDev = window.outerWidth - window.innerWidth > threshold;
-      const heightDev = window.outerHeight - window.innerHeight > threshold;
-      if (widthDev || heightDev) {
-        window.location.reload();
-      }
-    };
-
-    const interval = setInterval(checkDevTools, 500);
-
-    return () => {
-      document.removeEventListener('contextmenu', handleContextMenu);
-      window.removeEventListener('keydown', handleKeyDown);
-      clearInterval(interval);
-    };
-  }, []);
+  // DevTools and Reverse-Engineering Protection Hook removed as per user request.
 
   // Close dropdown when clicking anywhere outside
   useEffect(() => {
