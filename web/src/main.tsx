@@ -9,8 +9,13 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<App />} />
         <Route path="/login" element={<App />} />
+        <Route path="/" element={<App />} />
+        <Route path="/app" element={<App />} />
+        <Route path="/app/:appId" element={<App />} />
+        <Route path="/kb" element={<App />} />
+        <Route path="/kb/:kbId" element={<App />} />
+        <Route path="/integration" element={<App />} />
         <Route path="/c/:chatId" element={<App />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

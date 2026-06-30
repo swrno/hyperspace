@@ -61,10 +61,27 @@ export interface Settings {
 /** Top-level screen the main app shell is showing. */
 export type ActiveScreen =
   | 'dashboard'
-  | 'chat'
+  | 'applications'
   | 'knowledge'
   | 'integrations'
   | 'admin';
+
+/** An application created by the user, with its own chat scope, prompt and LLM settings. */
+export interface Application {
+  id: string;
+  name: string;
+  description?: string;
+  systemPrompt: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  /** IDs of Knowledge Bases whose data is used as context in this app's playground. */
+  linkedKbIds: string[];
+  /** Isolated per-app chat history. */
+  messages: Message[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 /* ── Connectors / platforms ───────────────────────────────────────────────── */
 export type PlatformId =
