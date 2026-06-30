@@ -5,10 +5,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n server,web -c blue,green \"tsx watch server.ts\" \"vite\"",
+    "dev:client": "vite",
+    "dev:full": "concurrently -k -n server,web -c blue,green \"tsx watch server.ts\" \"vite\"",
     "server": "tsx watch server.ts",
     "start": "tsx server.ts",
-    "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json"

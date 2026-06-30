@@ -75,15 +75,23 @@ app.all('/api/graph', async (req, res) => {
   await graphHandler(req, res);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// On Vercel the whole Express app is exported as ONE serverless function (see
+// vercel.json → builds/routes), so we must NOT bind a port or start the long-
+// running poll loop there. Locally / on any normal Node host we do both.
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 
-  // Polling safety net / "update every N minutes" delta loop (architecture §7).
-  // Runs continuously while the server is up; each tick polls connections whose
-  // last sync is older than the interval and ingests only the changed items.
-  setInterval(() => {
-    syncAllDue(SYNC_INTERVAL_MINUTES).catch((e) =>
-      console.warn('Periodic sync error:', e.message)
-    );
-  }, SYNC_INTERVAL_MINUTES * 60 * 1000);
-});
+    // Polling safety net / "update every N minutes" delta loop (architecture §7).
+    // Runs continuously while the server is up; each tick polls connections whose
+    // last sync is older than the interval and ingests only the changed items.
+    setInterval(() => {
+      syncAllDue(SYNC_INTERVAL_MINUTES).catch((e) =>
+        console.warn('Periodic sync error:', e.message)
+      );
+    }, SYNC_INTERVAL_MINUTES * 60 * 1000);
+  });
+}
+
+// Vercel's @vercel/node runtime invokes this default export as (req, res).
+export default app;
