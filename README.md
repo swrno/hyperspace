@@ -251,6 +251,3 @@ When a user interacts with the system, they frequently provide implicit and expl
 2. **Graph Linking in Cognee:** These details are written directly into Cognee's Memory module, creating or updating a dedicated user node. The system establishes edges like (User)-[:PREFERS]->(Language {name: "Python"}) or (User)-[:WORKS_ON]->(Repository {name: "frontend-app"}).
 3. **Contextual Retrieval:** In future turns, when the user asks, *"What are the open bugs in my current project?"*, LangGraph first queries Cognee's memory. It resolves *"my current project"* by traversing the WORKS_ON edge, instantly grounding the subsequent vector and graph searches to the correct repository.
    This mechanism ensures the assistant doesn't just know the company's data—it deeply understands the specific user querying it, enabling hyper-personalized and context-aware responses.
-
-# hyperspace
-# hyperspace
