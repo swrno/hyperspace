@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Boxes, FileText, Github, Network, Plus, Minus, Maximize2,
-  FileStack, Sparkles, Layers,
+  FileStack, Waypoints, Layers,
 } from 'lucide-react';
 import type { KnowledgeBase } from './types';
 
@@ -308,7 +308,7 @@ export default function MindMap({ kb }: { kb: KnowledgeBase }) {
       {/* Footer hint */}
       <div className="absolute bottom-3 left-4 flex items-center gap-2 z-10 pointer-events-none">
         <span className="flex items-center gap-1.5 text-[11px] font-geist text-[#6B6762] bg-[#1E1D1C]/80 backdrop-blur border border-[#33302E] rounded-md px-2 py-1">
-          <Sparkles size={12} className="text-[#C9A66B]" /> {branches.length} branches · scroll to zoom · drag to pan
+          <Waypoints size={12} className="text-[#C9A66B]" /> {branches.length} branches · scroll to zoom · drag to pan
         </span>
       </div>
     </div>

@@ -10,7 +10,7 @@ import type {
 import {
   Send, Trash2, Download, Sun, Moon, Copy, Menu, X,
   Bot, User as UserIcon, Check, Plus, Settings as SettingsIcon, Edit2, MessageSquare,
-  ChevronLeft, ChevronDown, Paperclip, Zap, Terminal, Sparkles, Brain,
+  ChevronLeft, ChevronDown, Paperclip, Zap, Terminal, Brain,
   PanelLeftClose, PanelLeftOpen, MoreHorizontal, ThumbsUp, ThumbsDown,
   Mic, Image as ImageIcon, Search, Pencil, RefreshCw, Shield, Users, LogOut, Key,
   LayoutDashboard, Database, Blocks, MessagesSquare, ArrowRight, ArrowUpRight
@@ -2280,7 +2280,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                   onClick={() => { setSelectedKbId(null); setKbMenuOpen(false); }}
                   className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors ${!selectedKbId ? 'bg-[#33302E]' : 'hover:bg-[#2A2826]'}`}
                 >
-                  <Sparkles size={15} className="text-[#9C968E] shrink-0" />
+                  <Blocks size={15} className="text-[#9C968E] shrink-0" />
                   <span className="flex-1 text-[13px] font-geist font-medium text-[#F4F0EB]">All connected sources</span>
                   {!selectedKbId && <Check size={14} className="text-[#8FAE97] shrink-0" />}
                 </button>
