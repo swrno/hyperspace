@@ -19,7 +19,7 @@ export default async function generatePromptHandler(req: Request, res: Response)
         'Authorization': `Bearer ${groqKey}`
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: 'You are an expert at writing system prompts for AI assistants. The user will provide a brief topic or requirement. Your job is to output ONLY the generated system prompt text. Do not include quotes around the prompt or markdown code blocks. Just the raw system prompt text. It should be highly detailed, clear, and professional.' },
           { role: 'user', content: `Create a system prompt for: ${topic}` }
@@ -30,7 +30,8 @@ export default async function generatePromptHandler(req: Request, res: Response)
     });
 
     if (!groqRes.ok) {
-      throw new Error(`Groq API Error: ${groqRes.status}`);
+      const errTxt = await groqRes.text();
+      throw new Error(`Groq API Error: ${groqRes.status} ${errTxt}`);
     }
 
     const groqData = await groqRes.json();

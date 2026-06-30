@@ -983,6 +983,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     systemPrompt: string; model: string; temperature: number; maxTokens: number;
   } | null>(null);
   const [editingAppField, setEditingAppField] = useState<'prompt' | 'model' | null>(null);
+  const [promptTopic, setPromptTopic] = useState('');
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
 
   const handleCookieConsent = (accepted: boolean) => {
     localStorage.setItem('orgmind_cookie_consent', accepted ? 'accepted' : 'declined');
@@ -1577,6 +1579,29 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       });
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleGeneratePrompt = async () => {
+    if (!promptTopic.trim()) return;
+    setIsGeneratingPrompt(true);
+    try {
+      const response = await fetch('/api/generate-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({ topic: promptTopic.trim() })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAppSettingsForm(prev => prev ? { ...prev, systemPrompt: data.prompt } : null);
+        setPromptTopic('');
+      } else {
+        console.error('Failed to generate prompt');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsGeneratingPrompt(false);
     }
   };
 
@@ -3011,14 +3036,34 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                   </button>
                 )}
               </div>
-              <div className="bg-[#252523] p-4 rounded-xl border border-[#3D3A37] text-[13px] text-[#A8A39B] leading-relaxed max-h-[160px] overflow-y-auto custom-scrollbar">
+              <div className="bg-[#252523] p-4 rounded-xl border border-[#3D3A37] text-[13px] text-[#A8A39B] leading-relaxed max-h-[220px] overflow-y-auto custom-scrollbar">
                 {editingAppField === 'prompt' ? (
-                  <textarea 
-                    value={appSettingsForm?.systemPrompt || ''}
-                    onChange={(e) => setAppSettingsForm(prev => prev ? { ...prev, systemPrompt: e.target.value } : null)}
-                    className="w-full bg-transparent text-[#F4F0EB] resize-none outline-none focus:outline-none"
-                    rows={4}
-                  />
+                  <div className="space-y-3">
+                    <textarea 
+                      value={appSettingsForm?.systemPrompt || ''}
+                      onChange={(e) => setAppSettingsForm(prev => prev ? { ...prev, systemPrompt: e.target.value } : null)}
+                      className="w-full bg-transparent text-[#F4F0EB] resize-none outline-none focus:outline-none"
+                      rows={5}
+                      placeholder="Enter system prompt manually..."
+                    />
+                    <div className="flex items-center gap-2 pt-3 border-t border-[#3D3A37]">
+                      <input 
+                        type="text"
+                        placeholder="Or describe the bot to auto-generate (e.g. 'coding assistant')"
+                        value={promptTopic}
+                        onChange={e => setPromptTopic(e.target.value)}
+                        className="flex-1 bg-transparent text-[12px] text-[#A8A39B] outline-none border border-[#3D3A37] rounded-lg px-3 py-1.5 focus:border-[#C9A66B]"
+                        onKeyDown={e => { if (e.key === 'Enter') handleGeneratePrompt(); }}
+                      />
+                      <button 
+                        onClick={handleGeneratePrompt}
+                        disabled={!promptTopic.trim() || isGeneratingPrompt}
+                        className="px-3 py-1.5 bg-[#C9A66B] rounded-lg text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                      >
+                        {isGeneratingPrompt ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   app.systemPrompt || "No system prompt configured. The assistant will use default behavior."
                 )}
@@ -3050,12 +3095,16 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
               <div className="bg-[#252523] p-4 rounded-xl border border-[#3D3A37] mb-3">
                 <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Model</div>
                 {editingAppField === 'model' ? (
-                  <input
-                    type="text"
+                  <select
                     value={appSettingsForm?.model || ''}
                     onChange={(e) => setAppSettingsForm(prev => prev ? { ...prev, model: e.target.value } : null)}
-                    className="w-full bg-transparent text-[13.5px] font-medium text-[#F4F0EB] border-b border-[#3D3A37] focus:border-[#C9A66B] outline-none py-1"
-                  />
+                    className="w-full bg-transparent text-[13.5px] font-medium text-[#F4F0EB] border-b border-[#3D3A37] focus:border-[#C9A66B] outline-none py-1 appearance-none cursor-pointer"
+                  >
+                    <option value="qwen/qwen3-32b">qwen/qwen3-32b</option>
+                    <option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b</option>
+                    <option value="meta-llama/llama-4-scout-17b-16e-instruct">meta-llama/llama-4-scout-17b-16e-instruct</option>
+                    <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
+                  </select>
                 ) : (
                   <div className="text-[13.5px] font-medium text-[#F4F0EB]">{app.model}</div>
                 )}
