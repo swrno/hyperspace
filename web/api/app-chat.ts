@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
-import { hybridSearch } from './cognee.js';
+import { multiHopSearch } from './cognee.js';
 import { verifyToken } from './auth.js';
 
 export default async function appChatHandler(req: Request, res: Response) {
@@ -85,7 +85,7 @@ export default async function appChatHandler(req: Request, res: Response) {
       // prepend them — they are semantically richer than keyword matching.
       try {
         const fetchPromises = linkedKbIds.map((kbId: string) =>
-          hybridSearch(message, { userId, kbId, topK: 10 })
+          multiHopSearch(message, { userId, kbId, topK: 10, groqKey })
         );
         const results = await Promise.all(fetchPromises);
         const parts = results.filter((r): r is string => !!r);

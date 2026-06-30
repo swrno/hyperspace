@@ -116,50 +116,87 @@ export async function ingest(text, { userId, kbId, nodeSet }: any = {}) {
 
 // ── 3. Search (multi-hop grounded retrieval) ─────────────────────────────────
 
-/** Recursively extract strings from any nested Cognee search result value. */
+/** Recursively extract strings from any nested Cognee search result value.
+ *  Handles DocumentChunk format: { type, properties: { text: "..." } }
+ *  as well as flat { text, result, search_result, ... } shapes. */
 function extractStrings(val: unknown): string[] {
   if (!val) return [];
   if (typeof val === 'string') return val.trim() ? [val.trim()] : [];
   if (Array.isArray(val)) return val.flatMap(extractStrings);
   if (typeof val === 'object') {
     const v = val as Record<string, unknown>;
-    // Try common field names Cognee uses across API versions.
+    // Priority: well-known field names Cognee uses across API versions.
     for (const k of ['search_result', 'result', 'text', 'content', 'value', 'answer']) {
-      if (v[k]) return extractStrings(v[k]);
+      if (v[k] != null) return extractStrings(v[k]);
     }
+    // DocumentChunk format: { type: "DocumentChunk", properties: { text: "..." } }
+    if (v['properties'] != null) return extractStrings(v['properties']);
+    // Recursive fallback: collect strings from all remaining values so future
+    // Cognee API shape changes don't silently drop results.
+    return Object.values(v).flatMap(extractStrings).filter(Boolean);
   }
   return [];
 }
 
 /**
- * Resolve the dataset identifier to use in search calls.
- * Cognee Cloud requires the UUID, not the human name, in the `datasets` field.
- * Falls back to the name-based identifier so offline / self-hosted setups keep
- * working even if the datasets list endpoint isn't available.
+ * Shared search executor with automatic stale-UUID recovery.
+ *
+ * Strategy:
+ *   1. Try with the cached UUID (faster for Cognee Cloud).
+ *   2. If Cognee returns 404 (DatasetNotFoundError), the cached UUID is stale —
+ *      evict it and retry once with just the dataset name so Cognee can resolve it.
+ *   3. Fall back to the name-only identifier on any other failure so self-hosted
+ *      setups keep working even if the datasets list endpoint is unavailable.
  */
-async function resolveSearchDataset({ userId, kbId }: any): Promise<string> {
+async function cogneeSearch(
+  searchType: string,
+  query: string,
+  { userId, kbId, topK = 10 }: any,
+): Promise<any[] | null> {
+  if (!configured() || !query?.trim()) return null;
+
   const name = resolveDataset({ userId, kbId });
-  const id = await datasetIdFor(userId, kbId).catch(() => null);
-  return id || name;
+  const uuid = await datasetIdFor(userId, kbId).catch(() => null);
+
+  const attempt = async (dataset: string) => {
+    const res = await jpost('/api/v1/search', { searchType, query, datasets: [dataset], topK, includeReferences: false });
+    return res;
+  };
+
+  try {
+    const firstDataset = uuid || name;
+    let res = await attempt(firstDataset);
+
+    // On 404, the UUID is stale — evict the cache entry and retry with the name.
+    if (!res.ok && res.status === 404 && uuid && uuid !== name) {
+      console.warn(`Cognee ${searchType} stale UUID [${uuid}] for "${name}" — retrying with dataset name`);
+      datasetIdCache.delete(name); // force re-resolve on next call
+      res = await attempt(name);
+    }
+
+    if (!res.ok) {
+      const errTxt = await res.text().catch(() => '');
+      console.warn(`Cognee ${searchType} non-OK [${firstDataset}]:`, res.status, errTxt.slice(0, 200));
+      return null;
+    }
+
+    return (res.json() as any);
+  } catch (e: any) {
+    console.warn(`Cognee ${searchType} error:`, e.message);
+    return null;
+  }
 }
 
 /**
  * Graph search. Default GRAPH_COMPLETION returns a synthesised, multi-hop
  * answer grounded in the extracted graph. Returns a string (or null).
  */
-export async function graphSearch(query, { userId, kbId, searchType = 'GRAPH_COMPLETION', topK = 10 }: any = {}) {
+export async function graphSearch(query: string, { userId, kbId, searchType = 'GRAPH_COMPLETION', topK = 10 }: any = {}) {
   if (!configured() || !query?.trim()) return null;
-  const dataset = await resolveSearchDataset({ userId, kbId });
-  try {
-    const res = await jpost('/api/v1/search', { searchType, query, datasets: [dataset], topK, includeReferences: false });
-    if (!res.ok) {
-      console.warn(`Cognee graphSearch (${searchType}) non-OK [${dataset}]:`, res.status, await res.text().catch(() => ''));
-      return null;
-    }
-    const data = await (res.json() as any);
-    const parts = extractStrings(data);
-    return parts.length ? [...new Set(parts)].join('\n\n') : null;
-  } catch (e: any) { console.warn('Cognee graphSearch error:', e.message); return null; }
+  const data = await cogneeSearch(searchType, query, { userId, kbId, topK });
+  if (!data) return null;
+  const parts = extractStrings(data);
+  return parts.length ? [...new Set(parts)].join('\n\n') : null;
 }
 
 /**
@@ -168,16 +205,9 @@ export async function graphSearch(query, { userId, kbId, searchType = 'GRAPH_COM
  */
 export async function vectorSearch(query, { userId, kbId, topK = 10 }: any = {}) {
   if (!configured() || !query?.trim()) return [];
-  const dataset = await resolveSearchDataset({ userId, kbId });
-  try {
-    const res = await jpost('/api/v1/search', { searchType: 'CHUNKS', query, datasets: [dataset], topK, includeReferences: false });
-    if (!res.ok) {
-      console.warn(`Cognee vectorSearch non-OK [${dataset}]:`, res.status, await res.text().catch(() => ''));
-      return [];
-    }
-    const data = await (res.json() as any);
-    return [...new Set(extractStrings(data))];
-  } catch (e: any) { console.warn('Cognee vectorSearch error:', e.message); return []; }
+  const data = await cogneeSearch('CHUNKS', query, { userId, kbId, topK });
+  if (!data) return [];
+  return [...new Set(extractStrings(data))];
 }
 
 // ── Reciprocal Rank Fusion (RRF) ─────────────────────────────────────────────
@@ -210,6 +240,73 @@ export async function hybridSearch(query, { userId, kbId, topK = 10 }: any = {})
   const merged = rrfMerge(graphParts, vectorResults);
   if (merged.length === 0) return null;
   return merged.join('\n\n');
+}
+
+/**
+ * Multi-hop retrieval: decompose a complex query into sub-questions,
+ * run each through hybridSearch, and aggregate with deduplication.
+ *
+ * This improves recall for questions that require combining facts from
+ * multiple documents (e.g. "What does dmaid do and who built it?").
+ *
+ * Sub-question decomposition uses a fast model so latency stays low.
+ * Falls back to single hybridSearch if decomposition fails or GROQ key missing.
+ */
+export async function multiHopSearch(
+  query: string,
+  { userId, kbId, topK = 10, groqKey }: any = {},
+): Promise<string | null> {
+  if (!configured() || !query?.trim()) return null;
+
+  // Decompose into ≤3 focused sub-questions via a fast LLM call.
+  let subQueries: string[] = [query];
+  if (groqKey && query.trim().split(/\s+/).length >= 4) {
+    try {
+      const decomRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+        body: JSON.stringify({
+          model: 'llama-3.1-8b-instant',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Decompose the user question into 1–3 short, specific retrieval sub-questions. ' +
+                'Return ONLY a valid JSON array of strings, no explanation, no markdown.',
+            },
+            { role: 'user', content: query },
+          ],
+          temperature: 0,
+          max_tokens: 200,
+        }),
+      });
+      if (decomRes.ok) {
+        const decomData = await (decomRes.json() as any);
+        const raw = decomData.choices?.[0]?.message?.content || '';
+        const match = raw.match(/\[[\s\S]*\]/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            subQueries = parsed.slice(0, 3).map(String).filter(Boolean);
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('Query decomposition failed (non-fatal):', e.message);
+    }
+  }
+
+  // Run hybridSearch for each sub-question in parallel.
+  const opts = { userId, kbId, topK: Math.ceil(topK / subQueries.length) + 3 };
+  const results = await Promise.all(subQueries.map((q) => hybridSearch(q, opts)));
+
+  // Aggregate: split each result into chunks, deduplicate, rejoin.
+  const allChunks = results
+    .filter((r): r is string => !!r)
+    .flatMap((r) => r.split('\n\n').filter((s) => s.trim()));
+
+  const unique = [...new Set(allChunks)];
+  return unique.length ? unique.join('\n\n') : null;
 }
 
 // ── 4. The extracted graph (for visualisation) ───────────────────────────────
