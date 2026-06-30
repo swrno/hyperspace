@@ -33,9 +33,20 @@ function configured() {
   return true;
 }
 
-/** Per-user dataset name — true multi-tenant isolation. */
+/** Per-user dataset name — user-level isolation. */
 export function userDataset(userId) {
   return `hypr_user_${String(userId || 'anon').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 40)}`;
+}
+
+/** Per-KB dataset name — KB-level multi-tenant isolation.
+ *  Each knowledge base gets its own Cognee dataset so graphs are fully isolated. */
+export function kbDataset(kbId) {
+  return `hypr_kb_${String(kbId || 'unknown').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 40)}`;
+}
+
+/** Resolve the correct dataset name: KB-scoped if kbId given, else user-scoped. */
+function resolveDataset({ userId, kbId }: any = {}) {
+  return kbId ? kbDataset(kbId) : userDataset(userId);
 }
 
 async function jpost(path, body) {
@@ -60,13 +71,13 @@ const ENTERPRISE_PROMPT =
 
 // ── 1. Add ───────────────────────────────────────────────────────────────────
 
-/** Stage text into the user's dataset (cheap). nodeSet tags the source. */
-export async function addText(text, { userId, nodeSet }: any = {}) {
+/** Stage text into a dataset (cheap). Uses KB-level dataset if kbId is provided. */
+export async function addText(text, { userId, kbId, nodeSet }: any = {}) {
   if (!configured() || !text?.trim()) return null;
   try {
     const res = await jpost('/api/v1/add_text', {
       textData: [text],
-      datasetName: userDataset(userId),
+      datasetName: resolveDataset({ userId, kbId }),
       ...(nodeSet ? { nodeSet: Array.isArray(nodeSet) ? nodeSet : [nodeSet] } : {}),
     });
     if (!res.ok) { console.warn('Cognee add_text failed', res.status, (await res.text()).slice(0, 160)); return null; }
@@ -76,17 +87,18 @@ export async function addText(text, { userId, nodeSet }: any = {}) {
 
 // ── 2. Cognify (build the graph) — debounced per user, runs in background ─────
 
-const lastCognify = new Map(); // userId -> timestamp
+const lastCognify = new Map(); // key -> timestamp
 const COGNIFY_DEBOUNCE_MS = 90_000;
 
-export async function cognify(userId, { force = false }: any = {}) {
+export async function cognify(userId, { force = false, kbId }: any = {}) {
   if (!configured()) return null;
-  const last = lastCognify.get(userId) || 0;
+  const key = kbId || userId;
+  const last = lastCognify.get(key) || 0;
   if (!force && Date.now() - last < COGNIFY_DEBOUNCE_MS) return null; // avoid hammering the LLM
-  lastCognify.set(userId, Date.now());
+  lastCognify.set(key, Date.now());
   try {
     const res = await jpost('/api/v1/cognify', {
-      datasets: [userDataset(userId)],
+      datasets: [resolveDataset({ userId, kbId })],
       runInBackground: true,
       customPrompt: ENTERPRISE_PROMPT,
     });
@@ -96,9 +108,9 @@ export async function cognify(userId, { force = false }: any = {}) {
 }
 
 /** Convenience: stage content and schedule a graph rebuild. */
-export async function ingest(text, { userId, nodeSet }: any = {}) {
-  const added = await addText(text, { userId, nodeSet });
-  if (added) cognify(userId).catch(() => {});
+export async function ingest(text, { userId, kbId, nodeSet }: any = {}) {
+  const added = await addText(text, { userId, kbId, nodeSet });
+  if (added) cognify(userId, { kbId }).catch(() => {});
   return added;
 }
 
@@ -108,13 +120,13 @@ export async function ingest(text, { userId, nodeSet }: any = {}) {
  * Graph search. Default GRAPH_COMPLETION returns a synthesised, multi-hop
  * answer grounded in the extracted graph. Returns a string (or null).
  */
-export async function graphSearch(query, { userId, searchType = 'GRAPH_COMPLETION', topK = 10 }: any = {}) {
+export async function graphSearch(query, { userId, kbId, searchType = 'GRAPH_COMPLETION', topK = 10 }: any = {}) {
   if (!configured() || !query?.trim()) return null;
   try {
     const res = await jpost('/api/v1/search', {
       searchType,
       query,
-      datasets: [userDataset(userId)],
+      datasets: [resolveDataset({ userId, kbId })],
       topK,
       includeReferences: false,
     });
@@ -126,22 +138,78 @@ export async function graphSearch(query, { userId, searchType = 'GRAPH_COMPLETIO
   } catch (e) { console.warn('Cognee graphSearch error:', e.message); return null; }
 }
 
+/**
+ * Vector (chunk) search — retrieves semantically similar text chunks
+ * from the Cognee dataset. Returns ranked results as an array of strings.
+ */
+export async function vectorSearch(query, { userId, kbId, topK = 10 }: any = {}) {
+  if (!configured() || !query?.trim()) return [];
+  try {
+    const res = await jpost('/api/v1/search', {
+      searchType: 'CHUNKS',
+      query,
+      datasets: [resolveDataset({ userId, kbId })],
+      topK,
+      includeReferences: false,
+    });
+    if (!res.ok) return [];
+    const data = await (res.json() as any);
+    if (!Array.isArray(data)) return [];
+    return data
+      .flatMap((r) => r.search_result || r.result || r.text || [])
+      .filter((s) => typeof s === 'string' && s.trim())
+      .map((s) => s.trim());
+  } catch (e) { console.warn('Cognee vectorSearch error:', e.message); return []; }
+}
+
+// ── Reciprocal Rank Fusion (RRF) ─────────────────────────────────────────────
+// Merges two ranked lists using RRF. k=60 is standard (Cormack et al. 2009).
+function rrfMerge(graphResults: string[], vectorResults: string[], k = 60): string[] {
+  const scores = new Map<string, number>();
+  graphResults.forEach((r, i) => {
+    scores.set(r, (scores.get(r) || 0) + 1 / (k + i + 1));
+  });
+  vectorResults.forEach((r, i) => {
+    scores.set(r, (scores.get(r) || 0) + 1 / (k + i + 1));
+  });
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([text]) => text);
+}
+
+/**
+ * Hybrid retrieval: runs Graph Traversal + Vector Search in parallel,
+ * merges results with Reciprocal Rank Fusion, and returns unified context.
+ */
+export async function hybridSearch(query, { userId, kbId, topK = 10 }: any = {}) {
+  if (!configured() || !query?.trim()) return null;
+  const opts = { userId, kbId, topK };
+  const [graphResult, vectorResults] = await Promise.all([
+    graphSearch(query, { ...opts, searchType: 'GRAPH_COMPLETION' }),
+    vectorSearch(query, opts),
+  ]);
+  const graphParts = graphResult ? graphResult.split('\n\n').filter((s) => s.trim()) : [];
+  const merged = rrfMerge(graphParts, vectorResults);
+  if (merged.length === 0) return null;
+  return merged.join('\n\n');
+}
+
 // ── 4. The extracted graph (for visualisation) ───────────────────────────────
 
-async function datasetIdFor(userId) {
+async function datasetIdFor(userId, kbId?) {
   const res = await fetch(`${cogneeBase()}/api/v1/datasets/`, { headers: { 'X-API-Key': cogneeKey() } });
   if (!res.ok) return null;
   const list = await (res.json() as any);
-  const name = userDataset(userId);
+  const name = resolveDataset({ userId, kbId });
   const found = (Array.isArray(list) ? list : []).find((d) => d.name === name || d.dataset_name === name);
   return found?.id || found?.dataset_id || null;
 }
 
-/** Real Cognee-extracted graph for the user: { nodes, edges }. */
-export async function getDatasetGraph(userId) {
+/** Real Cognee-extracted graph. If kbId is given, returns the KB-scoped graph. */
+export async function getDatasetGraph(userId, kbId?) {
   if (!configured()) return null;
   try {
-    const id = await datasetIdFor(userId);
+    const id = await datasetIdFor(userId, kbId);
     if (!id) return null;
     const res = await fetch(`${cogneeBase()}/api/v1/datasets/${id}/graph`, { headers: { 'X-API-Key': cogneeKey() } });
     if (!res.ok) return null;

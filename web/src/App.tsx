@@ -1128,15 +1128,14 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   // Lightweight knowledge-base list for the chat scope picker (id + name only).
   const loadKbList = async (token: string | null) => {
-    // Mocked to use localStorage instead of API
+    if (!token) { setKbList([]); return; }
     try {
-      const stored = localStorage.getItem('hs_kbs');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setKbList((parsed || []).map((k: { id: string; name: string }) => ({ id: k.id, name: k.name })));
-      } else {
-        setKbList([]);
-      }
+      const res = await fetch('/api/kb', {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setKbList([]); return; }
+      const data = await res.json();
+      setKbList((data.kbs || []).map((k: { id: string; name: string }) => ({ id: k.id, name: k.name })));
     } catch {
       setKbList([]);
     }
@@ -1542,7 +1541,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           name: newAppName.trim(),
           description: newAppDesc.trim() || undefined,
           systemPrompt: 'You are a helpful AI assistant.',
-          model: 'llama3-8b-8192',
+          model: 'qwen/qwen3.6-27b',
           temperature: 0.7,
           maxTokens: 2048,
           linkedKbIds: [],
@@ -2900,7 +2899,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                   Playground (Preview to your Chatbot)
                 </h3>
                 <div className="flex items-center gap-2">
-                  <select 
+                  <select
                     value={appSessions[app.id] || 'default'}
                     onChange={(e) => setAppSessions(prev => ({ ...prev, [app.id]: e.target.value }))}
                     className="bg-transparent border border-[#3D3A37] text-[12px] rounded-lg px-2.5 py-1.5 text-[#8C8880] focus:outline-none focus:border-[#57534E]"
@@ -2915,7 +2914,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                       ));
                     })()}
                   </select>
-                  <button 
+                  <button
                     onClick={() => setAppSessions(prev => ({ ...prev, [app.id]: `session_${Date.now()}` }))}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A66B] rounded-lg text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors"
                   >
@@ -2927,7 +2926,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 {(() => {
                   const currentSessionId = appSessions[app.id] || 'default';
                   const currentMessages = app.messages.filter(m => (m.sessionId || 'default') === currentSessionId);
-                  
+
                   return currentMessages.length === 0 ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                       <Bot size={32} className="text-[#3D3A37] mb-4" />
@@ -2937,51 +2936,52 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                     <div className="flex flex-col space-y-6 pb-6 max-w-full">
                       {currentMessages.map(msg => (
                         <div key={msg.id} className="flex flex-col w-full">
-                        {msg.role === 'user' ? (
-                          <div className="flex flex-col items-end w-full">
-                            <div className="bg-[#3A3735] text-[#F4F0EB] font-basel text-[14px] px-4 py-2.5 rounded-[20px] max-w-[85%] break-words">{msg.content}</div>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-start w-full">
-                            <div className="flex gap-3 w-full">
-                              <div className="w-[28px] h-[28px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-0.5">
-                                <img src="/particles.png" className="w-[14px] h-[14px] opacity-80" alt="ai" />
-                              </div>
-                              <div className="flex-1 min-w-0 font-basel text-[14px] text-[#E8E6E3] prose-invert">
-                                {(() => {
-                                  const parsed = parseMessageWithThink(msg.content);
-                                  const displayReasoning = msg.reasoning || parsed.reasoning;
-                                  return (
-                                    <>
-                                      {displayReasoning && (
-                                        <Reasoning isStreaming={false} initialSeconds={3} customStreaming={true}>
-                                          <ReasoningTrigger />
-                                          <ReasoningContent>{displayReasoning}</ReasoningContent>
-                                        </Reasoning>
-                                      )}
-                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsed.content}</ReactMarkdown>
-                                    </>
-                                  );
-                                })()}
+                          {msg.role === 'user' ? (
+                            <div className="flex flex-col items-end w-full">
+                              <div className="bg-[#3A3735] text-[#F4F0EB] font-basel text-[14px] px-4 py-2.5 rounded-[20px] max-w-[85%] break-words">{msg.content}</div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-start w-full">
+                              <div className="flex gap-3 w-full">
+                                <div className="w-[28px] h-[28px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-0.5">
+                                  <img src="/particles.png" className="w-[14px] h-[14px] opacity-80" alt="ai" />
+                                </div>
+                                <div className="flex-1 min-w-0 font-basel text-[14px] text-[#E8E6E3] prose-invert">
+                                  {(() => {
+                                    const parsed = parseMessageWithThink(msg.content);
+                                    const displayReasoning = msg.reasoning || parsed.reasoning;
+                                    return (
+                                      <>
+                                        {displayReasoning && (
+                                          <Reasoning isStreaming={false} initialSeconds={3} customStreaming={true}>
+                                            <ReasoningTrigger />
+                                            <ReasoningContent>{displayReasoning}</ReasoningContent>
+                                          </Reasoning>
+                                        )}
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsed.content}</ReactMarkdown>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
                               </div>
                             </div>
+                          )}
+                        </div>
+                      ))}
+                      {appIsLoading && (
+                        <div className="flex items-start w-full gap-3">
+                          <div className="w-[28px] h-[28px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-0.5">
+                            <img src="/particles.png" className="w-[14px] h-[14px] opacity-80 animate-pulse" alt="ai" />
                           </div>
-                        )}
-                      </div>
-                    ))}
-                    {appIsLoading && (
-                      <div className="flex items-start w-full gap-3">
-                        <div className="w-[28px] h-[28px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-0.5">
-                          <img src="/particles.png" className="w-[14px] h-[14px] opacity-80 animate-pulse" alt="ai" />
+                          <div className="flex-1">
+                            <Reasoning isStreaming={true}><ReasoningTrigger /><ReasoningContent /></Reasoning>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <Reasoning isStreaming={true}><ReasoningTrigger /><ReasoningContent /></Reasoning>
-                        </div>
-                      </div>
-                    )}
-                    <div ref={appMessagesEndRef} />
-                  </div>
-                ); })()}
+                      )}
+                      <div ref={appMessagesEndRef} />
+                    </div>
+                  );
+                })()}
               </div>
               <div className="p-4 bg-[#1E1D1C] border-t border-[#3D3A37] shrink-0">
                 {renderAppInputBox()}
@@ -3069,7 +3069,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
               <div className="bg-[#252523] p-4 rounded-xl border border-[#3D3A37] text-[13px] text-[#A8A39B] leading-relaxed max-h-[220px] overflow-y-auto custom-scrollbar">
                 {editingAppField === 'prompt' ? (
                   <div className="space-y-3">
-                    <textarea 
+                    <textarea
                       value={appSettingsForm?.systemPrompt || ''}
                       onChange={(e) => setAppSettingsForm(prev => prev ? { ...prev, systemPrompt: e.target.value } : null)}
                       className="w-full bg-transparent text-[#F4F0EB] resize-none outline-none focus:outline-none"
@@ -3077,7 +3077,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                       placeholder="Enter system prompt manually..."
                     />
                     <div className="flex items-center gap-2 pt-3 border-t border-[#3D3A37]">
-                      <input 
+                      <input
                         type="text"
                         placeholder="Or describe the bot to auto-generate (e.g. 'coding assistant')"
                         value={promptTopic}
@@ -3085,7 +3085,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                         className="flex-1 bg-transparent text-[12px] text-[#A8A39B] outline-none border border-[#3D3A37] rounded-lg px-3 py-1.5 focus:border-[#C9A66B]"
                         onKeyDown={e => { if (e.key === 'Enter') handleGeneratePrompt(); }}
                       />
-                      <button 
+                      <button
                         onClick={handleGeneratePrompt}
                         disabled={!promptTopic.trim() || isGeneratingPrompt}
                         className="px-3 py-1.5 bg-[#C9A66B] rounded-lg text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
@@ -3194,28 +3194,25 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
               <div className="space-y-2.5">
                 {editingAppField === 'kbs' ? (
                   kbList.length > 0 ? kbList.map(kb => (
-                    <div 
-                      key={kb.id} 
+                    <div
+                      key={kb.id}
                       onClick={() => toggleAppKb(app.id, kb.id)}
-                      className={`px-3.5 py-3 rounded-xl border flex items-center gap-3 group transition-colors cursor-pointer ${
-                        app.linkedKbIds.includes(kb.id) 
-                          ? 'bg-[#C9A66B]/10 border-[#C9A66B]/30' 
+                      className={`px-3.5 py-3 rounded-xl border flex items-center gap-3 group transition-colors cursor-pointer ${app.linkedKbIds.includes(kb.id)
+                          ? 'bg-[#C9A66B]/10 border-[#C9A66B]/30'
                           : 'bg-[#252523] border-[#3D3A37] hover:border-[#57534E]'
-                      }`}
+                        }`}
                     >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
-                        app.linkedKbIds.includes(kb.id)
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${app.linkedKbIds.includes(kb.id)
                           ? 'bg-[#C9A66B]/20 text-[#C9A66B] border-[#C9A66B]/30'
                           : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                      }`}>
+                        }`}>
                         <span className="text-[10px] font-bold">KB</span>
                       </div>
                       <span className="text-[13px] font-medium text-[#F4F0EB] truncate flex-1">{kb.name}</span>
-                      <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                        app.linkedKbIds.includes(kb.id)
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center ${app.linkedKbIds.includes(kb.id)
                           ? 'bg-[#C9A66B] border-[#C9A66B] text-[#1A1917]'
                           : 'border-[#57534E] text-transparent'
-                      }`}>
+                        }`}>
                         <Check size={10} />
                       </div>
                     </div>
@@ -3300,7 +3297,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           renderAdminDashboard()
         ) : activeScreen === 'dashboard' ? (
           <ErrorBoundary label="the dashboard">
-            <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={handleNavigate} onAsk={onAskFromHub} platformIcon={platformIcon} />
+            <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={handleNavigate} onAsk={onAskFromHub} platformIcon={platformIcon} kbsCount={kbList.length} />
           </ErrorBoundary>
         ) : activeScreen === 'knowledge' ? (
           <ErrorBoundary label="knowledge bases">

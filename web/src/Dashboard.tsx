@@ -147,6 +147,7 @@ interface DashboardProps {
   onNavigate?: (screen: ActiveScreen) => void;
   onAsk?: (q: string) => void;
   platformIcon?: PlatformIconFn;
+  kbsCount?: number;
 }
 
 interface SourceRow extends MetaEntry {
@@ -157,7 +158,7 @@ interface SourceRow extends MetaEntry {
   syncStatus?: StatsConnection['initialSyncStatus'];
 }
 
-export default function Dashboard({ user, idToken, connectors = {}, onNavigate, onAsk, platformIcon }: DashboardProps) {
+export default function Dashboard({ user, idToken, connectors = {}, onNavigate, onAsk, platformIcon, kbsCount = 0 }: DashboardProps) {
   const [query, setQuery] = useState('');
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -238,9 +239,8 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
   ];
   const submitAsk = (q?: string) => { const t = (q ?? query).trim(); if (t) onAsk?.(t); };
 
-  // Read local counts for the new cards
+  // Read local counts for apps
   const appsCount = (() => { try { return JSON.parse(localStorage.getItem('hs_apps') || '[]').length; } catch { return 0; } })();
-  const kbsCount = (() => { try { return JSON.parse(localStorage.getItem('hs_kbs') || '[]').length; } catch { return 0; } })();
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#252523] font-geist animate-fade-in">

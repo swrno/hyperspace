@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
-import { graphSearch } from './cognee.js';
+import { hybridSearch } from './cognee.js';
 import { verifyToken } from './auth.js';
 
 export default async function appChatHandler(req: Request, res: Response) {
@@ -33,16 +33,23 @@ export default async function appChatHandler(req: Request, res: Response) {
 
     const messages = [];
 
+    // ── Hybrid Retrieval: Graph Traversal + Vector Search + RRF Merge ──────
+    // For each linked KB, run the hybrid retriever which does:
+    //   1. GRAPH_COMPLETION — multi-hop graph traversal over the KB's Cognee graph
+    //   2. CHUNKS — vector similarity search over the KB's ingested documents
+    //   3. Reciprocal Rank Fusion — merges both ranked lists into a single context
+    // Each KB has its own isolated Cognee dataset (hypr_kb_<kbId>).
     let retrievedContext = '';
-    // If the app has linked KBs, retrieve context from Cognee
     if (linkedKbIds && linkedKbIds.length > 0) {
-      // In Cognee, each KB acts as a dataset
       try {
-        const fetchPromises = linkedKbIds.map((kbId: string) => 
-          graphSearch(message, { userId: kbId, searchType: 'GRAPH_COMPLETION', topK: 10 })
+        const fetchPromises = linkedKbIds.map((kbId: string) =>
+          hybridSearch(message, { userId, kbId, topK: 10 })
         );
         const results = await Promise.all(fetchPromises);
-        retrievedContext = results.filter(r => r).join('\n\n');
+        const parts = results.filter(r => r);
+        if (parts.length > 0) {
+          retrievedContext = parts.join('\n\n---\n\n');
+        }
       } catch (err) {
         console.warn('Failed to retrieve from Cognee KBs:', err);
       }
@@ -50,7 +57,7 @@ export default async function appChatHandler(req: Request, res: Response) {
 
     let finalSystemPrompt = systemPrompt || 'You are a helpful AI assistant.';
     if (retrievedContext) {
-      finalSystemPrompt += `\n\n# Context from Knowledge Base:\nThe following information is retrieved from the knowledge base. Use it to answer the user's question:\n${retrievedContext}`;
+      finalSystemPrompt += `\n\n# Context from Knowledge Base:\nThe following information is retrieved from the knowledge base using hybrid search (graph traversal + vector search). Use it to answer the user's question accurately. If the context is insufficient, say so.\n\n${retrievedContext}`;
     }
 
     messages.push({ role: 'system', content: finalSystemPrompt });
@@ -71,7 +78,7 @@ export default async function appChatHandler(req: Request, res: Response) {
         'Authorization': `Bearer ${groqKey}`
       },
       body: JSON.stringify({
-        model: model || 'llama3-8b-8192',
+        model: model || 'qwen/qwen3.6-27b',
         messages,
         temperature: temperature ?? 0.7,
         max_tokens: maxTokens ?? 1024,
@@ -88,10 +95,7 @@ export default async function appChatHandler(req: Request, res: Response) {
     const groqData = await groqRes.json();
     const replyContent = groqData.choices?.[0]?.message?.content || '';
 
-    // We don't save to DB here because the frontend maintains its own state and calls updateApp?
-    // Wait, the user specifically requested: "Store User message as history. When Ever I am creating an app in UI it should store all the info in MongoDB. Every app should have a APP_ID, API_KEY. Store A-Z info like model it currently selected. Temo, top_p, sys_prompt, User message as history."
-
-    // So we should save the new messages to MongoDB.
+    // Save messages to MongoDB
     const db = await getDb();
     const appsCollection = db.collection('apps');
     

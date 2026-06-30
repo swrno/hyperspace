@@ -52,7 +52,7 @@ export default async function handler(req: Request, res: Response) {
     // Semantic mode → the REAL graph Cognee extracted via cognify (entities +
     // relationships the LLM found), rather than our structural Mongo edges.
     if (req.query?.mode === 'cognee') {
-      const g = await getDatasetGraph(user.uid);
+      const g = await getDatasetGraph(user.uid, kbId as string || undefined);
       const rawNodes = g?.nodes || [];
       const rawEdges = g?.edges || [];
       const nodes = rawNodes.map((n) => ({ id: n.id, label: cleanLabel(n), type: n.type || 'Node', source: 'cognee', url: null }));

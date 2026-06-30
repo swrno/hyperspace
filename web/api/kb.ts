@@ -121,6 +121,7 @@ export default async function handler(req: Request, res: Response) {
           const header = `# Knowledge Base Document: ${entry.name}\nKnowledge Base ID: ${kbId}\n\n`;
           cogneeIngest(header + content.slice(0, 100000), {
             userId: user.uid,
+            kbId,
             nodeSet: ['kb', kbNodeSet(kbId)],
           }).catch((e) => console.warn('KB Cognee ingest failed (non-fatal):', e.message));
         }
@@ -161,7 +162,7 @@ export default async function handler(req: Request, res: Response) {
         );
         if (source.items.length) {
           const payload = formatConnectorPayload(kbId, user.uid, user.email, platform, source.items);
-          cogneeIngest(payload, { userId: user.uid, nodeSet: ['kb', kbNodeSet(kbId)] })
+          cogneeIngest(payload, { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] })
             .catch((e) => console.warn('KB source Cognee ingest failed (non-fatal):', e.message));
 
           if (platform === 'github') {
@@ -178,7 +179,7 @@ export default async function handler(req: Request, res: Response) {
                   const batch = entities.slice(i, i + 25);
                   const doc = entitiesToDocument(batch, `github knowledge`);
                   const kbDoc = `# Knowledge Base ID: ${kbId}\n\n${doc}`;
-                  await cogneeIngest(kbDoc, { userId: user.uid, nodeSet: ['kb', kbNodeSet(kbId)] });
+                  await cogneeIngest(kbDoc, { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] });
                 }
               } catch (err: any) {
                 console.error('KB Github snapshot ingest failed:', err.message);
@@ -198,7 +199,7 @@ export default async function handler(req: Request, res: Response) {
           { $pull: { sources: { platform } }, $set: { updatedAt: now } }
         );
         // Force a graph rebuild so the removed source's nodes drop out on their own.
-        cognify(user.uid, { force: true }).catch(() => {});
+        cognify(user.uid, { force: true, kbId }).catch(() => {});
         return res.status(200).json({ success: true });
       }
 
@@ -222,6 +223,14 @@ export default async function handler(req: Request, res: Response) {
         if (typeof name === 'string' && name.trim()) fields.name = name.trim();
         if (typeof description === 'string') fields.description = description.trim();
         await kbCol.updateOne({ _id: kbId, userId: user.uid }, { $set: fields });
+        return res.status(200).json({ success: true });
+      }
+
+      // ── Manually trigger a graph rebuild for a KB ────────────────────────
+      if (action === 'rebuild-graph') {
+        const { kbId } = body;
+        if (!kbId) return res.status(400).json({ error: 'kbId is required' });
+        cognify(user.uid, { force: true, kbId }).catch(() => {});
         return res.status(200).json({ success: true });
       }
 

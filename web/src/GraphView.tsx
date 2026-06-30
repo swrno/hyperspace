@@ -229,7 +229,7 @@ interface GraphViewProps {
 
 export default function GraphView({ idToken, onAsk, kbId, embedded = false, refreshKey = 0 }: GraphViewProps) {
   const [view, setView] = useState<'2d' | '3d'>('2d');
-  const [mode, setMode] = useState<'structural' | 'cognee'>('structural');
+  const [mode, setMode] = useState<'structural' | 'cognee'>('cognee');
   const [colorBy, setColorBy] = useState<'type' | 'community'>('type');
   const [data, setData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -264,78 +264,48 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
 
   const load = async (m: 'structural' | 'cognee' = mode) => {
     setLoading(true);
-    
-    if (m === 'cognee') {
-      try {
-        const res = await fetch(`/api/graph?mode=cognee${kbId ? `&kbId=${kbId}` : ''}`, {
-          headers: idToken ? { Authorization: `Bearer ${idToken}` } : {}
-        });
-        if (res.ok) {
-          const fetchedData = await res.json();
-          setData(fetchedData);
-          setLoading(false);
-          return;
-        }
-      } catch (e) {
-        console.error('Failed to fetch real Cognee graph', e);
-      }
-    }
-
-    setTimeout(() => {
-      let kbNodes = [
-        { id: '1', label: 'Knowledge Base', type: 'Concept', degree: 3 },
-        { id: '2', label: 'Core Concepts', type: 'Topic', degree: 2 }
-      ];
-      let kbEdges = [
-        { source: '1', target: '2', label: 'contains' }
-      ];
-      
-      try {
-        if (kbId) {
-          const kbs = JSON.parse(localStorage.getItem('hs_kbs') || '[]');
-          const kb = kbs.find((k: any) => k.id === kbId);
-          if (kb) {
-            let idCounter = 3;
-            if (kb.documents) {
-              kb.documents.forEach((d: any) => {
-                const nId = `${idCounter++}`;
-                kbNodes.push({ id: nId, label: d.name, type: 'Document', degree: 1 });
-                kbEdges.push({ source: '1', target: nId, label: 'contains' });
-              });
-            }
-            if (kb.sources) {
-              kb.sources.forEach((s: any) => {
-                if (s.items) {
-                  s.items.forEach((item: any) => {
-                    const nId = `${idCounter++}`;
-                    kbNodes.push({ id: nId, label: item.name, type: 'Repository', degree: 2 });
-                    kbEdges.push({ source: '1', target: nId, label: 'integrates' });
-                  });
-                }
-              });
-            }
-          }
-        }
-      } catch (e) { /* ignore */ }
-
-      // Mock Graph Data for local-first UI
-      setData({
-        nodes: kbNodes,
-        edges: kbEdges,
-        stats: { nodes: kbNodes.length, edges: kbEdges.length }
+    try {
+      const params = new URLSearchParams();
+      if (m === 'cognee') params.set('mode', 'cognee');
+      if (kbId) params.set('kbId', kbId);
+      const res = await fetch(`/api/graph?${params.toString()}`, {
+        headers: idToken ? { Authorization: `Bearer ${idToken}` } : {}
       });
-      setLoading(false);
-    }, 600);
+      if (res.ok) {
+        const fetchedData = await res.json();
+        setData(fetchedData);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.error('Failed to fetch graph from API', e);
+    }
+    // Fallback: empty graph if API fails
+    setData({ nodes: [], edges: [], stats: { nodes: 0, edges: 0 } });
+    setLoading(false);
   };
   useEffect(() => { load(mode); /* eslint-disable-next-line */ }, [idToken, mode, kbId, refreshKey]);
 
   const syncNow = async () => {
     if (syncing) return;
     setSyncing(true);
-    setTimeout(() => {
-      load(mode);
+    try {
+      if (kbId && idToken) {
+        await fetch('/api/kb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify({ action: 'rebuild-graph', kbId })
+        });
+      }
+      // Wait a moment for processing, then reload
+      setTimeout(() => {
+        load(mode);
+        setSyncing(false);
+      }, 2000);
+    } catch (e) {
+      console.error('Failed to trigger rebuild', e);
       setSyncing(false);
-    }, 1500);
+    }
   };
 
   const presentTypes = useMemo(() => [...new Set((data?.nodes || []).map((n) => n.type))], [data]);
