@@ -359,8 +359,9 @@ export async function ingestGitHubEntity(
 
 export async function vectorSearch(
   query: string,
-  { userId, kbId, topK = 10 }: any = {},
+  { userId, kbId, topK: rawTopK = 10 }: any = {},
 ): Promise<string[]> {
+  const topK = Math.floor(rawTopK);
   if (!configured() || !query?.trim()) return [];
   try {
     const queryEmbedding = await embed(query, 'RETRIEVAL_QUERY');
@@ -389,8 +390,9 @@ export async function vectorSearch(
 
 export async function graphSearch(
   query: string,
-  { userId, kbId, topK = 10 }: any = {},
+  { userId, kbId, topK: rawTopK = 10 }: any = {},
 ): Promise<string | null> {
+  const topK = Math.floor(rawTopK);
   if (!configured() || !query?.trim()) return null;
   try {
     const escaped = query.replace(/[+\-&|!(){}[\]^"~*?:\\/]/g, '\\$&');
