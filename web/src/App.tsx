@@ -236,9 +236,16 @@ const mdComponents: Components = {
   td: ({ children }) => <td className="px-3 py-2 border-t border-[#2E2C2A] text-[#C7C2BC] align-top">{children}</td>,
 };
 
+/* LLMs often format a GitHub issue reference as an ATX heading (e.g.
+   "# #11: While pasting the PAT …"), which react-markdown renders as a giant
+   <h1>. Demote any heading whose text is an issue-style "#<number>" reference
+   back to inline bold, leaving genuine section headings (## Summary) intact. */
+const normalizeAiMarkdown = (md: string) =>
+  md.replace(/^\s{0,3}#{1,6}[ \t]+(#\d[^\n]*?)\s*$/gm, '**$1**');
+
 /** Chat-styled GFM markdown renderer used in the app playground. */
 function ChatMarkdown({ children }: { children: string }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{children}</ReactMarkdown>;
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{normalizeAiMarkdown(children)}</ReactMarkdown>;
 }
 
 /** Retrieval-depth modes shown in the playground composer. */
