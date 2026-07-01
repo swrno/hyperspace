@@ -3,18 +3,21 @@ import {
   Database, Plus, ArrowLeft, FileText, Upload, Trash2, X,
   Loader2, FolderPlus, Search, FileStack, Calendar,
   Blocks, Plug, ArrowUpRight, Check, ChevronDown, Network, Pencil,
+  BarChart3, type LucideIcon,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { Connectors, KbDocument, KbSource, KnowledgeBase, PlatformIconFn } from './types';
 import ErrorBoundary from './ErrorBoundary';
 import GraphView from './GraphView';
+import KbInsights from './KbInsights';
+import { Skeleton } from './charts';
 
 /** Shape sent to the backend when uploading a document. */
 type DocInput =
   | { name: string; type: 'text'; content: string }
   | { name: string; type: 'pdf'; contentBase64: string };
 
-type DetailTab = 'documents' | 'sources' | 'insights' | 'graph' | 'mindmap';
+type DetailTab = 'documents' | 'sources' | 'insights' | 'graph';
 
 
 // Folder card accent palette — warm, dark tones that match the app's graph colours.
@@ -99,7 +102,7 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   }, [location.pathname]);
 
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<DetailTab>('documents');
+  const [tab, setTab] = useState<DetailTab>('insights');
   // Bumped whenever the active KB's docs/sources change, to force the embedded
   // graph to rebuild on its own.
   const [graphRefresh, setGraphRefresh] = useState(0);
@@ -347,7 +350,36 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
 
   const active = kbs.find((k) => k.id === activeId);
 
-  /* ── Detail view (Single scrollable page) ── */
+  /* Direct navigation to /kb/:id while the list is still loading. */
+  if (loading && activeId && !active) {
+    return (
+      <div className="flex-1 flex flex-col h-full min-h-0 bg-[#252523] font-geist animate-fade-in overflow-hidden">
+        <div className="shrink-0">
+          <div className="px-6 lg:px-10 pt-6 pb-4">
+            <Skeleton className="h-4 w-40 rounded mb-5" />
+            <div className="flex items-center gap-3.5">
+              <Skeleton className="w-11 h-11 rounded-xl" />
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-48 rounded" />
+                <Skeleton className="h-3 w-64 rounded" />
+              </div>
+            </div>
+          </div>
+          <div className="px-6 lg:px-10 border-b border-[#3D3A37] flex gap-2 pb-3 pt-1">
+            {['w-28', 'w-24', 'w-24', 'w-40'].map((w, i) => <Skeleton key={i} className={`h-7 ${w} rounded-md`} />)}
+          </div>
+        </div>
+        <div className="flex-1 p-6 lg:p-10">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+            <Skeleton className="lg:col-span-2 h-64 rounded-2xl" />
+            <Skeleton className="lg:col-span-3 h-64 rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Detail view (tabbed) ── */
   if (active) {
     const docs = active.documents || [];
     const kbSources = active.sources || [];
@@ -355,14 +387,21 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
     const connectedPlatforms = Object.entries(connectors).filter(([, c]) => c?.connected);
     const sourceItemCount = kbSources.reduce((n, s) => n + (s.items?.length || 0), 0);
 
+    const TABS: { id: DetailTab; label: string; Icon: LucideIcon; count?: number }[] = [
+      { id: 'insights', label: 'Insights', Icon: BarChart3 },
+      { id: 'documents', label: 'Documents', Icon: FileStack, count: docs.length },
+      { id: 'sources', label: 'Sources', Icon: Plug, count: kbSources.length },
+      { id: 'graph', label: 'Knowledge Graph', Icon: Network },
+    ];
+
     const renderSourceIcon = (id: string, size = 18) =>
       platformIcon ? platformIcon({ id }, size) : <Plug size={size - 2} className="text-[#9C968E]" />;
 
     return (
       <div className="flex-1 flex flex-col h-full min-h-0 bg-[#252523] font-geist animate-fade-in overflow-hidden">
         {/* Header (fixed) */}
-        <div className="shrink-0 border-b border-[#3D3A37]">
-          <div className="px-6 lg:px-10 py-6">
+        <div className="shrink-0">
+          <div className="px-6 lg:px-10 pt-6 pb-4">
             <button onClick={() => navigate('/kb')} className="flex items-center gap-2 text-[13px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors mb-5">
               <ArrowLeft size={16} /> Back to Knowledge Bases
             </button>
@@ -400,14 +439,34 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
               </button>
             </div>
           </div>
+          {/* Tabs */}
+          <div className="px-6 lg:px-10 border-b border-[#3D3A37]">
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {TABS.map((t) => {
+                const on = tab === t.id;
+                return (
+                  <button key={t.id} onClick={() => setTab(t.id)}
+                    className={`relative flex items-center gap-2 px-3.5 py-3 text-[13px] font-geist font-medium whitespace-nowrap transition-colors ${on ? 'text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#C7C2BC]'}`}>
+                    <t.Icon size={15} strokeWidth={1.85} />
+                    {t.label}
+                    {t.count != null && (
+                      <span className={`text-[10.5px] tabular-nums px-1.5 py-0.5 rounded-md border ${on ? 'bg-[#33302E] border-[#4A4744] text-[#C7C2BC]' : 'bg-[#1E1D1C] border-[#3D3A37] text-[#8C8880]'}`}>{t.count}</span>
+                    )}
+                    {on && <span className="absolute left-2 right-2 bottom-0 h-[2px] rounded-full bg-[#C9A66B]" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        {/* Scrollable single page content */}
-        <div className="flex-1 overflow-y-auto pb-32">
+        {/* Tab content */}
+        <div className="flex-1 min-h-0">
+          {tab === 'documents' && (
+          <div className="h-full overflow-y-auto">
           
-          {/* Documents Section */}
-          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 py-10">
-            <h2 className="text-[18px] font-geist font-semibold text-[#F4F0EB] tracking-tight mb-6 flex items-center gap-2"><FileStack size={20} className="text-[#C9A66B]" /> Documents</h2>
+          {/* Documents */}
+          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 py-8">
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
               {/* Upload */}
               <div className="lg:col-span-2 card-elev rounded-2xl p-5 h-fit">
@@ -469,13 +528,14 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
               </div>
             </div>
           </div>
+          </div>
+          )}
 
-          <div className="w-full h-px bg-[#3D3A37]" />
-
-          {/* Sources Section */}
-          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 py-10">
-            <div className="flex items-center justify-between gap-3 mb-6">
-              <h2 className="text-[18px] font-geist font-semibold text-[#F4F0EB] tracking-tight flex items-center gap-2"><Plug size={20} className="text-[#8AA9C9]" /> Connected sources</h2>
+          {tab === 'sources' && (
+          <div className="h-full overflow-y-auto">
+          {/* Sources */}
+          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 py-8">
+            <div className="flex items-center justify-end gap-3 mb-5">
               <button onClick={onOpenIntegrations} className="btn-bump btn-bump-dark px-3 py-2 text-[12px]">
                 <Blocks size={14} /> Manage integrations
               </button>
@@ -785,20 +845,24 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
               </div>
             )}
           </div>
-          <div className="w-full h-px bg-[#3D3A37] my-10" />
+          </div>
+          )}
 
-          {/* Graph Section */}
-          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 pb-10">
-            <div className="flex items-center justify-between gap-3 mb-6">
-              <h2 className="text-[18px] font-geist font-semibold text-[#F4F0EB] tracking-tight flex items-center gap-2">
-                <Network size={20} className="text-[#C9A66B]" /> Cognee Graph
-              </h2>
-            </div>
-            <div className="card-elev rounded-2xl overflow-hidden h-[500px] relative border border-[#3D3A37]">
+          {tab === 'insights' && (
+          <div className="h-full overflow-y-auto">
+          <div className="max-w-[1080px] mx-auto px-6 lg:px-10 py-8">
+            <KbInsights idToken={idToken} kb={active} refreshKey={graphRefresh} />
+          </div>
+          </div>
+          )}
+
+          {tab === 'graph' && (
+          <div className="h-full p-4 lg:p-6">
+            <div className="card-elev rounded-2xl overflow-hidden h-full relative border border-[#3D3A37]">
               <GraphView idToken={idToken} kbId={active.id} embedded={true} refreshKey={graphRefresh} />
             </div>
           </div>
-
+          )}
         </div>
       </div>
     );
@@ -846,7 +910,22 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-24 text-[#8C8880]"><Loader2 size={22} className="animate-spin" /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-2xl p-5 card-elev flex flex-col gap-3.5">
+                <div className="flex items-start justify-between">
+                  <Skeleton className="w-10 h-10 rounded-xl" />
+                  <Skeleton className="w-12 h-5 rounded-md" />
+                </div>
+                <div className="flex-1">
+                  <Skeleton className="h-4 w-2/3 rounded" />
+                  <Skeleton className="h-3 w-full rounded mt-2.5" />
+                  <Skeleton className="h-3 w-1/2 rounded mt-1.5" />
+                </div>
+                <div className="pt-3 border-t border-[#33302E]"><Skeleton className="h-3 w-1/3 rounded" /></div>
+              </div>
+            ))}
+          </div>
         ) : error ? (
           <div className="card-elev rounded-2xl p-6 text-[13px] font-geist text-[#F87171]">{error}</div>
         ) : filtered.length === 0 ? (
@@ -871,53 +950,34 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                 <button
                   key={kb.id}
                   onClick={() => navigate(`/kb/${kb.id}`)}
-                  className="group text-left w-full transition-all duration-200 hover:-translate-y-1.5 focus:outline-none"
+                  className="group text-left w-full card-elev card-elev-hover rounded-2xl p-5 flex flex-col gap-3.5 focus:outline-none"
                 >
-                  {/* Folder tab — sits above the body, aligned top-left */}
-                  <div
-                    className="ml-3.5 h-[22px] rounded-t-[11px] border border-b-0 transition-colors duration-200"
-                    style={{
-                      width: '44%',
-                      background: `linear-gradient(to bottom, ${accent.tab} 0%, ${accent.tabEnd} 100%)`,
-                      borderColor: accent.border,
-                    }}
-                  />
-                  {/* Folder body */}
-                  <div
-                    className="rounded-b-2xl rounded-tr-2xl p-5 flex flex-col gap-3.5 transition-all duration-200"
-                    style={{
-                      background: 'linear-gradient(180deg, #2c2a28 0%, #262422 100%)',
-                      border: `1px solid ${accent.border}`,
-                      boxShadow: '0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 24px rgba(0,0,0,0.22)',
-                    }}
-                  >
-                    {/* Icon row */}
-                    <div className="flex items-start justify-between">
-                      <span
-                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                        style={{ background: accent.iconBg, border: `1px solid ${accent.iconBorder}` }}
-                      >
-                        <Database size={18} style={{ color: accent.iconColor }} />
-                      </span>
-                      <span className="text-[10.5px] font-geist font-semibold text-[#C7C2BC] bg-[#1E1D1C] border border-[#3D3A37] px-2 py-0.5 rounded-md tabular-nums mt-0.5">
-                        {n} doc{n === 1 ? '' : 's'}
-                      </span>
-                    </div>
+                  {/* Icon row */}
+                  <div className="flex items-start justify-between">
+                    <span
+                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ background: accent.iconBg, border: `1px solid ${accent.iconBorder}` }}
+                    >
+                      <Database size={18} style={{ color: accent.iconColor }} />
+                    </span>
+                    <span className="text-[10.5px] font-geist font-semibold text-[#C7C2BC] bg-[#1E1D1C] border border-[#3D3A37] px-2 py-0.5 rounded-md tabular-nums mt-0.5">
+                      {n} doc{n === 1 ? '' : 's'}
+                    </span>
+                  </div>
 
-                    {/* Name + description */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-[15px] font-geist font-semibold text-[#F4F0EB] tracking-tight truncate group-hover:text-white transition-colors">
-                        {kb.name}
-                      </h3>
-                      <p className="text-[12px] font-geist text-[#8C8880] mt-1 line-clamp-2 leading-relaxed">
-                        {kb.description || 'No description'}
-                      </p>
-                    </div>
+                  {/* Name + description */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-[15px] font-geist font-semibold text-[#F4F0EB] tracking-tight truncate group-hover:text-white transition-colors">
+                      {kb.name}
+                    </h3>
+                    <p className="text-[12px] font-geist text-[#8C8880] mt-1 line-clamp-2 leading-relaxed">
+                      {kb.description || 'No description'}
+                    </p>
+                  </div>
 
-                    {/* Footer */}
-                    <div className="flex items-center gap-1.5 text-[11px] font-geist text-[#6B6762] pt-3 border-t border-[#33302E]">
-                      <Calendar size={11} /> Created {fmtDate(kb.createdAt)}
-                    </div>
+                  {/* Footer */}
+                  <div className="flex items-center gap-1.5 text-[11px] font-geist text-[#6B6762] pt-3 border-t border-[#33302E]">
+                    <Calendar size={11} /> Created {fmtDate(kb.createdAt)}
                   </div>
                 </button>
               );

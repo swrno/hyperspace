@@ -5,6 +5,33 @@ import Graph from 'graphology';
 import louvain from 'graphology-communities-louvain';
 import '@react-sigma/core/lib/style.css';
 import { RefreshCw, Loader2, Network, Boxes, X, Search } from 'lucide-react';
+import { Skeleton } from './charts';
+
+/* Loading placeholder that hints at a node graph — shimmering nodes + faint links. */
+const SKELETON_NODES = [
+  { x: '50%', y: '47%', s: 66 }, { x: '29%', y: '30%', s: 42 }, { x: '71%', y: '31%', s: 46 },
+  { x: '23%', y: '64%', s: 34 }, { x: '76%', y: '66%', s: 38 }, { x: '47%', y: '75%', s: 30 },
+  { x: '61%', y: '21%', s: 26 }, { x: '38%', y: '55%', s: 28 }, { x: '84%', y: '47%', s: 24 },
+];
+const SKELETON_LINKS = [
+  ['50%', '47%', '29%', '30%'], ['50%', '47%', '71%', '31%'], ['50%', '47%', '23%', '64%'],
+  ['50%', '47%', '76%', '66%'], ['50%', '47%', '38%', '55%'], ['71%', '31%', '61%', '21%'],
+  ['23%', '64%', '47%', '75%'], ['71%', '31%', '84%', '47%'],
+] as const;
+function GraphSkeleton() {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      <svg className="absolute inset-0 w-full h-full" aria-hidden>
+        <g stroke="#33302E" strokeWidth={1.5}>
+          {SKELETON_LINKS.map(([x1, y1, x2, y2], i) => <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />)}
+        </g>
+      </svg>
+      {SKELETON_NODES.map((n, i) => (
+        <Skeleton key={i} className="absolute rounded-full -translate-x-1/2 -translate-y-1/2" style={{ left: n.x, top: n.y, width: n.s, height: n.s }} />
+      ))}
+    </div>
+  );
+}
 import type { GraphData, GraphNode } from './types';
 
 /* A node as seen by the colour/size helpers — the app node, or a force-graph
