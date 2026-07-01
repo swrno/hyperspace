@@ -207,10 +207,39 @@ function deriveHeading(chunk) {
   return '';
 }
 
-export async function gdocsNodeSnapshot(token, selectedItems, kbId) {
+/**
+ * Delta filter for Drive files (docs/slides have no cheap changes API here):
+ * keep only items whose Drive `modifiedTime` is >= the cursor. Items whose
+ * metadata can't be fetched are kept (fail-open — better a redundant re-ingest
+ * than a silently dropped update). Returns `items` unchanged when `sinceIso` is
+ * falsy (full build).
+ */
+async function filterModifiedSince(token, items, sinceIso) {
+  if (!sinceIso) return items || [];
+  const kept = [];
+  for (const item of items || []) {
+    if (!item.id) continue;
+    try {
+      const res = await fetch(`${DRIVE}/files/${item.id}?fields=modifiedTime`, { headers: auth(token) });
+      if (!res.ok) {
+        kept.push(item); // fail-open on metadata error
+        continue;
+      }
+      const meta = (await res.json()) as any;
+      if (!meta.modifiedTime || meta.modifiedTime >= sinceIso) kept.push(item);
+    } catch (e) {
+      console.warn(`filterModifiedSince failed for ${item.id}:`, e.message);
+      kept.push(item);
+    }
+  }
+  return kept;
+}
+
+export async function gdocsNodeSnapshot(token, selectedItems, kbId, sinceIso?) {
   const documents = [];
   const chunks = [];
-  for (const item of selectedItems || []) {
+  const items = await filterModifiedSince(token, selectedItems, sinceIso);
+  for (const item of items) {
     if (!item.id) continue;
     try {
       const text = await exportFileText(token, item.id, 'gdocs');
@@ -266,10 +295,11 @@ function extractSlideText(slide) {
   return parts.join('\n');
 }
 
-export async function gslidesNodeSnapshot(token, selectedItems, kbId) {
+export async function gslidesNodeSnapshot(token, selectedItems, kbId, sinceIso?) {
   const presentations = [];
   const slides = [];
-  for (const item of selectedItems || []) {
+  const items = await filterModifiedSince(token, selectedItems, sinceIso);
+  for (const item of items) {
     if (!item.id) continue;
     try {
       const pres = await fetchSlidesPresentation(token, item.id);
@@ -297,7 +327,7 @@ export async function gslidesNodeSnapshot(token, selectedItems, kbId) {
 }
 
 /** Fully paginate calendar events via nextPageToken (unlike calendarList(), which only fetches page 1 for the UI picker). */
-async function listAllCalendarEvents(token) {
+async function listAllCalendarEvents(token, updatedMin?) {
   const events = [];
   let pageToken;
   const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -307,6 +337,8 @@ async function listAllCalendarEvents(token) {
       singleEvents: 'true',
       orderBy: 'startTime',
       timeMin,
+      // Delta: only events changed since the cursor (Calendar's real updatedMin).
+      ...(updatedMin ? { updatedMin } : {}),
       ...(pageToken ? { pageToken } : {}),
     });
     let res;
@@ -327,7 +359,7 @@ async function listAllCalendarEvents(token) {
   return events;
 }
 
-export async function gcalNodeSnapshot(token, selectedItems, kbId) {
+export async function gcalNodeSnapshot(token, selectedItems, kbId, sinceIso?) {
   let calRaw;
   try {
     const res = await fetch(`${CALENDAR}`, { headers: auth(token) });
@@ -339,7 +371,7 @@ export async function gcalNodeSnapshot(token, selectedItems, kbId) {
 
   let allEvents = [];
   try {
-    allEvents = await listAllCalendarEvents(token);
+    allEvents = await listAllCalendarEvents(token, sinceIso);
   } catch (e) {
     console.warn('gcalNodeSnapshot: failed to list events:', e.message);
   }

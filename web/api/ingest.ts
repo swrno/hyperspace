@@ -82,7 +82,7 @@ async function persistAndIngest(userId, provider, entities, force = false) {
  * @param selectedItems  picked in the UI: GitHub repo objects {name:"owner/repo"}
  *                        (Jira pulls all accessible projects regardless).
  */
-export async function runInitialSync(userId, provider, selectedItems = []) {
+export async function runInitialSync(userId, provider, selectedItems = [], nodeGraphSince?) {
   const op = oauthProviderFor(provider); // connection + sync state live under the OAuth provider
   const connection = await getConnection(userId, op);
   if (!connection) throw new Error(`No ${op} connection for user`);
@@ -114,9 +114,12 @@ export async function runInitialSync(userId, provider, selectedItems = []) {
 
     if (['gdocs', 'gslides', 'jira', 'gcal'].includes(provider)) {
       // Additive node-graph scaffolding (Source/Chunk/Entity) — best-effort,
-      // never blocks or fails the real sync. kbId is a stand-in (userId)
-      // until a future task wires this to kb.ts's real per-KB scoping.
-      buildNodeGraphForProvider(userId, userId, provider, selectedItems, token, connection).catch((e) =>
+      // never blocks or fails the real sync. This is the global connect path, so
+      // kbId is the userId stand-in; real per-KB scoping flows through kb.ts's
+      // attach-source, which calls buildNodeGraphForProvider with a real kbId.
+      // nodeGraphSince (set by "Sync now" refreshes) makes this an incremental
+      // build; unset on a true initial sync → full build.
+      buildNodeGraphForProvider(userId, userId, provider, selectedItems, token, connection, nodeGraphSince).catch((e) =>
         console.warn(`Node-graph build failed for ${provider} (non-fatal):`, e.message)
       );
     }
@@ -154,6 +157,11 @@ export async function runDeltaSync(userId, provider) {
       { token, cloudId: connection.cloudId, siteUrl: connection.siteUrl },
       since
     ));
+    // Additive node-graph delta — best-effort, keyed by the userId stand-in and
+    // scoped to issues updated since the cursor. Never blocks the real sync.
+    buildNodeGraphForProvider(userId, userId, 'jira', [], token, connection, since).catch((e) =>
+      console.warn('Node-graph delta failed for jira (non-fatal):', e.message)
+    );
   }
 
   const count = await persistAndIngest(userId, provider, entities);
@@ -195,10 +203,14 @@ export async function syncUser(userId) {
       if (conn.provider === 'google') {
         const cdoc = await db.collection('connectors').findOne({ userId });
         const cmap = cdoc?.connectors || {};
+        // Old pipeline re-pulls fully (Drive has no cheap delta), but the
+        // node-graph build reuses the poll cursor so docs/slides (modifiedTime)
+        // and calendar (updatedMin) only re-ingest what changed.
+        const nodeGraphSince = conn.lastPollCursor;
         for (const plat of ['gdocs', 'gslides', 'gsheets', 'gcal']) {
           const items = cmap[plat]?.selectedItems || [];
           if (items.length) {
-            const r = await runInitialSync(userId, plat, items);
+            const r = await runInitialSync(userId, plat, items, nodeGraphSince);
             total += r.count || 0;
           }
         }
@@ -368,8 +380,14 @@ async function upsertNodeGraph(userId, kbId, nodes, edges) {
 /**
  * Build and persist the new Source/Chunk/Entity graph for one platform batch.
  * Wrapped entirely in try/catch — a failure here never affects the real sync.
+ *
+ * `kbId` is the real Knowledge-Base id when invoked from kb.ts's attach-source,
+ * or the `userId` stand-in for the global connect/delta paths.
+ * `since` (ISO string) turns this into a delta build: only sources changed after
+ * the cursor are re-ingested. Note: delta upserts add/update nodes but never
+ * delete stale ones (no tombstoning) — same trade-off the live pipeline accepts.
  */
-async function buildNodeGraphForProvider(userId, kbId, provider, selectedItems, token, connection) {
+export async function buildNodeGraphForProvider(userId, kbId, provider, selectedItems, token, connection, since?) {
   try {
     let sources = [];
     let children = [];
@@ -392,7 +410,7 @@ async function buildNodeGraphForProvider(userId, kbId, provider, selectedItems, 
     };
 
     if (provider === 'gdocs') {
-      const { documents, chunks } = await google.gdocsNodeSnapshot(token, selectedItems, kbId);
+      const { documents, chunks } = await google.gdocsNodeSnapshot(token, selectedItems, kbId, since);
       sources = documents;
       children = chunks;
       const titleByDocId = new Map(documents.map((d) => [d.id, d.title]));
@@ -400,7 +418,7 @@ async function buildNodeGraphForProvider(userId, kbId, provider, selectedItems, 
         await runNer(chunk, chunk.metadata.chunk_text_content, titleByDocId.get(chunk.metadata.parent_document_id) || 'document');
       }
     } else if (provider === 'gslides') {
-      const { presentations, slides } = await google.gslidesNodeSnapshot(token, selectedItems, kbId);
+      const { presentations, slides } = await google.gslidesNodeSnapshot(token, selectedItems, kbId, since);
       sources = presentations;
       children = slides;
       const titleByPresId = new Map(presentations.map((p) => [p.id, p.title]));
@@ -411,7 +429,8 @@ async function buildNodeGraphForProvider(userId, kbId, provider, selectedItems, 
     } else if (provider === 'jira') {
       const { projects, issues } = await jira.jiraNodeSnapshot(
         { token, cloudId: connection?.cloudId, siteUrl: connection?.siteUrl },
-        kbId
+        kbId,
+        since
       );
       sources = projects;
       children = issues;
@@ -428,7 +447,7 @@ async function buildNodeGraphForProvider(userId, kbId, provider, selectedItems, 
         }
       }
     } else if (provider === 'gcal') {
-      const { calendar, events, structuredEntities } = await google.gcalNodeSnapshot(token, selectedItems, kbId);
+      const { calendar, events, structuredEntities } = await google.gcalNodeSnapshot(token, selectedItems, kbId, since);
       sources = [calendar];
       children = events;
       // Structured, no NER — attendees/location become Entity nodes directly (spec's edge rule 4).

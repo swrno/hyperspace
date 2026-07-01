@@ -129,3 +129,77 @@ export async function retrieveContext(userId, query, { entityLimit = 16, docLimi
   }
   return lines.join('\n');
 }
+
+// Content-bearing node types in the additive Source/Chunk/Entity graph — the
+// ones worth surfacing to the model (entities are attached as related items).
+const NODE_CONTENT_TYPES = ['document', 'chunk', 'slide', 'presentation', 'jira_project', 'jira_issue', 'calendar_event'];
+
+function nodeText(n) {
+  const m = n.metadata || {};
+  return `${n.title || ''} ${n.body || ''} ${m.name || ''} ${m.description || ''} ${m.issue_text_content || ''} ${m.chunk_text_content || ''} ${m.slide_text_content || ''}`.toLowerCase();
+}
+
+function scoreNode(n, tokens) {
+  const hay = nodeText(n);
+  const title = (n.title || '').toLowerCase();
+  let s = 0;
+  for (const t of tokens) {
+    if (hay.includes(t)) s += 1;
+    if (title.includes(t)) s += 2; // title hits weigh more
+  }
+  return s;
+}
+
+/**
+ * Grounding context from the additive node graph (`kb_nodes`/`kb_edges`).
+ *
+ * Complements retrieveContext (the flat kb_entities index) with the richer
+ * Source -> Chunk -> Entity structure: keyword-matched content nodes plus their
+ * 1-hop entities/relations. Scoped by userId, and by real `kbId` when a chat is
+ * pinned to a knowledge base. Returns a formatted string or null.
+ */
+export async function retrieveNodeGraphContext(userId, query, { kbId }: { kbId?: string } = {}) {
+  const db = await getDb();
+  const filter: Record<string, any> = { userId };
+  if (kbId) filter.kbId = kbId;
+
+  const nodes = await db.collection('kb_nodes').find(filter).limit(400).toArray();
+  if (!nodes.length) return null;
+
+  const byId = new Map(nodes.map((n) => [n.id || n._id, n]));
+  const tokens = tokenize(query);
+
+  const content = nodes.filter((n) => NODE_CONTENT_TYPES.includes(n.type));
+  const ranked = tokens.length
+    ? content.map((n) => ({ n, s: scoreNode(n, tokens) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).map((x) => x.n)
+    : content;
+  const picked = ranked.slice(0, 12);
+  if (!picked.length) return null;
+
+  // 1-hop neighbours: entities (HAS_ENTITY) and relations (RELATES_TO) of the
+  // picked nodes, resolved to titles via the in-memory node map.
+  const pickedIds = picked.map((n) => n.id || n._id);
+  const edges = await db
+    .collection('kb_edges')
+    .find({ ...filter, source: { $in: pickedIds }, label: { $in: ['HAS_ENTITY', 'RELATES_TO'] } })
+    .limit(600)
+    .toArray();
+  const relatedBySource = new Map<string, string[]>();
+  for (const e of edges) {
+    const target = byId.get(e.target) as any;
+    const label = target?.title || e.target;
+    if (!label) continue;
+    const arr = relatedBySource.get(e.source) || [];
+    if (!arr.includes(label)) arr.push(label);
+    relatedBySource.set(e.source, arr);
+  }
+
+  const blocks = picked.map((n) => {
+    const body = (n.body || n.metadata?.description || '').slice(0, 400);
+    const related = (relatedBySource.get(n.id || n._id) || []).slice(0, 12);
+    const relLine = related.length ? `\nRelated: ${related.join(', ')}` : '';
+    return `[${n.type}] ${n.title || n.id}${body ? `\n${body}` : ''}${relLine}`;
+  });
+
+  return `The node graph holds ${nodes.length} nodes. Most relevant:\n${blocks.join('\n\n---\n\n')}`;
+}

@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken, checkRateLimit, logMessageUsage } from './auth.js';
 import { graphSearch, recallMemory, rememberMemory } from './cognee.js';
-import { retrieveContext } from './retrieval.js';
+import { retrieveContext, retrieveNodeGraphContext } from './retrieval.js';
 import { routeQuery } from './lib/router.js';
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]).catch(() => null);
@@ -178,10 +178,14 @@ export default async function handler(req: Request, res: Response) {
 
     let systemContent;
     if (kbScope) {
-      const memory = await withTimeout(recallMemory(message, { userId: user.uid }), 2500);
+      const [memory, nodeGraph] = await Promise.all([
+        withTimeout(recallMemory(message, { userId: user.uid }), 2500),
+        retrieveNodeGraphContext(user.uid, message, { kbId }).catch(() => null),
+      ]);
       const blocks = [];
       if (memory) blocks.push(`## What hypr remembers about you\n${memory}`);
       blocks.push(`## Knowledge base "${kbScope.name}"\n${kbScope.context}`);
+      if (nodeGraph) blocks.push(`## Knowledge graph (entities & relations)\n${nodeGraph}`);
       systemContent = `${depthPrompt}\n\n# Scope: knowledge base "${kbScope.name}"\nThe user is asking specifically about this knowledge base. Answer using ONLY the content below. Cite document names and source items. If the answer isn't present, say it isn't in this knowledge base and suggest what to add.\n\n${blocks.join('\n\n')}`;
     } else {
       // Otherwise ground from three sources in parallel (README §6 hybrid retrieval):
@@ -190,9 +194,10 @@ export default async function handler(req: Request, res: Response) {
       //  3. Personal memory (PSI) — what hypr knows about this user.
       const route = routeQuery(message);
       const searchType = route.mode === 'global' ? 'GRAPH_SUMMARY_COMPLETION' : mode.searchType;
-      const [cogneeAnswer, localContext, memory] = await Promise.all([
+      const [cogneeAnswer, localContext, nodeGraph, memory] = await Promise.all([
         withTimeout(graphSearch(message, { userId: user.uid, searchType, topK: mode.topK }), mode.timeout),
         retrieveContext(user.uid, message).catch(() => null),
+        retrieveNodeGraphContext(user.uid, message).catch(() => null),
         withTimeout(recallMemory(message, { userId: user.uid }), 2500),
       ]);
 
@@ -200,6 +205,7 @@ export default async function handler(req: Request, res: Response) {
       if (memory) ctxParts.push(`## What hypr remembers about you\n${memory}`);
       if (cogneeAnswer) ctxParts.push(`## Knowledge graph reasoning (${route.mode} search)\n${cogneeAnswer}`);
       if (localContext) ctxParts.push(`## Connected data (structured index)\n${localContext}`);
+      if (nodeGraph) ctxParts.push(`## Knowledge graph (entities & relations)\n${nodeGraph}`);
       const kgContext = ctxParts.length ? ctxParts.join('\n\n') : null;
 
       systemContent = kgContext

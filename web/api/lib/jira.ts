@@ -185,18 +185,22 @@ export async function snapshot({ token, cloudId, siteUrl }) {
   return { entities };
 }
 
+/** Format an ISO timestamp into a JQL `updated >= "..."` clause. Jira JQL wants
+ *  "yyyy/MM/dd HH:mm". Returns '' for a falsy cursor. */
+function jqlSince(sinceIso) {
+  if (!sinceIso) return '';
+  const d = new Date(sinceIso);
+  const fmt = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(
+    d.getDate()
+  ).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `updated >= "${fmt}"`;
+}
+
 /** Delta poll — issues updated since the cursor (JQL `updated >=`). */
 export async function pollSince({ token, cloudId, siteUrl }, sinceIso) {
   const entities = [];
-  let jql = 'order by updated DESC';
-  if (sinceIso) {
-    // Jira JQL wants "yyyy/MM/dd HH:mm"
-    const d = new Date(sinceIso);
-    const fmt = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(
-      d.getDate()
-    ).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    jql = `updated >= "${fmt}" order by updated DESC`;
-  }
+  const since = jqlSince(sinceIso);
+  const jql = since ? `${since} order by updated DESC` : 'order by updated DESC';
   const issues = await paginate(
     cloudId,
     'rest/api/3/search',
@@ -250,10 +254,11 @@ async function safeEmbedBatch(texts) {
   }
 }
 
-/** Full historical pull into the new ProjectNode/IssueNode graph, scoped per project so `linked_issues` can later be resolved into RELATES_TO edges by ingest.ts. */
-export async function jiraNodeSnapshot({ token, cloudId, siteUrl }, kbId) {
+/** Full historical pull into the new ProjectNode/IssueNode graph, scoped per project so `linked_issues` can later be resolved into RELATES_TO edges by ingest.ts. When `sinceIso` is set, only issues updated after the cursor are pulled (delta build). */
+export async function jiraNodeSnapshot({ token, cloudId, siteUrl }, kbId, sinceIso?) {
   const projects = [];
   const issues = [];
+  const since = jqlSince(sinceIso);
   try {
     const rawProjects = await paginateAll(cloudId, 'rest/api/3/project/search', token, {}, 'values');
     for (const p of rawProjects) {
@@ -261,7 +266,9 @@ export async function jiraNodeSnapshot({ token, cloudId, siteUrl }, kbId) {
       projects.push(project);
 
       try {
-        const jql = `project=${p.key} ORDER BY created ASC`;
+        const jql = since
+          ? `project=${p.key} AND ${since} ORDER BY created ASC`
+          : `project=${p.key} ORDER BY created ASC`;
         const rawIssues = await paginateAll(
           cloudId,
           'rest/api/3/search',

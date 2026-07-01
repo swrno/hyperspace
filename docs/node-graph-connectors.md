@@ -43,22 +43,32 @@ KnowledgeBase
 | `kb_nodes` | node's own globally-unique id (e.g. `gdocs::{fileId}`, `jira::issue::{id}`, `entity::{slug}`) | `{ id, type, title, body, metadata, kbId, userId, ingestedAt }` |
 | `kb_edges` | `{kbId}::{source}::{target}::{label}` | `{ source, target, label, description?, kbId, userId, ingestedAt }` |
 
-### `kbId` stand-in
+### `kbId`: real ids + stand-in
 
-`ingest.ts`'s `runInitialSync` has no real Knowledge Base concept (that lives in
-the off-limits `kb.ts`). `userId` is passed as the `kbId` stand-in throughout —
-query these collections by `kbId: <userId>` until real KB scoping is wired.
+Two paths populate the graph with different `kbId`s:
+
+- **Real KB id** — when a source is attached to a Knowledge Base
+  (`kb.ts`'s `attach-source` action), the graph is built keyed by the real
+  `knowledge_bases._id`. This is how a KB-scoped chat sees only its own graph.
+- **`userId` stand-in** — the global connect/delta path (`runInitialSync` /
+  `runDeltaSync`) has no KB context, so it still passes `userId` as `kbId`.
+
+Query these collections by the relevant `kbId` (a real KB id, or `<userId>` for
+the global path).
 
 ## Files changed
 
 | File | Change |
 |---|---|
 | `web/api/lib/schema.ts` | Node normalizers (`normalizeDocument`, `normalizeChunk`, `normalizePresentation`, `normalizeSlide`, `normalizeJiraProjectNode`, `normalizeJiraIssueNode`, `normalizeCalendarNode`, `normalizeCalendarEventNode`, `normalizeExtractedEntity`), paragraph-aware `chunkText`, `extractAdfText` (wraps existing ADF flattener) |
-| `web/api/lib/google.ts` | `gdocsNodeSnapshot`, `gslidesNodeSnapshot` (Slides API text extraction), `gcalNodeSnapshot` (fully paginated via `nextPageToken`) |
-| `web/api/lib/jira.ts` | `jiraNodeSnapshot` + `paginateAll` (uncapped pagination), full comment/issue-link fetch, ADF comment parsing |
+| `web/api/lib/google.ts` | `gdocsNodeSnapshot`, `gslidesNodeSnapshot` (Slides API text extraction), `gcalNodeSnapshot` (fully paginated via `nextPageToken`); **delta**: optional `sinceIso` — `filterModifiedSince` (Drive `modifiedTime`) for docs/slides, `updatedMin` for calendar |
+| `web/api/lib/jira.ts` | `jiraNodeSnapshot` + `paginateAll` (uncapped pagination), full comment/issue-link fetch, ADF comment parsing; **delta**: optional `sinceIso` via shared `jqlSince` helper (`updated >=` per-project JQL) |
 | `web/api/lib/graphbuild.ts` | `NODE_GRAPH_EDGES` constants + `buildNodeGraphEdges()` (pure edge assembler) |
-| `web/api/ingest.ts` | Groq-based NER (`extractEntitiesForNode`), entity co-occurrence + Jira linked-issue `RELATES_TO` edges, dedup + batched embeddings, `upsertNodeGraph`, `buildNodeGraphForProvider` (fire-and-forget after `persistAndIngest` in `runInitialSync`) |
+| `web/api/ingest.ts` | Groq-based NER (`extractEntitiesForNode`), entity co-occurrence + Jira linked-issue `RELATES_TO` edges, dedup + batched embeddings, `upsertNodeGraph`, exported `buildNodeGraphForProvider` (optional `since`); delta wired into `runDeltaSync` (jira) + `syncUser` (google, via `runInitialSync`'s `nodeGraphSince`) |
 | `web/api/graph.ts` | Read route: `mode=nodes` branch (add-only) |
+| `web/api/retrieval.ts` | `retrieveNodeGraphContext` — keyword-scored `kb_nodes` content + 1-hop `kb_edges` entities/relations (add-only) |
+| `web/api/chat.ts` | Node-graph context folded into both grounding branches (global + KB-scoped, real `kbId`) |
+| `web/api/kb.ts` | `attach-source` fires a real-`kbId` node-graph build for gdocs/gslides/jira/gcal (add-only) |
 
 ### Naming collisions resolved
 
@@ -105,18 +115,40 @@ Exposed as a `mode` branch (not a separate `/api/graph/nodes` path) because
 ```
 
 - Scoped by the **authenticated `userId`**, never a raw `kbId` param (prevents
-  reading another user's nodes; equivalent since `kbId === userId` today).
+  reading another user's nodes).
 - Strips internal fields and the large `embedding` vectors from `metadata`.
 - Caps at 2000 nodes / 5000 edges (`console.warn` on truncation); drops dangling
   edges whose endpoints fall outside the node cap.
+
+## Retrieval & delta sync
+
+**Chat consumption.** `retrieveNodeGraphContext` (in `retrieval.ts`) keyword-scores
+content nodes (`document`/`chunk`/`slide`/`presentation`/`jira_issue`/…) in
+`kb_nodes`, attaches each pick's 1-hop `HAS_ENTITY`/`RELATES_TO` neighbours from
+`kb_edges`, and strips embeddings. `chat.ts` folds it into both grounding
+branches: the global hybrid retrieval (`userId`-scoped) and the KB-scoped branch
+(real `kbId`).
+
+**Delta sync.** Reuses the existing `connection.lastPollCursor` (no
+`connections.ts` change); upserts are idempotent so a delta only narrows what's
+fetched:
+
+- **jira** — `updated >=` JQL, wired into `runDeltaSync` (fire-and-forget).
+- **gcal** — Calendar `updatedMin`.
+- **gdocs / gslides** — Drive has no cheap changes API here, so
+  `filterModifiedSince` gates selected files by `modifiedTime` (fail-open on a
+  metadata error). Wired through `syncUser`'s "Sync now" google path.
+
+**Limitation:** delta upserts add/update nodes but never delete stale ones (no
+tombstoning) — the same trade-off the live pipeline already accepts.
 
 ## Constraints honoured
 
 - **GitHub connector never touched** (`lib/github.ts` and all GitHub branches).
 - Off-limits files untouched: `auth.ts`, `oauth.ts`, `mongodb.ts`,
-  `connections.ts`, `server.ts`, `cognee.ts`, `retrieval.ts`, `chat.ts`, `kb.ts`,
-  `connectors.ts`. (`graph.ts` was later explicitly authorized, add-only, for the
-  read route.)
+  `connections.ts`, `server.ts`, `cognee.ts`, `connectors.ts`. (`graph.ts`, and
+  later `retrieval.ts` / `chat.ts` / `kb.ts`, were explicitly authorized,
+  add-only, for the retrieval-wiring work.)
 - No new npm packages.
 
 ## Verification
@@ -131,9 +163,18 @@ Exposed as a `mode` branch (not a separate `/api/graph/nodes` path) because
   connections; new fetch helpers were kept textually parallel to the existing
   battle-tested ones to narrow risk to URL/param correctness.
 
-## Not done (future work)
+## Implemented (previously "future work")
 
-1. Wire `retrieval.ts`/`chat.ts` to query `kb_nodes`/`kb_edges` so the richer
-   graph influences chat answers.
-2. Delta sync for the node graph (`jiraNodePollSince` + Google equivalents).
-3. Replace the `kbId = userId` stand-in with real KB ids from `kb.ts`.
+1. ✅ `retrieval.ts`/`chat.ts` query `kb_nodes`/`kb_edges` — the richer graph now
+   influences chat answers (see **Retrieval & delta sync**).
+2. ✅ Delta sync for the node graph — jira (`updated >=`), gcal (`updatedMin`),
+   gdocs/gslides (Drive `modifiedTime` filter).
+3. ✅ Real KB ids — `kb.ts`'s `attach-source` builds the graph keyed by the real
+   `knowledge_bases._id`; the global connect/delta path keeps the `userId`
+   stand-in.
+
+### Still open
+
+- No tombstoning: delta never deletes stale nodes/edges.
+- The global connect path still uses the `userId` stand-in (only attach-source
+  carries a real KB id).

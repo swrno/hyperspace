@@ -4,7 +4,14 @@ import { verifyToken } from './auth.js';
 import { ingest as cogneeIngest, cognify, formatConnectorPayload, ingestGitHubEntity } from './cognee.js';
 import { textFromBase64 } from './lib/pdf.js';
 import { getConnection, getAccessToken } from './connections.js';
+import { buildNodeGraphForProvider } from './ingest.js';
 import * as github from './lib/github.js';
+
+// Connectors that feed the additive Source/Chunk/Entity node graph, and the
+// OAuth provider whose stored connection holds each one's token.
+const NODE_GRAPH_PLATFORMS = ['gdocs', 'gslides', 'jira', 'gcal'];
+const oauthProviderForPlatform = (p: string) =>
+  ['gdocs', 'gslides', 'gsheets', 'gcal'].includes(p) ? 'google' : p;
 
 /** Per-KB Cognee tag so a knowledge base's graph is built only from its own
  *  documents and attached sources (README §4 — graph "based on sources"). */
@@ -179,6 +186,17 @@ export default async function handler(req: Request, res: Response) {
           const payload = formatConnectorPayload(kbId, user.uid, user.email, platform, source.items);
           cogneeIngest(payload, { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] })
             .catch((e) => console.warn('KB source Cognee ingest failed (non-fatal):', e.message));
+
+          // Additive node graph, keyed by the REAL kbId (not the userId stand-in
+          // the global connect path uses). Best-effort; never blocks the response.
+          if (NODE_GRAPH_PLATFORMS.includes(platform)) {
+            (async () => {
+              const conn = await getConnection(user.uid, oauthProviderForPlatform(platform));
+              if (!conn) return;
+              const token = await getAccessToken(conn);
+              await buildNodeGraphForProvider(user.uid, kbId, platform, source.items, token, conn);
+            })().catch((e) => console.warn(`KB node-graph build failed for ${platform} (non-fatal):`, e.message));
+          }
 
           if (platform === 'github') {
             // Deep background ingestion — runs fully async so the HTTP response
