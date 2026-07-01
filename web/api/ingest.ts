@@ -277,64 +277,10 @@ export async function syncAllDue(intervalMinutes = 30) {
 // gdocs/gslides/jira/gcal into kb_nodes/kb_edges, read by retrieval.ts's
 // retrieveNodeGraphContext (chat) and graph.ts's mode=nodes (visualisation).
 
-/**
- * LLM-based NER for one chunk/issue/event's text. Small, local duplicate of
- * cognee.ts's private (unexported, off-limits-file) extractEntities() — same
- * Groq endpoint/model/env var — using the exact prompt from the task brief.
- * Never throws; returns [] on any failure.
- */
-async function extractEntitiesForNode(text) {
-  const groqKey = process.env.GROQ_API_KEY || '';
-  if (!groqKey || !text?.trim()) return [];
-  // Retry on 429 with backoff — Groq's free tier rate-limits easily, and our NER
-  // volume competes with Cognee's own extraction. Honour Retry-After when given.
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Extract named entities from the text below.\n' +
-                'Return ONLY a valid JSON array, no explanation, no markdown fences.\n' +
-                'Each item must have: { "name": string, "type": "People|Organisation|Location|Product|Concept|Event", "description": string }\n' +
-                'If no entities are found return an empty array [].',
-            },
-            { role: 'user', content: `Text:\n${text.slice(0, 2000)}` },
-          ],
-          temperature: 0,
-          max_tokens: 500,
-        }),
-      });
-      if (res.status === 429) {
-        const retryAfter = Number(res.headers.get('retry-after'));
-        const waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(1500 * 2 ** attempt, 12000);
-        console.warn(`Node-graph NER rate-limited (429); retry ${attempt + 1}/4 in ${waitMs}ms`);
-        await new Promise((r) => setTimeout(r, waitMs));
-        continue;
-      }
-      if (!res.ok) {
-        console.warn(`Node-graph NER call failed (${res.status})`);
-        return [];
-      }
-      const data = await (res.json() as any);
-      const raw = data.choices?.[0]?.message?.content || '';
-      const match = raw.match(/\[[\s\S]*\]/);
-      if (!match) return [];
-      const parsed = JSON.parse(match[0]);
-      return Array.isArray(parsed) ? parsed.filter((e) => e?.name) : [];
-    } catch (e) {
-      console.warn('Node-graph NER extraction failed (non-fatal):', e.message);
-      return [];
-    }
-  }
-  console.warn('Node-graph NER giving up after repeated 429s');
-  return [];
-}
+// NOTE: the node graph no longer runs its own LLM NER. Cognee is the sole
+// entity/relationship extractor (via cognify) so the two pipelines don't compete
+// for Groq's rate-limited quota. The node graph keeps only structural nodes,
+// content, embeddings, gcal's structured entities, and Jira linked-issue edges.
 
 /** Populate .metadata.embedding on each EntityNode in one paced batch; never throws. */
 async function embedEntityNodesBatch(entityNodes) {
@@ -411,6 +357,11 @@ export async function buildNodeGraphForProvider(userId, kbId, provider, selected
     const entityOccurrences = [];
     const entityLinks = [];
 
+    // Structured (non-LLM) entities only — used by gcal (attendees/location).
+    // The node graph no longer runs its own LLM NER: Cognee is the sole entity
+    // extractor, so this stays a lightweight structural + content cache and does
+    // not compete with cognify for Groq quota. Content retrieval still works off
+    // the Source/Chunk nodes below.
     const addEntities = (rawEntities, sourceNodeId, sourceTitle) => {
       if (!rawEntities.length) return;
       const entityNodes = rawEntities.map((e) => normalizeExtractedEntity(e, kbId, sourceNodeId));
@@ -418,28 +369,14 @@ export async function buildNodeGraphForProvider(userId, kbId, provider, selected
       entityLinks.push(...pairwiseCooccurrenceLinks(entityNodes, sourceTitle));
     };
 
-    const runNer = async (node, textContent, sourceTitle) => {
-      const extracted = await extractEntitiesForNode(textContent);
-      addEntities(extracted, node.id, sourceTitle);
-    };
-
     if (provider === 'gdocs') {
       const { documents, chunks } = await google.gdocsNodeSnapshot(token, selectedItems, kbId, since);
       sources = documents;
       children = chunks;
-      const titleByDocId = new Map(documents.map((d) => [d.id, d.title]));
-      for (const chunk of chunks) {
-        await runNer(chunk, chunk.metadata.chunk_text_content, titleByDocId.get(chunk.metadata.parent_document_id) || 'document');
-      }
     } else if (provider === 'gslides') {
       const { presentations, slides } = await google.gslidesNodeSnapshot(token, selectedItems, kbId, since);
       sources = presentations;
       children = slides;
-      const titleByPresId = new Map(presentations.map((p) => [p.id, p.title]));
-      for (const slide of slides) {
-        if (slide.metadata.slide_text_content.startsWith('[slide ')) continue; // skip empty slides — no point NER-ing a placeholder
-        await runNer(slide, slide.metadata.slide_text_content, titleByPresId.get(slide.metadata.parent_presentation_id) || 'presentation');
-      }
     } else if (provider === 'jira') {
       const { projects, issues } = await jira.jiraNodeSnapshot(
         { token, cloudId: connection?.cloudId, siteUrl: connection?.siteUrl },
@@ -448,10 +385,6 @@ export async function buildNodeGraphForProvider(userId, kbId, provider, selected
       );
       sources = projects;
       children = issues;
-      const titleByProjId = new Map(projects.map((p) => [p.id, p.title]));
-      for (const issue of issues) {
-        await runNer(issue, issue.metadata.issue_text_content, titleByProjId.get(issue.metadata.parent_project_id) || 'project');
-      }
       // Jira linked_issues -> RELATES_TO between IssueNodes (spec's edge rule 3).
       const keyToNodeId = new Map(issues.map((i) => [i.metadata.issue_key, i.id]));
       for (const issue of issues) {

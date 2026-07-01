@@ -37,9 +37,11 @@ off-limits files (`cognee.ts`, `retrieval.ts`, `chat.ts`). So the new model was
 built as a second, parallel structure that leaves the existing flow byte-for-byte
 intact.
 
-**Accepted trade-off:** API/embedding/NER calls roughly double for these four
-platforms (once for each pipeline). Unavoidable without touching the off-limits
-files.
+**Groq contention (resolved):** the node graph originally ran its own LLM NER,
+which roughly doubled Groq calls and — because Cognee's `cognify` shares the same
+rate-limited key — starved Cognee's extraction (429s → empty Cognee graph). The
+node graph **no longer runs LLM NER**: Cognee is the sole entity/relationship
+extractor, and the node graph stays a lightweight structural + content cache.
 
 ## Data model
 
@@ -79,7 +81,7 @@ the global path).
 | `web/api/lib/google.ts` | `gdocsNodeSnapshot`, `gslidesNodeSnapshot` (Slides API text extraction), `gcalNodeSnapshot` (fully paginated via `nextPageToken`); **delta**: optional `sinceIso` — `filterModifiedSince` (Drive `modifiedTime`) for docs/slides, `updatedMin` for calendar |
 | `web/api/lib/jira.ts` | `jiraNodeSnapshot` + `paginateAll` (uncapped pagination), full comment/issue-link fetch, ADF comment parsing; **delta**: optional `sinceIso` via shared `jqlSince` helper (`updated >=` per-project JQL) |
 | `web/api/lib/graphbuild.ts` | `NODE_GRAPH_EDGES` constants + `buildNodeGraphEdges()` (pure edge assembler) |
-| `web/api/ingest.ts` | Groq-based NER (`extractEntitiesForNode`), entity co-occurrence + Jira linked-issue `RELATES_TO` edges, dedup + batched embeddings, `upsertNodeGraph`, exported `buildNodeGraphForProvider` (optional `since`); delta wired into `runDeltaSync` (jira) + `syncUser` (google, via `runInitialSync`'s `nodeGraphSince`) |
+| `web/api/ingest.ts` | Structural build (no LLM NER — Cognee is sole extractor), gcal structured entities + Jira linked-issue `RELATES_TO` edges, dedup + batched embeddings, `upsertNodeGraph`, exported `buildNodeGraphForProvider` (optional `since`); delta wired into `runDeltaSync` (jira) + `syncUser` (google, via `runInitialSync`'s `nodeGraphSince`) |
 | `web/api/graph.ts` | Read route: `mode=nodes` branch (add-only) |
 | `web/api/retrieval.ts` | `retrieveNodeGraphContext` — keyword-scored `kb_nodes` content + 1-hop `kb_edges` entities/relations (add-only) |
 | `web/api/chat.ts` | Node-graph context folded into both grounding branches (global + KB-scoped, real `kbId`) |
@@ -94,13 +96,17 @@ the live pipeline). The new functions are suffixed `…Node`
 
 ## Entity extraction
 
-- **gdocs / gslides / jira** — LLM NER over each chunk/slide/issue's text via Groq
-  (`llama-3.1-8b-instant`), producing `Entity` nodes + `HAS_ENTITY` edges.
-- **gcal** — structured, no LLM: attendees → `Entity(People)`, location →
+**Cognee is the sole LLM entity/relationship extractor.** The node graph does
+**no** LLM NER (removed — it was starving `cognify` on Groq's shared quota). What
+the node graph still produces itself, all without an LLM:
+
+- **gdocs / gslides / jira** — Source + Chunk/Slide/Issue nodes with content &
+  embeddings only (no `Entity` nodes from these platforms).
+- **gcal** — structured entities: attendees → `Entity(People)`, location →
   `Entity(Location)`, created directly from event fields.
-- **RELATES_TO** — entities co-occurring in the same NER call are linked
+- **RELATES_TO** — gcal structured entities co-occurring on an event are linked
   (`co-occurs in {source_title}`); Jira `linked_issues` link the two issue nodes
-  (`{relationship}`, e.g. `blocks`).
+  (`{relationship}`, e.g. `blocks`). Both are derived from source data, not NER.
 
 ### Efficiency
 
