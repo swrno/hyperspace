@@ -8,9 +8,24 @@ Google Docs (`gdocs`), Google Slides (`gslides`), Jira (`jira`), and Google
 Calendar (`gcal`).
 
 It runs **alongside** — never replacing — the existing pipeline
-(`snapshot()` → Mongo `kb_entities` → `entitiesToDocument()` → Cognee/Neo4j),
-which continues to power chat retrieval unchanged. The new graph is persisted to
-two new Mongo collections and exposed read-only via the graph API.
+(`snapshot()` → Mongo `kb_entities` → `entitiesToDocument()` → Cognee/Neo4j).
+The new graph is persisted to two new Mongo collections, consumed by chat
+retrieval, and exposed read-only via the graph API.
+
+## Role: permanent instant-retrieval cache (sidecar to Cognee)
+
+**Cognee/Neo4j is the source of truth** — it holds every connector (GitHub, Jira,
+Google) plus KB documents, unified per user. But Cognee isn't tightly user-scoped
+and indexes **asynchronously**, so freshly connected data isn't answerable for a
+while (see [`retrieval.ts`](../web/api/retrieval.ts)).
+
+`kb_nodes`/`kb_edges` is the fix: a **rebuildable, user-scoped cache** that grounds
+chat *instantly*, before Cognee catches up, and exposes an explicit
+`Source→Chunk→Entity→RELATES_TO` structure you can query/render without going
+through Cognee's LLM extractor. It is **not** a second source of truth — it can be
+dropped and rebuilt from the connectors at any time. GitHub deliberately stays out
+of this cache (its instant grounding comes from `kb_entities`); the cache covers
+gdocs/gslides/jira/gcal.
 
 ## Why additive
 

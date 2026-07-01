@@ -268,13 +268,14 @@ export async function syncAllDue(intervalMinutes = 30) {
   return { connections: due.length };
 }
 
-// ── Node-graph pipeline (additive, Source/Chunk/Entity scaffolding) ─────────
+// ── Node-graph pipeline (permanent instant-retrieval cache) ─────────────────
 //
-// Parallel to the KBEntity/Cognee flow above — does not replace it. Populates
-// the new KnowledgeBase -> Source -> Chunk -> Entity -> RELATES_TO -> Entity
-// model for gdocs/gslides/jira/gcal into new Mongo collections (kb_nodes,
-// kb_edges). Nothing currently reads these collections; this is scaffolding
-// for a future task that wires them to a real retrieval/visualisation path.
+// Parallel to the KBEntity/Cognee flow above — does not replace it. Cognee is
+// the source of truth; this is a rebuildable, user-scoped CACHE that grounds
+// chat instantly, before Cognee's async index catches up. Populates the
+// KnowledgeBase -> Source -> Chunk -> Entity -> RELATES_TO -> Entity model for
+// gdocs/gslides/jira/gcal into kb_nodes/kb_edges, read by retrieval.ts's
+// retrieveNodeGraphContext (chat) and graph.ts's mode=nodes (visualisation).
 
 /**
  * LLM-based NER for one chunk/issue/event's text. Small, local duplicate of
