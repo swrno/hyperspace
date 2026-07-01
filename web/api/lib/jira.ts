@@ -1,4 +1,7 @@
+// UPDATED: added additive jiraNodeSnapshot() for the new Project/Issue node graph — existing snapshot()/pollSince() untouched.
 import { normalizeJiraIssue, normalizeJiraProject, normalizeJiraSprint } from './schema.js';
+import { normalizeJiraProjectNode, normalizeJiraIssueNode } from './schema.js';
+import { embedBatch } from './embeddings.js';
 
 /**
  * Jira OAuth 2.0 (3LO) + REST client.
@@ -182,18 +185,22 @@ export async function snapshot({ token, cloudId, siteUrl }) {
   return { entities };
 }
 
+/** Format an ISO timestamp into a JQL `updated >= "..."` clause. Jira JQL wants
+ *  "yyyy/MM/dd HH:mm". Returns '' for a falsy cursor. */
+function jqlSince(sinceIso) {
+  if (!sinceIso) return '';
+  const d = new Date(sinceIso);
+  const fmt = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(
+    d.getDate()
+  ).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `updated >= "${fmt}"`;
+}
+
 /** Delta poll — issues updated since the cursor (JQL `updated >=`). */
 export async function pollSince({ token, cloudId, siteUrl }, sinceIso) {
   const entities = [];
-  let jql = 'order by updated DESC';
-  if (sinceIso) {
-    // Jira JQL wants "yyyy/MM/dd HH:mm"
-    const d = new Date(sinceIso);
-    const fmt = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(
-      d.getDate()
-    ).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    jql = `updated >= "${fmt}" order by updated DESC`;
-  }
+  const since = jqlSince(sinceIso);
+  const jql = since ? `${since} order by updated DESC` : 'order by updated DESC';
   const issues = await paginate(
     cloudId,
     'rest/api/3/search',
@@ -203,4 +210,92 @@ export async function pollSince({ token, cloudId, siteUrl }, sinceIso) {
   );
   for (const i of issues) entities.push(normalizeJiraIssue(i, siteUrl));
   return { entities };
+}
+
+// ── Node-graph snapshot (additive, Source/Chunk/Entity scaffolding) ─────────
+//
+// Parallel to snapshot()/pollSince() above — does not replace them. Populates
+// the new KnowledgeBase -> Source -> Chunk -> Entity node model consumed by
+// ingest.ts's buildNodeGraphForProvider().
+
+/**
+ * Uncapped startAt/total pagination (unlike paginate()'s maxPages ceiling),
+ * for full-pagination compliance. Safety-capped at 500 pages (50k items)
+ * against a runaway API bug — never truly infinite.
+ */
+async function paginateAll(cloudId, path, token, params: any = {}, itemsKey?: string) {
+  const out = [];
+  let startAt = 0;
+  const maxResults = 100;
+  for (let page = 0; page < 500; page++) {
+    const res = await jiraGet(cloudId, path, token, { ...params, startAt, maxResults });
+    if (!res.ok) {
+      if (res.status === 404 || res.status === 403) break;
+      throw new Error(`Jira ${res.status} for ${path}`);
+    }
+    const data = await (res.json() as any);
+    const items = (itemsKey && data[itemsKey]) || data.issues || data.values || [];
+    out.push(...items);
+    const total = data.total ?? startAt + items.length;
+    startAt += items.length;
+    if (!items.length || startAt >= total) break;
+    if (page === 499) console.warn(`paginateAll: hit 500-page safety cap for ${path}`);
+  }
+  return out;
+}
+
+async function safeEmbedBatch(texts) {
+  if (!texts.length) return [];
+  try {
+    return await embedBatch(texts);
+  } catch (e) {
+    console.warn('Node-graph embedBatch failed (non-fatal):', e.message);
+    return texts.map(() => undefined);
+  }
+}
+
+/** Full historical pull into the new ProjectNode/IssueNode graph, scoped per project so `linked_issues` can later be resolved into RELATES_TO edges by ingest.ts. When `sinceIso` is set, only issues updated after the cursor are pulled (delta build). */
+export async function jiraNodeSnapshot({ token, cloudId, siteUrl }, kbId, sinceIso?) {
+  const projects = [];
+  const issues = [];
+  const since = jqlSince(sinceIso);
+  try {
+    const rawProjects = await paginateAll(cloudId, 'rest/api/3/project/search', token, {}, 'values');
+    for (const p of rawProjects) {
+      const project = normalizeJiraProjectNode({ key: p.key, name: p.name, description: p.description }, kbId);
+      projects.push(project);
+
+      try {
+        const jql = since
+          ? `project=${p.key} AND ${since} ORDER BY created ASC`
+          : `project=${p.key} ORDER BY created ASC`;
+        const rawIssues = await paginateAll(
+          cloudId,
+          'rest/api/3/search',
+          token,
+          { jql, fields: 'summary,description,comment,issuetype,status,assignee,reporter,priority,issuelinks' },
+          'issues'
+        );
+        const projectIssues = [];
+        for (const raw of rawIssues) {
+          try {
+            projectIssues.push(normalizeJiraIssueNode(raw, project.id, kbId));
+          } catch (e) {
+            console.warn(`jiraNodeSnapshot: failed to normalize issue ${raw?.key}:`, e.message);
+          }
+        }
+        // One paced batch of issue-text embeddings per project.
+        const embeds = await safeEmbedBatch(projectIssues.map((i) => i.metadata.issue_text_content));
+        projectIssues.forEach((issue, idx) => {
+          issue.metadata.embedding = embeds[idx];
+          issues.push(issue);
+        });
+      } catch (e) {
+        console.warn(`jiraNodeSnapshot: failed to fetch issues for project ${p.key}:`, e.message);
+      }
+    }
+  } catch (e) {
+    console.warn('jiraNodeSnapshot failed:', e.message);
+  }
+  return { projects, issues };
 }

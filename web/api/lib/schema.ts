@@ -1,3 +1,4 @@
+// UPDATED: added additive node-graph schema (Document/Chunk/Presentation/Slide/Project/Issue/Calendar/CalendarEvent/Entity normalizers) + chunkText + extractAdfText — existing normalizers/entityToText untouched.
 /**
  * Internal entity schema + normalisation.
  *
@@ -284,4 +285,244 @@ export function entityToText(e) {
 export function entitiesToDocument(entities, heading) {
   const header = heading ? `# ${heading}\n\n` : '';
   return header + entities.map(entityToText).join('\n\n---\n\n');
+}
+
+// ── Node-graph schema (Source/Chunk/Entity) ─────────────────────────────────
+//
+// Additive scaffolding for the KnowledgeBase -> Source -> Chunk -> Entity
+// model (gdocs/gslides/jira/gcal). These normalizers are pure/sync and run
+// alongside — not instead of — the KBEntity normalizers above. They are
+// consumed by google.ts's *NodeSnapshot functions, jira.ts's jiraNodeSnapshot,
+// and wired together in ingest.ts. Nothing in the existing pipeline
+// (entitiesToDocument, addText, chat/retrieval) reads these nodes.
+
+/** Recursively flatten an Atlassian Document Format (ADF) node to plain text. */
+export function extractAdfText(node) {
+  return adfToText(node);
+}
+
+/**
+ * Split text into paragraph-aware chunks, capped at maxChars each (merging
+ * adjacent paragraphs greedily) and at 30 chunks total per document.
+ */
+export function chunkText(text, maxChars = 2000) {
+  const sections = String(text || '').split(/\n\n+/);
+  const chunks = [];
+  let current = '';
+  for (const section of sections) {
+    if ((current + section).length > maxChars && current) {
+      chunks.push(current.trim());
+      current = section;
+    } else {
+      current += (current ? '\n\n' : '') + section;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks.slice(0, 30);
+}
+
+/** Stable, dedupe-friendly id fragment from a free-text name. */
+function slugify(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'unnamed';
+}
+
+// ── Google Docs ──────────────────────────────────────────────────────────────
+
+export function normalizeDocument(file, description, kbId) {
+  return {
+    id: `gdocs::${file.id}`,
+    type: 'document',
+    title: file.name,
+    body: description || '',
+    metadata: {
+      platform: 'gdocs',
+      source_id: file.id,
+      name: file.name,
+      description: description || '',
+      embedding: undefined,
+      kb_id: kbId,
+    },
+  };
+}
+
+export function normalizeChunk(text, index, heading, summary, parentDocumentId, kbId) {
+  const chunkId = `${parentDocumentId}::chunk${index}`;
+  return {
+    id: chunkId,
+    type: 'chunk',
+    title: heading || `Chunk ${index + 1}`,
+    body: text,
+    metadata: {
+      chunk_id: chunkId,
+      chunk_text_content: text,
+      heading: heading || '',
+      summary: summary || '',
+      embedding: undefined,
+      parent_document_id: parentDocumentId,
+      kb_id: kbId,
+    },
+  };
+}
+
+// ── Google Slides ────────────────────────────────────────────────────────────
+
+export function normalizePresentation(file, firstSlideText, slideCount, kbId) {
+  return {
+    id: `gslides::${file.id}`,
+    type: 'presentation',
+    title: file.name,
+    body: firstSlideText || '',
+    metadata: {
+      platform: 'gslides',
+      source_id: file.id,
+      name: file.name,
+      slide_count: slideCount,
+      embedding: undefined,
+      kb_id: kbId,
+    },
+  };
+}
+
+export function normalizeSlide(slideId, index, text, parentPresentationId, kbId) {
+  const content = (text || '').trim() || `[slide ${index + 1}: no text content]`;
+  const nodeId = `${parentPresentationId}::slide${index}`;
+  return {
+    id: nodeId,
+    type: 'slide',
+    title: `Slide ${index + 1}`,
+    body: content,
+    metadata: {
+      slide_id: slideId || nodeId,
+      slide_index: index,
+      slide_text_content: content,
+      embedding: undefined,
+      parent_presentation_id: parentPresentationId,
+      kb_id: kbId,
+    },
+  };
+}
+
+// ── Jira ─────────────────────────────────────────────────────────────────────
+
+export function normalizeJiraProjectNode(raw, kbId) {
+  return {
+    id: `jira::${raw.key}`,
+    type: 'jira_project',
+    title: raw.name,
+    body: raw.description || '',
+    metadata: {
+      platform: 'jira',
+      source_id: raw.key,
+      name: raw.name,
+      description: raw.description || '',
+      kb_id: kbId,
+    },
+  };
+}
+
+export function normalizeJiraIssueNode(rawIssue, projectId, kbId) {
+  const f = rawIssue.fields || {};
+  const comments = (f.comment?.comments || []).map((c) => adfToText(c.body).trim()).filter(Boolean);
+  const issueTextContent = [f.summary || '', adfToText(f.description).trim(), ...comments]
+    .filter(Boolean)
+    .join('\n');
+  const linkedIssues = (f.issuelinks || [])
+    .map((link) => {
+      const key = link.outwardIssue?.key || link.inwardIssue?.key;
+      const relationship = link.outwardIssue ? link.type?.outward : link.type?.inward;
+      return key ? { key, relationship: relationship || 'relates to' } : null;
+    })
+    .filter(Boolean);
+  const nodeId = `jira::issue::${rawIssue.id}`;
+  return {
+    id: nodeId,
+    type: 'jira_issue',
+    title: f.summary || rawIssue.key,
+    body: issueTextContent,
+    metadata: {
+      issue_id: rawIssue.id,
+      issue_key: rawIssue.key,
+      issue_type: f.issuetype?.name || '',
+      status: f.status?.name || '',
+      assignee: f.assignee?.displayName || '',
+      reporter: f.reporter?.displayName || '',
+      priority: f.priority?.name || '',
+      issue_text_content: issueTextContent,
+      linked_issues: linkedIssues,
+      embedding: undefined,
+      parent_project_id: projectId,
+      kb_id: kbId,
+    },
+  };
+}
+
+// ── Google Calendar ──────────────────────────────────────────────────────────
+
+export function normalizeCalendarNode(raw, kbId) {
+  return {
+    id: `gcal::${raw.id}`,
+    type: 'calendar',
+    title: raw.summary || 'Calendar',
+    body: raw.description || '',
+    metadata: {
+      platform: 'gcal',
+      calendar_id: raw.id,
+      name: raw.summary || 'Calendar',
+      description: raw.description || '',
+      embedding: undefined,
+      kb_id: kbId,
+    },
+  };
+}
+
+// Note: `calendarId` here is the parent CalendarNode's full `.id` (e.g. "gcal::primary"),
+// the same convention normalizeChunk/normalizeSlide use for their parent id params.
+export function normalizeCalendarEventNode(raw, calendarId, kbId) {
+  const startRaw = raw.start?.dateTime || raw.start?.date || '';
+  const date = startRaw ? startRaw.slice(0, 10) : '';
+  const time = raw.start?.dateTime || '';
+  const attendees = (raw.attendees || []).map((a) => a.displayName || a.email).filter(Boolean);
+  const location = raw.location || '';
+  const nodeId = `${calendarId}::event::${raw.id}`;
+  return {
+    id: nodeId,
+    type: 'calendar_event',
+    title: raw.summary || '(no title)',
+    body: raw.description || '',
+    metadata: {
+      event_id: raw.id,
+      name: raw.summary || '(no title)',
+      description: raw.description || '',
+      date,
+      time,
+      attendees,
+      location,
+      embedding: undefined,
+      parent_calendar_id: calendarId,
+      kb_id: kbId,
+    },
+  };
+}
+
+// ── Extracted entities (NER + structured) ───────────────────────────────────
+
+export function normalizeExtractedEntity(entity, kbId, sourceNodeId) {
+  return {
+    id: `entity::${slugify(entity.name)}`,
+    type: 'entity',
+    title: entity.name,
+    body: entity.description || '',
+    metadata: {
+      name: entity.name,
+      entity_type: entity.type || 'Concept',
+      description: entity.description || '',
+      embedding: undefined,
+      kb_id: kbId,
+      source_node_id: sourceNodeId,
+    },
+  };
 }

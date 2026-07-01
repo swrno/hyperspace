@@ -1002,8 +1002,11 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   // Connector / knowledge-graph ingestion state
   const [connectors, setConnectors] = useState<Connectors>({}); // { [platformId]: { connected, account, status, lastSync } }
   const [connectorModal, setConnectorModal] = useState<string | null>(null); // open platform id
-  const [connectorStage, setConnectorStage] = useState<ConnectorStage>('auth'); // only 'auth' stage used now
+  const [connectorStage, setConnectorStage] = useState<ConnectorStage>('auth');
   const [connectorBusy, setConnectorBusy] = useState(false);
+  const [connectorItems, setConnectorItems] = useState<ConnectorItem[]>([]); // items available to pick after auth
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(false);
   const [rateLimitMsg, setRateLimitMsg] = useState('');
   const [showCookieConsent, setShowCookieConsent] = useState(() => !localStorage.getItem('orgmind_cookie_consent'));
   const [activeDocModal, setActiveDocModal] = useState<'terms' | 'privacy' | null>(null);
@@ -1129,12 +1132,15 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   const authorizePlatform = async (platformId: string) => {
     setConnectorBusy(true);
-    // Real OAuth disabled for UI mockup mode.
-    // if (OAUTH_PLATFORMS.includes(platformId) && idToken) {
-    //   window.location.href = `/api/auth/${platformId}/authorize?token=${encodeURIComponent(idToken)}`;
-    //   return;
-    // }
-    // Simulated: mark as connected after a short delay
+    // Real OAuth: bounce the browser to the provider's consent screen. The
+    // Firebase token rides as a query param since this is a full-page redirect,
+    // not a fetch (see authorizeHandler in api/oauth.ts). The callback returns
+    // to /?connected=<platform>, handled by the effect below.
+    if (OAUTH_PLATFORMS.includes(platformId) && idToken) {
+      window.location.href = `/api/auth/${platformId}/authorize?token=${encodeURIComponent(idToken)}`;
+      return;
+    }
+    // Non-OAuth (mockup) connectors: mark as connected after a short delay.
     setTimeout(() => {
       saveConnector(platformId, {
         connected: true,
@@ -1145,6 +1151,50 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       setConnectorBusy(false);
       closeConnector();
     }, 900);
+  };
+
+  // After authorization, open the modal on the item-selection stage and fetch
+  // the account's real items (docs / sheets / events…) to choose from.
+  const enterSelectStage = async (platformId: string) => {
+    setConnectorModal(platformId);
+    setConnectorStage('select');
+    setConnectorBusy(false);
+    setSelectedItemIds([]);
+    setConnectorItems([]);
+    if (!idToken) return;
+    setItemsLoading(true);
+    try {
+      const res = await fetch('/api/connectors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ action: 'list-items', platform: platformId }),
+      });
+      const data = await res.json();
+      setConnectorItems(data.items || []);
+    } catch (e) {
+      console.warn('Failed to list connector items:', e.message);
+    } finally {
+      setItemsLoading(false);
+    }
+  };
+
+  const toggleItem = (id: string) =>
+    setSelectedItemIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  // Persist the chosen items and kick off ingestion (server-side runInitialSync).
+  const confirmSelection = async (platformId: string) => {
+    setConnectorBusy(true);
+    setConnectorStage('ingest');
+    const selectedItems = connectorItems.filter((i) => selectedItemIds.includes(i.id));
+    await saveConnector(platformId, {
+      connected: true,
+      account: user?.email || 'connected',
+      selectedItems,
+      status: 'synced',
+      lastSync: new Date().toISOString(),
+    });
+    setConnectorBusy(false);
+    closeConnector();
   };
 
   const disconnectPlatform = async (platformId: string) => {
@@ -1196,9 +1246,12 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     const connected = params.get('connected');
     if (params.get('screen') === 'integrations') navigate('/integration');
     if (connected) {
-      // OAuth complete — just reload connector state. No item selection step.
+      // OAuth complete — refresh connector state, then open the item picker so
+      // the user chooses exactly what to ingest (`connected` holds the UI
+      // platform id, e.g. gdocs). Jira self-syncs server-side, so skip its picker.
       loadConnectors(idToken);
       window.history.replaceState({}, '', window.location.pathname);
+      if (connected !== 'jira') enterSelectStage(connected);
     }
     // eslint-disable-next-line
   }, [idToken]);
@@ -3588,6 +3641,68 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                     </button>
                   </div>
                 </>
+              )}
+
+              {/* Stage: Select items to ingest */}
+              {connectorStage === 'select' && (
+                <>
+                  <div className="px-6 py-5">
+                    {itemsLoading ? (
+                      <div className="flex items-center justify-center gap-2.5 py-10 text-[13px] font-geist text-[#8C8880]">
+                        <RefreshCw size={14} className="animate-spin" /> Loading your {p.name}…
+                      </div>
+                    ) : connectorItems.length === 0 ? (
+                      <p className="py-10 text-center text-[13px] font-geist text-[#8C8880]">
+                        No items found in your {p.name}.
+                      </p>
+                    ) : (
+                      <div className="rounded-xl border border-[#3D3A37] bg-[#1E1D1C] divide-y divide-[#33302E] overflow-hidden max-h-[300px] overflow-y-auto">
+                        {connectorItems.map((item) => {
+                          const checked = selectedItemIds.includes(item.id);
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => toggleItem(item.id)}
+                              className="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-[#252523] transition-colors"
+                            >
+                              <span className={`w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0 ${checked ? 'bg-[#8FAE97] border-[#8FAE97]' : 'border-[#4A4744]'}`}>
+                                {checked && <Check size={11} className="text-[#1E1D1C]" strokeWidth={3} />}
+                              </span>
+                              <span className="flex-1 min-w-0">
+                                <span className="block text-[13px] font-geist text-[#F4F0EB] truncate">{item.name}</span>
+                                {item.meta && <span className="block text-[11px] font-geist text-[#6B6762] truncate">{item.meta}</span>}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2.5 px-5 py-4 border-t border-[#3D3A37]">
+                    <span className="text-[12px] font-geist text-[#8C8880]">{selectedItemIds.length} selected</span>
+                    <div className="flex items-center gap-2.5">
+                      <button onClick={closeConnector} className="px-4 py-2.5 text-[13px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => confirmSelection(p.id)}
+                        disabled={connectorBusy || selectedItemIds.length === 0}
+                        className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] font-geist disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Ingest {selectedItemIds.length || ''} selected
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Stage: Ingesting */}
+              {connectorStage === 'ingest' && (
+                <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+                  <RefreshCw size={20} className="animate-spin text-[#8FAE97]" />
+                  <p className="text-[13px] font-geist text-[#C7C2BC]">Building your knowledge graph…</p>
+                  <p className="text-[11px] font-geist text-[#6B6762]">Extracting entities & relationships → Cognee</p>
+                </div>
               )}
 
             </div>
