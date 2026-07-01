@@ -55,6 +55,10 @@ const PLATFORM_NAMES: Record<string, string> = {
   github: 'GitHub', gdocs: 'Google Docs', gslides: 'Google Slides', gsheets: 'Google Sheets',
   gcal: 'Google Calendar', jira: 'Jira', slack: 'Slack', salesforce: 'Salesforce',
 };
+
+// Platforms whose real items come from the backend `list-items` action (live
+// OAuth). Everything else falls back to MOCK_PLATFORM_ITEMS (demo connectors).
+const LIVE_ITEM_PLATFORMS = ['github', 'jira', 'gdocs', 'gslides', 'gsheets', 'gcal'];
 const platformNoun = (id: string) => (id === 'github' ? 'repositories' : id === 'jira' ? 'projects' : id === 'slack' ? 'channels' : 'items');
 
 const fmtBytes = (n?: number): string => {
@@ -122,6 +126,7 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   // Dynamic items fetched from external APIs
   const [dynamicItems, setDynamicItems] = useState<Record<string, {id: string, name: string}[]>>({});
   const [isFetchingGithub, setIsFetchingGithub] = useState(false);
+  const [isFetchingItems, setIsFetchingItems] = useState(false); // live fetch for non-github OAuth platforms
   // When no GitHub token is available, ask for a PAT
   const [githubUsernameInput, setGithubUsernameInput] = useState('');
   const [githubPatInput, setGithubPatInput] = useState('');
@@ -497,7 +502,10 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                 {connectedPlatforms.map(([id, c]) => {
                   const attachedItems = kbSources.find((s) => s.platform === id)?.items || [];
                   const isExpanded = expandedPlatform === id;
-                  const availableItems = (id === 'github' && dynamicItems['github']?.length) ? dynamicItems['github'] : (MOCK_PLATFORM_ITEMS[id] || []);
+                  // Prefer live-fetched items once we've fetched them (an empty
+                  // fetched array means "connected but nothing there" — show that,
+                  // not mock). Fall back to mock only before a fetch / for demo platforms.
+                  const availableItems = dynamicItems[id] ?? (MOCK_PLATFORM_ITEMS[id] || []);
                   const filteredItems = availableItems.filter(i => i.name.toLowerCase().includes(sourceSearch.toLowerCase()));
                   const isAllFilteredSelected = filteredItems.length > 0 && filteredItems.every(i => tempSelectedItems[i.id]);
                   
@@ -539,6 +547,24 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                           }
                         } catch (e) { console.error('Failed to fetch repos from backend:', e); setNeedsGithubUsername(true); }
                         setIsFetchingGithub(false);
+                      } else if (LIVE_ITEM_PLATFORMS.includes(id) && dynamicItems[id] === undefined) {
+                        // Google/Jira: fetch the account's real items from the backend.
+                        setIsFetchingItems(true);
+                        try {
+                          const res = await fetch('/api/connectors', {
+                            method: 'POST',
+                            headers: authHeaders(),
+                            body: JSON.stringify({ action: 'list-items', platform: id }),
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setDynamicItems(prev => ({
+                              ...prev,
+                              [id]: (data.items || []).map((r: any) => ({ id: r.id, name: r.name, meta: r.meta })),
+                            }));
+                          }
+                        } catch (e) { console.error(`Failed to fetch ${id} items from backend:`, e); }
+                        setIsFetchingItems(false);
                       }
                     }
                   };
@@ -646,10 +672,10 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                           </div>
                           
                           <div className="max-h-[240px] overflow-y-auto p-2">
-                            {isFetchingGithub && id === 'github' ? (
+                            {(id === 'github' ? isFetchingGithub : isFetchingItems) ? (
                               <div className="py-6 flex flex-col items-center justify-center text-[12px] font-geist text-[#8C8880]">
                                 <Loader2 size={16} className="animate-spin mb-2 opacity-50" />
-                                Loading repositories…
+                                Loading {id === 'github' ? 'repositories' : (PLATFORM_NAMES[id] || id)}…
                               </div>
                             ) : needsGithubUsername && id === 'github' ? (
                               <div className="py-4 px-2 flex flex-col gap-3">

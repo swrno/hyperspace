@@ -30,6 +30,30 @@ const TYPE_COLOR: Record<string, string> = {
 const colorOf = (t: string) => TYPE_COLOR[t] || '#8C8880';
 const sizeOf = (n: NodeLike) => (n.type === 'KnowledgeBase' ? 16 : n.type === 'Source' ? 13 : n.type === 'Person' ? 7 : 5 + Math.min(n.degree || 0, 9));
 
+/* Map the node-graph (kb_nodes) lowercase types onto the display palette above. */
+const NODE_TYPE_DISPLAY: Record<string, string> = {
+  knowledge_base: 'KnowledgeBase', document: 'Document', chunk: 'DocumentChunk',
+  presentation: 'Source', slide: 'Slide', jira_project: 'Project', jira_issue: 'WorkItem',
+  calendar: 'Source', calendar_event: 'Event', entity: 'Entity',
+};
+
+/* Normalize the /api/graph?mode=nodes response ({id,type,title,body,metadata} +
+   stats.nodeCount) into the GraphData shape the viewer expects ({id,label,type,
+   degree,properties} + stats.nodes). Degree is derived from the edges. */
+function normalizeNodeGraph(raw: any): GraphData {
+  const degree: Record<string, number> = {};
+  for (const e of raw?.edges || []) { degree[e.source] = (degree[e.source] || 0) + 1; degree[e.target] = (degree[e.target] || 0) + 1; }
+  const nodes = (raw?.nodes || []).map((n: any) => ({
+    id: n.id,
+    label: n.title || n.id,
+    type: NODE_TYPE_DISPLAY[n.type] || n.type,
+    degree: degree[n.id] || 0,
+    properties: { ...(n.metadata || {}), ...(n.body ? { body: n.body } : {}) },
+  }));
+  const edges = (raw?.edges || []).map((e: any) => ({ source: e.source, target: e.target, label: e.label }));
+  return { nodes, edges, stats: { nodes: nodes.length, edges: edges.length } };
+}
+
 /* Custom label renderer — draws a dark pill behind the text so labels stay
    readable over light-coloured nodes (plain white text vanished on them). */
 function drawNodeLabel(context: CanvasRenderingContext2D, data: any, settings: any) {
@@ -229,7 +253,10 @@ interface GraphViewProps {
 
 export default function GraphView({ idToken, onAsk, kbId, embedded = false, refreshKey = 0 }: GraphViewProps) {
   const [view, setView] = useState<'2d' | '3d'>('2d');
-  const [mode, setMode] = useState<'structural' | 'cognee'>('cognee');
+  // Default to our node graph (kb_nodes) — it's populated instantly on ingest,
+  // unlike the Cognee graph which extracts asynchronously. Toggle to 'cognee'
+  // for the LLM-extracted view.
+  const [mode, setMode] = useState<'structural' | 'cognee'>('structural');
   const [colorBy, setColorBy] = useState<'type' | 'community'>('type');
   const [data, setData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -266,14 +293,16 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (m === 'cognee') params.set('mode', 'cognee');
+      // structural → our additive node graph (kb_nodes/kb_edges); cognee → the
+      // LLM-extracted Cognee graph.
+      params.set('mode', m === 'cognee' ? 'cognee' : 'nodes');
       if (kbId) params.set('kbId', kbId);
       const res = await fetch(`/api/graph?${params.toString()}`, {
         headers: idToken ? { Authorization: `Bearer ${idToken}` } : {}
       });
       if (res.ok) {
         const fetchedData = await res.json();
-        setData(fetchedData);
+        setData(m === 'cognee' ? fetchedData : normalizeNodeGraph(fetchedData));
         setLoading(false);
         return;
       }
@@ -319,11 +348,16 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
           <h1 className="text-[20px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-none">Knowledge Graph</h1>
           <p className="text-[12px] font-geist text-[#8C8880] mt-1.5 truncate">
             {data ? `${data.stats.nodes} nodes · ${data.stats.edges} edges` : (kbId ? 'Built from this base’s documents & sources' : 'Your unified, cross-tool graph')}
-            {mode === 'cognee' ? ' · Cognee-extracted' : ' · structural'}
+            {mode === 'cognee' ? ' · Cognee-extracted' : ' · node graph'}
             {communityCount > 1 ? ` · ${communityCount} communities` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Cognee (LLM-extracted) / Structural (our node graph) */}
+          <div className="flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
+            <button onClick={() => setMode('cognee')} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${mode === 'cognee' ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>Cognee</button>
+            <button onClick={() => setMode('structural')} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${mode === 'structural' ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>Nodes</button>
+          </div>
           {/* 2D / 3D */}
           <div className="flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
             <button onClick={() => setView('2d')} className={`flex items-center gap-1 px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${view === '2d' ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}><Network size={13} /> 2D</button>

@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { multiHopSearch } from './cognee.js';
 import { verifyToken } from './auth.js';
+import { retrieveNodeGraphContext } from './retrieval.js';
 
 export default async function appChatHandler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -96,6 +97,23 @@ export default async function appChatHandler(req: Request, res: Response) {
         }
       } catch (err) {
         console.warn('Cognee hybrid search failed:', err);
+      }
+
+      // ── Node-graph instant cache (kb_nodes) ─────────────────────────────
+      // Surfaces attached-source content (docs/issues/events) the moment it's
+      // ingested — before Cognee's async graph catches up, and even when its
+      // NER was rate-limited. This is where attached Google Docs / Jira text
+      // actually lives, so it fills the gap MongoDB docs + Cognee leave.
+      try {
+        const ngResults = await Promise.all(
+          linkedKbIds.map((kbId: string) =>
+            retrieveNodeGraphContext(userId, message, { kbId }).catch(() => null)
+          )
+        );
+        const ng = ngResults.filter((r): r is string => !!r).join('\n\n---\n\n');
+        if (ng) retrievedContext = (retrievedContext ? retrievedContext + '\n\n---\n\n' : '') + ng;
+      } catch (err) {
+        console.warn('Node-graph retrieval failed:', err);
       }
     }
 

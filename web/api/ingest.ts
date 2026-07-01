@@ -286,41 +286,54 @@ export async function syncAllDue(intervalMinutes = 30) {
 async function extractEntitiesForNode(text) {
   const groqKey = process.env.GROQ_API_KEY || '';
   if (!groqKey || !text?.trim()) return [];
-  try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Extract named entities from the text below.\n' +
-              'Return ONLY a valid JSON array, no explanation, no markdown fences.\n' +
-              'Each item must have: { "name": string, "type": "People|Organisation|Location|Product|Concept|Event", "description": string }\n' +
-              'If no entities are found return an empty array [].',
-          },
-          { role: 'user', content: `Text:\n${text.slice(0, 2000)}` },
-        ],
-        temperature: 0,
-        max_tokens: 500,
-      }),
-    });
-    if (!res.ok) {
-      console.warn(`Node-graph NER call failed (${res.status})`);
+  // Retry on 429 with backoff — Groq's free tier rate-limits easily, and our NER
+  // volume competes with Cognee's own extraction. Honour Retry-After when given.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+        body: JSON.stringify({
+          model: 'llama-3.1-8b-instant',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Extract named entities from the text below.\n' +
+                'Return ONLY a valid JSON array, no explanation, no markdown fences.\n' +
+                'Each item must have: { "name": string, "type": "People|Organisation|Location|Product|Concept|Event", "description": string }\n' +
+                'If no entities are found return an empty array [].',
+            },
+            { role: 'user', content: `Text:\n${text.slice(0, 2000)}` },
+          ],
+          temperature: 0,
+          max_tokens: 500,
+        }),
+      });
+      if (res.status === 429) {
+        const retryAfter = Number(res.headers.get('retry-after'));
+        const waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(1500 * 2 ** attempt, 12000);
+        console.warn(`Node-graph NER rate-limited (429); retry ${attempt + 1}/4 in ${waitMs}ms`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+      if (!res.ok) {
+        console.warn(`Node-graph NER call failed (${res.status})`);
+        return [];
+      }
+      const data = await (res.json() as any);
+      const raw = data.choices?.[0]?.message?.content || '';
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (!match) return [];
+      const parsed = JSON.parse(match[0]);
+      return Array.isArray(parsed) ? parsed.filter((e) => e?.name) : [];
+    } catch (e) {
+      console.warn('Node-graph NER extraction failed (non-fatal):', e.message);
       return [];
     }
-    const data = await (res.json() as any);
-    const raw = data.choices?.[0]?.message?.content || '';
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) return [];
-    const parsed = JSON.parse(match[0]);
-    return Array.isArray(parsed) ? parsed.filter((e) => e?.name) : [];
-  } catch (e) {
-    console.warn('Node-graph NER extraction failed (non-fatal):', e.message);
-    return [];
   }
+  console.warn('Node-graph NER giving up after repeated 429s');
+  return [];
 }
 
 /** Populate .metadata.embedding on each EntityNode in one paced batch; never throws. */
