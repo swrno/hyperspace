@@ -1,6 +1,9 @@
+// UPDATED: added additive node-graph pipeline (Source/Chunk/Entity + NER) persisted to kb_nodes/kb_edges, invoked best-effort after the existing persistAndIngest() call in runInitialSync — existing sync flow untouched.
 import { getDb } from './mongodb.js';
 import { addText, cognify } from './cognee.js';
-import { entitiesToDocument } from './lib/schema.js';
+import { entitiesToDocument, normalizeExtractedEntity } from './lib/schema.js';
+import { embedBatch } from './lib/embeddings.js';
+import { buildNodeGraphEdges } from './lib/graphbuild.js';
 import {
   getConnection,
   getAccessToken,
@@ -108,6 +111,15 @@ export async function runInitialSync(userId, provider, selectedItems = []) {
     }
 
     const count = await persistAndIngest(userId, provider, entities, true);
+
+    if (['gdocs', 'gslides', 'jira', 'gcal'].includes(provider)) {
+      // Additive node-graph scaffolding (Source/Chunk/Entity) — best-effort,
+      // never blocks or fails the real sync. kbId is a stand-in (userId)
+      // until a future task wires this to kb.ts's real per-KB scoping.
+      buildNodeGraphForProvider(userId, userId, provider, selectedItems, token, connection).catch((e) =>
+        console.warn(`Node-graph build failed for ${provider} (non-fatal):`, e.message)
+      );
+    }
 
     await setSyncState(userId, op, {
       initialSyncStatus: 'completed',
@@ -242,4 +254,202 @@ export async function syncAllDue(intervalMinutes = 30) {
     }
   }
   return { connections: due.length };
+}
+
+// ── Node-graph pipeline (additive, Source/Chunk/Entity scaffolding) ─────────
+//
+// Parallel to the KBEntity/Cognee flow above — does not replace it. Populates
+// the new KnowledgeBase -> Source -> Chunk -> Entity -> RELATES_TO -> Entity
+// model for gdocs/gslides/jira/gcal into new Mongo collections (kb_nodes,
+// kb_edges). Nothing currently reads these collections; this is scaffolding
+// for a future task that wires them to a real retrieval/visualisation path.
+
+/**
+ * LLM-based NER for one chunk/issue/event's text. Small, local duplicate of
+ * cognee.ts's private (unexported, off-limits-file) extractEntities() — same
+ * Groq endpoint/model/env var — using the exact prompt from the task brief.
+ * Never throws; returns [] on any failure.
+ */
+async function extractEntitiesForNode(text) {
+  const groqKey = process.env.GROQ_API_KEY || '';
+  if (!groqKey || !text?.trim()) return [];
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Extract named entities from the text below.\n' +
+              'Return ONLY a valid JSON array, no explanation, no markdown fences.\n' +
+              'Each item must have: { "name": string, "type": "People|Organisation|Location|Product|Concept|Event", "description": string }\n' +
+              'If no entities are found return an empty array [].',
+          },
+          { role: 'user', content: `Text:\n${text.slice(0, 2000)}` },
+        ],
+        temperature: 0,
+        max_tokens: 500,
+      }),
+    });
+    if (!res.ok) {
+      console.warn(`Node-graph NER call failed (${res.status})`);
+      return [];
+    }
+    const data = await (res.json() as any);
+    const raw = data.choices?.[0]?.message?.content || '';
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    const parsed = JSON.parse(match[0]);
+    return Array.isArray(parsed) ? parsed.filter((e) => e?.name) : [];
+  } catch (e) {
+    console.warn('Node-graph NER extraction failed (non-fatal):', e.message);
+    return [];
+  }
+}
+
+/** Populate .metadata.embedding on each EntityNode in one paced batch; never throws. */
+async function embedEntityNodesBatch(entityNodes) {
+  if (!entityNodes.length) return entityNodes;
+  try {
+    const embeds = await embedBatch(entityNodes.map((en) => `${en.metadata.name} ${en.metadata.description}`));
+    entityNodes.forEach((en, i) => { en.metadata.embedding = embeds[i]; });
+  } catch (e) {
+    console.warn('Node-graph entity embedBatch failed (non-fatal):', e.message);
+  }
+  return entityNodes;
+}
+
+/** Keep the first node per id — entities dedupe by name→id, so this collapses cross-chunk repeats. */
+function dedupeById(nodes) {
+  const seen = new Map();
+  for (const n of nodes) if (!seen.has(n.id)) seen.set(n.id, n);
+  return [...seen.values()];
+}
+
+/**
+ * Pairwise RELATES_TO links between entities extracted together from the
+ * same NER call, mirroring cognee.ts's own established co-occurrence pattern
+ * (entities found together in one chunk/PR/issue get linked to each other).
+ */
+function pairwiseCooccurrenceLinks(entityNodes, sourceTitle) {
+  const links = [];
+  for (let i = 0; i < entityNodes.length; i++) {
+    for (let j = i + 1; j < entityNodes.length; j++) {
+      links.push({
+        fromEntityId: entityNodes[i].id,
+        toEntityId: entityNodes[j].id,
+        description: `co-occurs in ${sourceTitle}`,
+      });
+    }
+  }
+  return links;
+}
+
+/** Upsert node-graph nodes/edges into Mongo, mirroring upsertEntities()'s pattern. */
+async function upsertNodeGraph(userId, kbId, nodes, edges) {
+  if (!nodes.length && !edges.length) return { nodes: 0, edges: 0 };
+  const db = await getDb();
+  const nodesCol = db.collection('kb_nodes');
+  const edgesCol = db.collection('kb_edges');
+  const now = new Date().toISOString();
+  for (const n of nodes) {
+    await nodesCol.updateOne({ _id: n.id }, { $set: { ...n, kbId, userId, ingestedAt: now } }, { upsert: true });
+  }
+  for (const e of edges) {
+    const edgeId = `${kbId}::${e.source}::${e.target}::${e.label}`;
+    await edgesCol.updateOne({ _id: edgeId }, { $set: { ...e, kbId, userId, ingestedAt: now } }, { upsert: true });
+  }
+  return { nodes: nodes.length, edges: edges.length };
+}
+
+/**
+ * Build and persist the new Source/Chunk/Entity graph for one platform batch.
+ * Wrapped entirely in try/catch — a failure here never affects the real sync.
+ */
+async function buildNodeGraphForProvider(userId, kbId, provider, selectedItems, token, connection) {
+  try {
+    let sources = [];
+    let children = [];
+    // One entry per (source-node, entity) occurrence — drives HAS_ENTITY edges.
+    // Deduped by id later for the node list + embedding (an entity in N chunks
+    // is one node, but keeps N edges).
+    const entityOccurrences = [];
+    const entityLinks = [];
+
+    const addEntities = (rawEntities, sourceNodeId, sourceTitle) => {
+      if (!rawEntities.length) return;
+      const entityNodes = rawEntities.map((e) => normalizeExtractedEntity(e, kbId, sourceNodeId));
+      entityOccurrences.push(...entityNodes);
+      entityLinks.push(...pairwiseCooccurrenceLinks(entityNodes, sourceTitle));
+    };
+
+    const runNer = async (node, textContent, sourceTitle) => {
+      const extracted = await extractEntitiesForNode(textContent);
+      addEntities(extracted, node.id, sourceTitle);
+    };
+
+    if (provider === 'gdocs') {
+      const { documents, chunks } = await google.gdocsNodeSnapshot(token, selectedItems, kbId);
+      sources = documents;
+      children = chunks;
+      const titleByDocId = new Map(documents.map((d) => [d.id, d.title]));
+      for (const chunk of chunks) {
+        await runNer(chunk, chunk.metadata.chunk_text_content, titleByDocId.get(chunk.metadata.parent_document_id) || 'document');
+      }
+    } else if (provider === 'gslides') {
+      const { presentations, slides } = await google.gslidesNodeSnapshot(token, selectedItems, kbId);
+      sources = presentations;
+      children = slides;
+      const titleByPresId = new Map(presentations.map((p) => [p.id, p.title]));
+      for (const slide of slides) {
+        if (slide.metadata.slide_text_content.startsWith('[slide ')) continue; // skip empty slides — no point NER-ing a placeholder
+        await runNer(slide, slide.metadata.slide_text_content, titleByPresId.get(slide.metadata.parent_presentation_id) || 'presentation');
+      }
+    } else if (provider === 'jira') {
+      const { projects, issues } = await jira.jiraNodeSnapshot(
+        { token, cloudId: connection?.cloudId, siteUrl: connection?.siteUrl },
+        kbId
+      );
+      sources = projects;
+      children = issues;
+      const titleByProjId = new Map(projects.map((p) => [p.id, p.title]));
+      for (const issue of issues) {
+        await runNer(issue, issue.metadata.issue_text_content, titleByProjId.get(issue.metadata.parent_project_id) || 'project');
+      }
+      // Jira linked_issues -> RELATES_TO between IssueNodes (spec's edge rule 3).
+      const keyToNodeId = new Map(issues.map((i) => [i.metadata.issue_key, i.id]));
+      for (const issue of issues) {
+        for (const link of issue.metadata.linked_issues || []) {
+          const targetId = keyToNodeId.get(link.key);
+          if (targetId) entityLinks.push({ fromEntityId: issue.id, toEntityId: targetId, description: link.relationship });
+        }
+      }
+    } else if (provider === 'gcal') {
+      const { calendar, events, structuredEntities } = await google.gcalNodeSnapshot(token, selectedItems, kbId);
+      sources = [calendar];
+      children = events;
+      // Structured, no NER — attendees/location become Entity nodes directly (spec's edge rule 4).
+      const candidatesByEvent = new Map(structuredEntities.map((s) => [s.eventId, s.candidates]));
+      for (const event of events) {
+        addEntities(candidatesByEvent.get(event.id) || [], event.id, calendar.title);
+      }
+    } else {
+      return;
+    }
+
+    // Dedupe entity nodes by id and embed the unique set once (an entity in N
+    // chunks is one node + one embed call, but keeps its N HAS_ENTITY edges).
+    const uniqueEntities = await embedEntityNodesBatch(dedupeById(entityOccurrences));
+
+    const kbRoot = { id: `kb:${kbId}`, type: 'knowledge_base', title: kbId, body: '', metadata: { kb_id: kbId } };
+    // Edges use every occurrence (for per-chunk HAS_ENTITY); nodes use uniques.
+    const { edges } = buildNodeGraphEdges({ kbId, sources, children, entities: entityOccurrences, entityLinks });
+    const nodes = [kbRoot, ...sources, ...children, ...uniqueEntities];
+    await upsertNodeGraph(userId, kbId, nodes, edges);
+  } catch (e) {
+    console.warn(`Node-graph build failed for ${provider} (non-fatal):`, e.message);
+  }
 }

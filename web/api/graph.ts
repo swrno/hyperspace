@@ -107,6 +107,63 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json({ nodes, edges, mode: 'cognee', stats: { nodes: nodes.length, edges: edges.length, entities: nodes.length, sources: types.length, people: 0 } });
     }
 
+    // Node-graph mode → the additive Source/Chunk/Entity scaffolding persisted
+    // to the kb_nodes/kb_edges collections (gdocs/gslides/jira/gcal). Reachable
+    // at GET /api/graph?mode=nodes&kbId=<userId>&platform=<optional>. Exposed as
+    // a mode branch (not a separate /api/graph/nodes path) because server.ts
+    // registers only app.all('/api/graph', …) and is off-limits to change.
+    if (req.query?.mode === 'nodes') {
+      const db = await getDb();
+      const platform = req.query?.platform as string | undefined;
+      const NODE_CAP = 2000;
+      const EDGE_CAP = 5000;
+
+      // Always scope by the authenticated user (kbId is the userId stand-in);
+      // never trust a raw kbId query param to read another user's nodes.
+      const nodeFilter: any = { userId: user.uid };
+      if (kbId) nodeFilter.kbId = kbId;
+      if (platform) nodeFilter['metadata.platform'] = platform;
+      const edgeFilter: any = { userId: user.uid };
+      if (kbId) edgeFilter.kbId = kbId;
+
+      const rawNodes = await db.collection('kb_nodes').find(nodeFilter).limit(NODE_CAP + 1).toArray();
+      const rawEdges = await db.collection('kb_edges').find(edgeFilter).limit(EDGE_CAP + 1).toArray();
+      if (rawNodes.length > NODE_CAP) console.warn(`/api/graph?mode=nodes: nodes truncated at ${NODE_CAP}`);
+      if (rawEdges.length > EDGE_CAP) console.warn(`/api/graph?mode=nodes: edges truncated at ${EDGE_CAP}`);
+
+      // Drop internal fields (_id/userId/kbId/ingestedAt) and the large
+      // embedding vectors — keep only what a viewer needs.
+      const stripEmbedding = (meta: any) => {
+        if (!meta || meta.embedding === undefined) return meta;
+        const { embedding, ...rest } = meta;
+        return rest;
+      };
+      const nodes = rawNodes.slice(0, NODE_CAP).map((n: any) => ({
+        id: n.id, type: n.type, title: n.title, body: n.body, metadata: stripEmbedding(n.metadata),
+      }));
+      const nodeIds = new Set(nodes.map((n) => n.id));
+      const edges = rawEdges
+        .slice(0, EDGE_CAP)
+        .map((e: any) => ({
+          source: e.source,
+          target: e.target,
+          label: e.label,
+          ...(e.description ? { description: e.description } : {}),
+        }))
+        // Drop dangling edges whose endpoints fell outside the node cap.
+        .filter((e: any) => nodeIds.has(e.source) && nodeIds.has(e.target));
+
+      const byType: Record<string, number> = {};
+      for (const n of nodes) byType[n.type] = (byType[n.type] || 0) + 1;
+
+      return res.status(200).json({
+        nodes,
+        edges,
+        stats: { nodeCount: nodes.length, edgeCount: edges.length, byType },
+        mode: 'nodes',
+      });
+    }
+
     // Structural mode per-KB graph
     if (kbId) {
       const db = await getDb();
