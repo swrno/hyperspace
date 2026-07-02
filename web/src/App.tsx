@@ -5,7 +5,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { getTimeBasedGreeting } from './greetings';
 import type {
   ActiveScreen, AdminUser, Chat, Connector, Connectors,
-  ConnectorItem, ConnectorStage, Message, Platform, Settings, User, Application,
+  Message, Platform, Settings, User, Application,
 } from './types';
 import {
   Send, Trash2, Download, Sun, Moon, Copy, Menu, X,
@@ -1064,11 +1064,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   // Connector / knowledge-graph ingestion state
   const [connectors, setConnectors] = useState<Connectors>({}); // { [platformId]: { connected, account, status, lastSync } }
   const [connectorModal, setConnectorModal] = useState<string | null>(null); // open platform id
-  const [connectorStage, setConnectorStage] = useState<ConnectorStage>('auth');
   const [connectorBusy, setConnectorBusy] = useState(false);
-  const [connectorItems, setConnectorItems] = useState<ConnectorItem[]>([]); // items available to pick after auth
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
-  const [itemsLoading, setItemsLoading] = useState(false);
   const [rateLimitMsg, setRateLimitMsg] = useState('');
   const [showCookieConsent, setShowCookieConsent] = useState(() => !localStorage.getItem('orgmind_cookie_consent'));
   const [activeDocModal, setActiveDocModal] = useState<'terms' | 'privacy' | null>(null);
@@ -1183,7 +1179,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   const openConnector = (platformId: string) => {
     setConnectorModal(platformId);
-    setConnectorStage('auth');
     setConnectorBusy(false);
   };
 
@@ -1213,50 +1208,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       setConnectorBusy(false);
       closeConnector();
     }, 900);
-  };
-
-  // After authorization, open the modal on the item-selection stage and fetch
-  // the account's real items (docs / sheets / events…) to choose from.
-  const enterSelectStage = async (platformId: string) => {
-    setConnectorModal(platformId);
-    setConnectorStage('select');
-    setConnectorBusy(false);
-    setSelectedItemIds([]);
-    setConnectorItems([]);
-    if (!idToken) return;
-    setItemsLoading(true);
-    try {
-      const res = await fetch('/api/connectors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ action: 'list-items', platform: platformId }),
-      });
-      const data = await res.json();
-      setConnectorItems(data.items || []);
-    } catch (e) {
-      console.warn('Failed to list connector items:', e.message);
-    } finally {
-      setItemsLoading(false);
-    }
-  };
-
-  const toggleItem = (id: string) =>
-    setSelectedItemIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-
-  // Persist the chosen items and kick off ingestion (server-side runInitialSync).
-  const confirmSelection = async (platformId: string) => {
-    setConnectorBusy(true);
-    setConnectorStage('ingest');
-    const selectedItems = connectorItems.filter((i) => selectedItemIds.includes(i.id));
-    await saveConnector(platformId, {
-      connected: true,
-      account: user?.email || 'connected',
-      selectedItems,
-      status: 'synced',
-      lastSync: new Date().toISOString(),
-    });
-    setConnectorBusy(false);
-    closeConnector();
   };
 
   const disconnectPlatform = async (platformId: string) => {
@@ -1308,12 +1259,11 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     const connected = params.get('connected');
     if (params.get('screen') === 'integrations') navigate('/integration');
     if (connected) {
-      // OAuth complete — refresh connector state, then open the item picker so
-      // the user chooses exactly what to ingest (`connected` holds the UI
-      // platform id, e.g. gdocs). Jira self-syncs server-side, so skip its picker.
+      // OAuth complete — refresh connector state. Integrations only links the
+      // account; picking what to ingest (repos / docs / slides…) happens per
+      // knowledge base in the Knowledge tab.
       loadConnectors(idToken);
       window.history.replaceState({}, '', window.location.pathname);
-      if (connected !== 'jira') enterSelectStage(connected);
     }
     // eslint-disable-next-line
   }, [idToken]);
@@ -3650,7 +3600,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       {/* ── Connector Modal ── */}
       {connectorModal && (() => {
         const p = PLATFORM_MAP[connectorModal];
-        const c = connectors[connectorModal];
         return (
           <div className="fixed inset-0 z-[300] flex items-center justify-center animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={closeConnector}>
             <div className="bg-[#252523] border border-[#3D3A37] rounded-2xl w-full max-w-[460px] mx-4 shadow-2xl overflow-hidden flex flex-col font-geist" onClick={e => e.stopPropagation()}>
@@ -3662,14 +3611,10 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-[18px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-tight">
-                    {connectorStage === 'auth' ? `Connect ${p.name}` : connectorStage === 'select' ? p.selectTitle : 'Building knowledge graph'}
+                    Connect {p.name}
                   </h3>
                   <p className="text-[12.5px] font-geist text-[#8C8880] leading-snug mt-1 truncate">
-                    {connectorStage === 'auth'
-                      ? 'Read-only access · you choose what to ingest'
-                      : connectorStage === 'select'
-                        ? `${c?.account || p.name} · pick what feeds the graph`
-                        : 'Extracting entities & relationships → Cognee'}
+                    Read-only access · pick what to ingest in Knowledge
                   </p>
                 </div>
                 <button onClick={closeConnector} className="text-[#6B6762] hover:text-[#F4F0EB] transition-colors shrink-0 -mt-1 -mr-1 p-1">
@@ -3677,95 +3622,30 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 </button>
               </div>
 
-              {/* Stage: Authorize */}
-              {connectorStage === 'auth' && (
-                <>
-                  <div className="px-6 py-5">
-                    <p className="text-[13px] font-geist text-[#C7C2BC] leading-relaxed mb-4">{p.authBlurb}</p>
-                    <div className="rounded-xl border border-[#3D3A37] bg-[#1E1D1C] divide-y divide-[#33302E] overflow-hidden">
-                      {p.scopes.map((s, i) => (
-                        <div key={i} className="flex items-center gap-3 px-3.5 py-3">
-                          <Check size={15} className="text-[#8FAE97] shrink-0" strokeWidth={2.75} />
-                          <span className="text-[12.5px] font-geist text-[#C7C2BC]">{s}</span>
-                        </div>
-                      ))}
+              {/* Authorize — item selection happens per-KB in the Knowledge tab */}
+              <div className="px-6 py-5">
+                <p className="text-[13px] font-geist text-[#C7C2BC] leading-relaxed mb-4">{p.authBlurb}</p>
+                <div className="rounded-xl border border-[#3D3A37] bg-[#1E1D1C] divide-y divide-[#33302E] overflow-hidden">
+                  {p.scopes.map((s, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3.5 py-3">
+                      <Check size={15} className="text-[#8FAE97] shrink-0" strokeWidth={2.75} />
+                      <span className="text-[12.5px] font-geist text-[#C7C2BC]">{s}</span>
                     </div>
-                    <p className="mt-3.5 text-[11px] font-geist text-[#6B6762] leading-relaxed">
-                      Read-only and revocable anytime. hypr never writes to your {p.name}.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-[#3D3A37]">
-                    <button onClick={closeConnector} className="px-4 py-2.5 text-[13px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
-                      Cancel
-                    </button>
-                    <button onClick={() => authorizePlatform(p.id)} disabled={connectorBusy} className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] font-geist disabled:cursor-wait">
-                      {connectorBusy ? (<><RefreshCw size={13} className="animate-spin" /> Authorizing…</>) : (<>Authorize {p.name}</>)}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {/* Stage: Select items to ingest */}
-              {connectorStage === 'select' && (
-                <>
-                  <div className="px-6 py-5">
-                    {itemsLoading ? (
-                      <div className="flex items-center justify-center gap-2.5 py-10 text-[13px] font-geist text-[#8C8880]">
-                        <RefreshCw size={14} className="animate-spin" /> Loading your {p.name}…
-                      </div>
-                    ) : connectorItems.length === 0 ? (
-                      <p className="py-10 text-center text-[13px] font-geist text-[#8C8880]">
-                        No items found in your {p.name}.
-                      </p>
-                    ) : (
-                      <div className="rounded-xl border border-[#3D3A37] bg-[#1E1D1C] divide-y divide-[#33302E] overflow-hidden max-h-[300px] overflow-y-auto">
-                        {connectorItems.map((item) => {
-                          const checked = selectedItemIds.includes(item.id);
-                          return (
-                            <button
-                              key={item.id}
-                              onClick={() => toggleItem(item.id)}
-                              className="w-full flex items-center gap-3 px-3.5 py-3 text-left hover:bg-[#252523] transition-colors"
-                            >
-                              <span className={`w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0 ${checked ? 'bg-[#8FAE97] border-[#8FAE97]' : 'border-[#4A4744]'}`}>
-                                {checked && <Check size={11} className="text-[#1E1D1C]" strokeWidth={3} />}
-                              </span>
-                              <span className="flex-1 min-w-0">
-                                <span className="block text-[13px] font-geist text-[#F4F0EB] truncate">{item.name}</span>
-                                {item.meta && <span className="block text-[11px] font-geist text-[#6B6762] truncate">{item.meta}</span>}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-2.5 px-5 py-4 border-t border-[#3D3A37]">
-                    <span className="text-[12px] font-geist text-[#8C8880]">{selectedItemIds.length} selected</span>
-                    <div className="flex items-center gap-2.5">
-                      <button onClick={closeConnector} className="px-4 py-2.5 text-[13px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => confirmSelection(p.id)}
-                        disabled={connectorBusy || selectedItemIds.length === 0}
-                        className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] font-geist disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Ingest {selectedItemIds.length || ''} selected
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* Stage: Ingesting */}
-              {connectorStage === 'ingest' && (
-                <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-                  <RefreshCw size={20} className="animate-spin text-[#8FAE97]" />
-                  <p className="text-[13px] font-geist text-[#C7C2BC]">Building your knowledge graph…</p>
-                  <p className="text-[11px] font-geist text-[#6B6762]">Extracting entities & relationships → Cognee</p>
+                  ))}
                 </div>
-              )}
+                <p className="mt-3.5 text-[11px] font-geist text-[#6B6762] leading-relaxed">
+                  Read-only and revocable anytime. hypr never writes to your {p.name}.
+                  Choose which {p.nounPlural} feed each graph from the Knowledge tab.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-[#3D3A37]">
+                <button onClick={closeConnector} className="px-4 py-2.5 text-[13px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
+                  Cancel
+                </button>
+                <button onClick={() => authorizePlatform(p.id)} disabled={connectorBusy} className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] font-geist disabled:cursor-wait">
+                  {connectorBusy ? (<><RefreshCw size={13} className="animate-spin" /> Authorizing…</>) : (<>Authorize {p.name}</>)}
+                </button>
+              </div>
 
             </div>
           </div>
