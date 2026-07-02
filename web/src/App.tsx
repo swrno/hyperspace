@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, type ReactNode } from 'react';
+import React, { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -210,6 +210,54 @@ const parseMessageWithThink = (content: string) => {
   return { reasoning: null, content };
 };
 
+/* Flatten react-markdown children (strings, nested elements) into raw code text. */
+const extractCodeText = (node: ReactNode): string => {
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(extractCodeText).join('');
+  if (React.isValidElement(node)) return extractCodeText((node.props as { children?: ReactNode }).children);
+  return '';
+};
+
+/* Fenced code block styled like Claude's: language label + copy button in a
+   header bar, hljs-highlighted body on the app's dark surface. */
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  const highlighted = useMemo(() => {
+    if (language && hljs.getLanguage(language)) {
+      return hljs.highlight(code, { language, ignoreIllegals: true }).value;
+    }
+    const auto = hljs.highlightAuto(code);
+    return auto.relevance > 5 ? auto.value : null;
+  }, [language, code]);
+  const copy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <div className="my-3 rounded-xl border border-[#3D3A37] bg-[#161514] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#1E1D1C] border-b border-[#3D3A37]">
+        <span className="text-[11px] text-[#8C8880] font-geist-mono lowercase select-none">{language || 'text'}</span>
+        <button
+          onClick={copy}
+          className="flex items-center gap-1.5 text-[11px] text-[#8C8880] hover:text-[#F4F0EB] transition-colors"
+          aria-label="Copy code"
+        >
+          {copied ? <Check size={12} className="text-[#C9A66B]" /> : <Copy size={12} />}
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="p-4 overflow-x-auto leading-relaxed">
+        {highlighted !== null
+          ? <code className="hljs font-geist-mono text-[12.5px]" style={{ background: 'transparent', padding: 0 }} dangerouslySetInnerHTML={{ __html: highlighted }} />
+          : <code className="font-geist-mono text-[12.5px] text-[#C9D1D9]">{code}</code>}
+      </pre>
+    </div>
+  );
+}
+
 /* On-brand GFM markdown for chat — no `prose`, explicit dark-surface styling. */
 const mdComponents: Components = {
   p: ({ children }) => <p className="my-2 leading-relaxed first:mt-0 last:mb-0">{children}</p>,
@@ -229,7 +277,14 @@ const mdComponents: Components = {
       ? <code className={`${className || ''} font-geist-mono text-[12.5px]`}>{children}</code>
       : <code className="px-1.5 py-0.5 rounded-md bg-[#161514] border border-[#3D3A37] text-[#D8B48C] text-[12.5px] font-geist-mono">{children}</code>
   ),
-  pre: ({ children }) => <pre className="my-2.5 p-3.5 rounded-xl bg-[#161514] border border-[#3D3A37] overflow-x-auto leading-relaxed">{children}</pre>,
+  pre: ({ children }) => {
+    const child = React.Children.toArray(children)[0];
+    const props = React.isValidElement(child)
+      ? (child.props as { className?: string; children?: ReactNode })
+      : { className: '', children };
+    const match = /language-([\w+-]+)/.exec(props.className || '');
+    return <CodeBlock language={match?.[1] || ''} code={extractCodeText(props.children).replace(/\n$/, '')} />;
+  },
   table: ({ children }) => <div className="my-2.5 overflow-x-auto rounded-lg border border-[#3D3A37]"><table className="w-full text-[13px] border-collapse">{children}</table></div>,
   thead: ({ children }) => <thead className="bg-[#1E1D1C]">{children}</thead>,
   th: ({ children }) => <th className="text-left font-semibold text-[#F4F0EB] px-3 py-2 border-b border-[#3D3A37]">{children}</th>,
@@ -2993,7 +3048,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 {/* backdrop */}
                 <div className="fixed inset-0 z-40" onClick={() => setAppModelDropdownOpen(false)} />
                 {/* dropdown */}
-                <div className="absolute bottom-full left-0 mb-2 w-[280px] bg-[#1E1D1C] border border-[#3D3A37] rounded-[14px] shadow-2xl z-50 overflow-hidden">
+                <div className="absolute bottom-full left-0 mb-2 w-[272px] bg-[#1E1D1C] border border-[#3D3A37] rounded-[14px] shadow-2xl z-50 overflow-hidden">
                   <div className="p-1.5 space-y-1">
                     {APP_MODELS.map((m) => (
                       <button
@@ -3002,20 +3057,20 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                           updateApp(app.id, { model: m.id });
                           setAppModelDropdownOpen(false);
                         }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-left transition-colors ${
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-[10px] text-left transition-colors ${
                           m.id === app.model ? 'bg-[#2A2826]' : 'hover:bg-[#252523]'
                         }`}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-[13.5px] font-semibold text-[#F4F0EB]">{m.name}</span>
+                            <span className="text-[13px] font-semibold text-[#F4F0EB]">{m.name}</span>
                             {m.badge && (
                               <span className="px-1.5 py-0.5 bg-[#C9A66B]/15 text-[#C9A66B] text-[9px] font-bold uppercase tracking-wider rounded-md border border-[#C9A66B]/25">
                                 {m.badge}
                               </span>
                             )}
                           </div>
-                          <p className="text-[11.5px] text-[#6B6762] mt-0.5">{m.desc}</p>
+                          <p className="text-[11px] text-[#6B6762] mt-0.5 leading-snug">{m.desc}</p>
                         </div>
                         {m.id === app.model && (
                           <Check size={14} className="text-[#C9A66B] shrink-0" />
@@ -3023,10 +3078,10 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                       </button>
                     ))}
                   </div>
-                  <div className="border-t border-[#3D3A37] px-3 py-2.5">
+                  <div className="border-t border-[#3D3A37] px-3 py-1.5">
                     <button
                       onClick={() => setAppModelDropdownOpen(false)}
-                      className="w-full flex items-center justify-between text-[12px] text-[#8C8880] hover:text-[#F4F0EB] transition-colors py-1"
+                      className="w-full flex items-center justify-between text-[11.5px] text-[#8C8880] hover:text-[#F4F0EB] transition-colors py-1"
                     >
                       <span>More models in Settings</span>
                       <ChevronRight size={12} />
