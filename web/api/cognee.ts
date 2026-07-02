@@ -38,7 +38,7 @@
  */
 
 import { configured, runCypher, ensureSchema } from './lib/neo4j.js';
-import { embed, embedBatch, chunkText } from './lib/embeddings.js';
+import { embed, embedBatch, semanticChunkText } from './lib/embeddings.js';
 
 ensureSchema().catch((e: any) => console.warn('Neo4j schema setup warning:', e.message));
 
@@ -68,19 +68,19 @@ async function extractEntities(text: string, groqKey: string): Promise<Extracted
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         messages: [
           {
             role: 'system',
             content:
-              'Extract key named entities from the text. Return ONLY a valid JSON array, no explanation.\n' +
-              'Each item: {"name":"...","description":"one sentence","type":"People|Organisation|Product|Location|Concept|Technology|Event"}.\n' +
-              'Limit to the 5 most important entities.',
+              'Extract the salient named entities from the text. Return ONLY a valid JSON array, no explanation.\n' +
+              'Each item: {"name":"...","description":"1-2 sentences: what it is AND why it matters in this text","type":"People|Organisation|Product|Location|Concept|Technology|Event"}.\n' +
+              'Include up to 15 distinct, specific entities (skip generic filler). Prefer concrete, informative descriptions grounded in the text.',
           },
-          { role: 'user', content: text.slice(0, 2000) },
+          { role: 'user', content: text.slice(0, 4000) },
         ],
         temperature: 0,
-        max_tokens: 400,
+        max_tokens: 1500,
       }),
     });
     if (!res.ok) return [];
@@ -90,7 +90,7 @@ async function extractEntities(text: string, groqKey: string): Promise<Extracted
     if (!match) return [];
     const parsed = JSON.parse(match[0]);
     return Array.isArray(parsed)
-      ? parsed.slice(0, 5).filter((e: any) => e?.name && e?.description)
+      ? parsed.slice(0, 15).filter((e: any) => e?.name && e?.description)
       : [];
   } catch { return []; }
 }
@@ -153,7 +153,7 @@ export async function addText(
   if (!configured() || !text?.trim()) return null;
 
   try {
-    const rawChunks = chunkText(text);
+    const rawChunks = await semanticChunkText(text);
     if (!rawChunks.length) return null;
 
     const groqKey = process.env.GROQ_API_KEY || '';
@@ -163,7 +163,13 @@ export async function addText(
     const docNodeId = docId || uid();
     const docNodeName = docName || rawChunks[0].split('\n')[0].slice(0, 120);
 
-    const chunkEmbeddings = await embedBatch(rawChunks, 'RETRIEVAL_DOCUMENT');
+    // Contextual embeddings — prefix the document name so each chunk vector
+    // carries document context (better retrieval). The stored chunk_text_content
+    // below stays the raw chunk; only the embedding input is contextualized.
+    const chunkEmbeddings = await embedBatch(
+      rawChunks.map((c) => `${docNodeName}\n\n${c}`),
+      'RETRIEVAL_DOCUMENT',
+    );
 
     const chunkRows = rawChunks.map((t, i) => ({
       chunk_id: uid(), chunk_text_content: t, embedding: chunkEmbeddings[i],
