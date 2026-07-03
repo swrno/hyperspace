@@ -308,8 +308,9 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
         setKbs(kbs.map((k) =>
           k.id === kbId ? { ...k, sources: [...(k.sources || []).filter((s) => s.platform !== platform), data.source], updatedAt: new Date().toISOString() } : k
         ));
-        // Start polling progress for GitHub ingestion
-        if (platform === 'github' && items.length > 0) {
+        // Start polling ingest progress for any live connector (GitHub deep
+        // ingest, or the Cognee + node-graph build for gdocs/gslides/jira/gcal).
+        if (LIVE_ITEM_PLATFORMS.includes(platform) && items.length > 0) {
           setIngestProgress(prev => ({ ...prev, [kbId]: { phase: 'Starting…', pct: 2, done: false } }));
           startIngestPolling(kbId);
         }
@@ -582,7 +583,7 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                   };
                   
                   const kbIngest = active ? ingestProgress[active.id] : undefined;
-                  const showProgress = !isExpanded && id === 'github' && !!kbIngest && attachedItems.length > 0;
+                  const showProgress = !isExpanded && LIVE_ITEM_PLATFORMS.includes(id) && !!kbIngest && attachedItems.length > 0;
 
                   return (
                     <div key={id} className={`card-elev rounded-2xl overflow-hidden transition-all h-fit ${isExpanded ? 'border-[#57534E]' : ''}`}>
