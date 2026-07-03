@@ -37,7 +37,7 @@
  *   PRComment.embedding  = embed(comment)
  */
 
-import { configured, runCypher, ensureSchema } from './lib/neo4j.js';
+import { configured, runCypher, ensureSchema, int } from './lib/neo4j.js';
 import { embed, embedBatch, semanticChunkText } from './lib/embeddings.js';
 
 ensureSchema().catch((e: any) => console.warn('Neo4j schema setup warning:', e.message));
@@ -383,7 +383,7 @@ export async function vectorSearch(
               nxt.chunk_text_content  AS nextText,
               score
        ORDER BY score DESC LIMIT $topK`,
-      { topK: topK * 2, embedding: queryEmbedding, kbId: kbId || '', userId: userId || '' },
+      { topK: int(topK * 2), embedding: queryEmbedding, kbId: kbId || '', userId: userId || '' },
     );
     return [...new Set(
       records.map((r: any) => [r.prevText, r.text, r.nextText].filter(Boolean).join('\n')).filter(Boolean)
@@ -412,7 +412,7 @@ export async function graphSearch(
        RETURN c.chunk_text_content AS text, score,
               collect(DISTINCT rc.chunk_text_content)[..2] AS relatedChunks
        ORDER BY score DESC LIMIT $topK`,
-      { query: escaped, kbId: kbId || '', userId: userId || '', topK },
+      { query: escaped, kbId: kbId || '', userId: userId || '', topK: int(topK) },
     );
     const parts = records.map((r: any) => {
       let t = r.text || '';

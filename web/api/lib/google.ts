@@ -303,21 +303,45 @@ export async function gslidesNodeSnapshot(token, selectedItems, kbId, sinceIso?)
     if (!item.id) continue;
     try {
       const pres = await fetchSlidesPresentation(token, item.id);
-      if (!pres) continue;
-      const rawSlides = pres.slides || [];
-      const slideTexts = rawSlides.map((s, i) => extractSlideText(s) || `[slide ${i + 1}: no text content]`);
-      const firstSlideText = rawSlides.length ? extractSlideText(rawSlides[0]) : '';
-      // One paced batch per presentation: [presentation summary text, ...slide texts].
-      const embeds = await safeEmbedBatch([`${item.name}\n${firstSlideText}`, ...slideTexts]);
+      const rawSlides = pres?.slides || [];
+      const slideTexts = rawSlides.map((s) => extractSlideText(s));
+      const hasStructuredText = slideTexts.some((t) => t.trim());
 
-      const presentation = normalizePresentation({ id: item.id, name: item.name }, firstSlideText, rawSlides.length, kbId);
-      presentation.metadata.embedding = embeds[0];
-      presentations.push(presentation);
-
-      for (let i = 0; i < rawSlides.length; i++) {
-        const slide = normalizeSlide(rawSlides[i].objectId, i, extractSlideText(rawSlides[i]), presentation.id, kbId);
-        slide.metadata.embedding = embeds[i + 1];
-        slides.push(slide);
+      if (rawSlides.length && hasStructuredText) {
+        // Slides API worked — keep per-slide structure.
+        const firstSlideText = slideTexts[0] || '';
+        const embeds = await safeEmbedBatch([
+          `${item.name}\n${firstSlideText}`,
+          ...slideTexts.map((t, i) => t || `[slide ${i + 1}: no text content]`),
+        ]);
+        const presentation = normalizePresentation({ id: item.id, name: item.name }, firstSlideText, rawSlides.length, kbId);
+        presentation.metadata.embedding = embeds[0];
+        presentations.push(presentation);
+        for (let i = 0; i < rawSlides.length; i++) {
+          const slide = normalizeSlide(rawSlides[i].objectId, i, slideTexts[i] || `[slide ${i + 1}: no text content]`, presentation.id, kbId);
+          slide.metadata.embedding = embeds[i + 1];
+          slides.push(slide);
+        }
+      } else {
+        // Slides API unavailable/empty (e.g. Slides API not enabled) — fall back
+        // to Drive export text, the same reliable path gdocs uses. Chunks stand
+        // in for slides so the content is still retrievable.
+        const text = await exportFileText(token, item.id, 'gslides');
+        if (!text) {
+          console.warn(`gslidesNodeSnapshot: no content for ${item.id} (Slides API and Drive export both empty)`);
+          continue;
+        }
+        const rawChunks = chunkText(text);
+        const description = (text.split(/\n\n+/).find((p) => p.trim()) || '').slice(0, 300);
+        const embeds = await safeEmbedBatch([`${item.name}\n${description}`, ...rawChunks]);
+        const presentation = normalizePresentation({ id: item.id, name: item.name }, description, rawChunks.length, kbId);
+        presentation.metadata.embedding = embeds[0];
+        presentations.push(presentation);
+        for (let i = 0; i < rawChunks.length; i++) {
+          const slide = normalizeSlide(`${item.id}-p${i}`, i, rawChunks[i], presentation.id, kbId);
+          slide.metadata.embedding = embeds[i + 1];
+          slides.push(slide);
+        }
       }
     } catch (e) {
       console.warn(`gslidesNodeSnapshot failed for ${item.id}:`, e.message);
