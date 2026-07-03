@@ -161,6 +161,14 @@
 .btn-bump-dark:hover { background: #3d3a37; }
 .btn-bump-dark:active { box-shadow: 0 2px 0 0 #1a1917, 0 3px 9px rgba(0, 0, 0, 0.35); }
 
+.btn-bump-gold {
+  background: #c9a66b;
+  color: #1a1917;
+  box-shadow: 0 4px 0 0 #8f7444, 0 7px 16px rgba(0, 0, 0, 0.3);
+}
+.btn-bump-gold:hover { background: #d3b078; }
+.btn-bump-gold:active { box-shadow: 0 2px 0 0 #8f7444, 0 3px 9px rgba(0, 0, 0, 0.3); }
+
 .btn-bump-emerald {
   background: #34d399;
   color: #06281d;
@@ -192,21 +200,18 @@
   animation: hypr-shimmer 2.4s linear infinite;
 }
 
-/* Elevated surface card with a soft inner top highlight */
+/* Flat surface card — hairline border, no shadow. Elevation is expressed
+   through background steps, not glows. */
 .card-elev {
-  background: linear-gradient(180deg, #2c2a28 0%, #262422 100%);
-  border: 1px solid #3d3a37;
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
-    0 8px 24px rgba(0, 0, 0, 0.22);
+  background: #2b2927;
+  border: 1px solid #383533;
 }
 .card-elev-hover {
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .card-elev-hover:hover {
-  border-color: #57534e;
-  transform: translateY(-2px);
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
-    0 14px 34px rgba(0, 0, 0, 0.3);
+  border-color: #4a4744;
+  background: #2e2c2a;
 }
 
 .font-martina-italic {

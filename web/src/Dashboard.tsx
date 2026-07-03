@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowRight, Plus, Database, Blocks, Network, Share2, FileText, Boxes,
+  ArrowRight, ArrowUpRight, Plus, Database, FileText, Boxes,
   TrendingUp, PieChart, BarChart3, History, GitPullRequest, GitCommitHorizontal,
   CalendarDays, FolderGit2, CircleDot, User, Target, ExternalLink, Layers,
-  Search, type LucideIcon,
+  type LucideIcon,
 } from 'lucide-react';
-import { StatCard, AreaChart, Donut, BarList, Skeleton } from './charts';
+import { AreaChart, Donut, BarList, Skeleton } from './charts';
 import type {
   ActiveScreen, Connectors, PlatformIconFn, RecentItem, Stats, StatsConnection, User as AppUser,
 } from './types';
@@ -107,6 +107,7 @@ interface DashboardProps {
   onAsk?: (q: string) => void;
   platformIcon?: PlatformIconFn;
   kbsCount?: number;
+  appsCount?: number;
 }
 
 interface SourceRow extends MetaEntry {
@@ -117,15 +118,14 @@ interface SourceRow extends MetaEntry {
   syncStatus?: StatsConnection['initialSyncStatus'];
 }
 
-/* Small framed section header used across the analytics panels. */
-function PanelHead({ Icon, color, title, hint }: { Icon: LucideIcon; color: string; title: string; hint?: string }) {
+/* Quiet section header used across the analytics panels — monochrome icon,
+   title, optional right-aligned hint. Color stays in the data, not the chrome. */
+function PanelHead({ Icon, title, hint }: { Icon: LucideIcon; title: string; hint?: string }) {
   return (
-    <div className="flex items-center gap-2 mb-4">
-      <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + '1f', border: `1px solid ${color}38` }}>
-        <Icon size={14.5} style={{ color }} strokeWidth={1.9} />
-      </span>
-      <h3 className="text-[14px] font-geist font-semibold text-[#F4F0EB] tracking-tight">{title}</h3>
-      {hint && <span className="text-[11.5px] font-geist text-[#6B6762] ml-auto">{hint}</span>}
+    <div className="flex items-center gap-2.5 mb-5">
+      <Icon size={15} className="text-[#8C8880] shrink-0" strokeWidth={1.9} />
+      <h3 className="text-[13.5px] font-geist font-semibold text-[#F4F0EB] tracking-tight">{title}</h3>
+      {hint && <span className="text-[11.5px] font-geist text-[#6B6762] ml-auto tabular-nums">{hint}</span>}
     </div>
   );
 }
@@ -134,8 +134,43 @@ function EmptyHint({ text }: { text: string }) {
   return <p className="text-[12.5px] font-geist text-[#8C8880] py-10 text-center">{text}</p>;
 }
 
-export default function Dashboard({ user, idToken, connectors = {}, onNavigate, onAsk, platformIcon, kbsCount = 0 }: DashboardProps) {
-  const [query, setQuery] = useState('');
+/* KPI card: label top-left, quiet arrow top-right, big number, one muted
+   meta line. Flat surfaces, hairline borders — no gradients, no glow.
+   `hero` renders the single solid-accent variant (flat gold, dark ink). */
+function KpiCard({ label, value, chip, chipHint, hero, onClick }: {
+  label: string; value: string; chip?: string; chipHint?: string; hero?: boolean; onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`group rounded-xl p-5 flex flex-col text-left transition-[background-color,border-color,transform] duration-150 active:translate-y-[2px] ${hero
+        ? 'bg-[#C9A66B] hover:bg-[#CEAC72]'
+        : 'card-elev card-elev-hover'}`}
+    >
+      <div className="flex items-start justify-between gap-2 w-full">
+        <span className={`text-[12.5px] font-geist font-medium truncate ${hero ? 'text-[#1A1917]/70' : 'text-[#9C968E]'}`}>{label}</span>
+        <ArrowUpRight
+          size={15}
+          strokeWidth={1.9}
+          className={`shrink-0 -mt-0.5 -mr-0.5 transition-all duration-150 group-hover:translate-x-px group-hover:-translate-y-px ${hero
+            ? 'text-[#1A1917]/50 group-hover:text-[#1A1917]'
+            : 'text-[#57534E] group-hover:text-[#C7C2BC]'}`}
+        />
+      </div>
+      <p className={`text-[30px] font-geist font-semibold tracking-tight tabular-nums leading-none mt-5 ${hero ? 'text-[#1A1917]' : 'text-[#F4F0EB]'}`}>{value}</p>
+      <div className="flex items-center gap-2 mt-3.5 min-h-[20px]">
+        {chip && (
+          <span className={`text-[10.5px] font-geist font-semibold tabular-nums shrink-0 px-1.5 py-[3px] rounded-md leading-none ${hero
+            ? 'bg-[#1A1917]/15 text-[#1A1917]'
+            : 'bg-[#33302E] text-[#C7C2BC]'}`}>{chip}</span>
+        )}
+        {chipHint && <span className={`text-[11.5px] font-geist truncate ${hero ? 'text-[#1A1917]/65' : 'text-[#8C8880]'}`}>{chipHint}</span>}
+      </div>
+    </button>
+  );
+}
+
+export default function Dashboard({ user, idToken, connectors = {}, onNavigate, onAsk, platformIcon, kbsCount = 0, appsCount = 0 }: DashboardProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -233,13 +268,12 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
 
   const recent: RecentItem[] = view.recent || [];
 
-  const appsCount = (() => { try { return JSON.parse(localStorage.getItem('hs_apps') || '[]').length; } catch { return 0; } })();
   const suggestions = [
     'What changed across my repos this week?',
     'Summarize open work items and their owners',
     'Which pull requests reference Jira tickets?',
   ];
-  const submitAsk = (q?: string) => { const t = (q ?? query).trim(); if (t) onAsk?.(t); };
+  const submitAsk = (q: string) => { const t = q.trim(); if (t) onAsk?.(t); };
 
   /* ── Skeleton (first paint only) ──────────────────────────────────────── */
   if (loading && !stats) {
@@ -249,10 +283,8 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
           {/* header */}
           <Skeleton className="h-9 w-72 rounded-lg" />
           <Skeleton className="h-4 w-56 rounded mt-3" />
-          {/* ask bar */}
-          <Skeleton className="h-12 w-full rounded-2xl mt-7" />
           {/* KPI strip */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-7">
             {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[116px] rounded-2xl" />)}
           </div>
           {/* ingestion chart + composition donut */}
@@ -285,7 +317,7 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
               <span className="text-[#4A4744]">·</span>
               <span>{connectedCount} source{connectedCount === 1 ? '' : 's'} connected</span>
               {anyIngesting && (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#2A2318] border border-[#5A4A28] text-[11px] font-medium text-[#C9A66B]">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#2C2A28] border border-[#3D3A37] text-[11px] font-medium text-[#A8A39B]">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#C9A66B] animate-pulse" /> Syncing
                 </span>
               )}
@@ -296,40 +328,28 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
               )}
             </p>
           </div>
-          <button onClick={() => onNavigate?.('integrations')} className="btn-bump btn-bump-dark px-3.5 py-2 text-[12.5px] self-start sm:self-auto">
-            <Blocks size={15} strokeWidth={1.75} /> Connect sources
-          </button>
+          <div className="flex items-center gap-2.5 self-start sm:self-auto">
+            <button onClick={() => onNavigate?.('integrations')} className="btn-bump btn-bump-gold px-4 py-2.5 text-[12.5px]">
+              <Plus size={15} strokeWidth={2.2} /> Connect source
+            </button>
+            <button onClick={() => onNavigate?.('knowledge')} className="btn-bump btn-bump-dark px-4 py-2.5 text-[12.5px]">
+              <Database size={15} strokeWidth={1.9} /> Knowledge bases
+            </button>
+          </div>
         </div>
 
-        {/* Ask bar — straight into chat grounded on the graph */}
-        <form
-          onSubmit={(e) => { e.preventDefault(); submitAsk(); }}
-          className="card-elev rounded-2xl px-4 py-3 flex items-center gap-3 mb-7 focus-within:border-[#57534E] transition-colors"
-        >
-          <Search size={17} className="text-[#6B6762] shrink-0" strokeWidth={1.9} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask across everything you've connected…"
-            className="flex-1 bg-transparent outline-none text-[14px] text-[#F4F0EB] placeholder:text-[#6B6762] min-w-0"
-          />
-          <button type="submit" disabled={!query.trim()} className="btn-bump btn-bump-accent px-3.5 py-1.5 text-[12.5px] shrink-0">
-            Ask <ArrowRight size={14} strokeWidth={2} />
-          </button>
-        </form>
-
-        {/* KPI strip — live graph metrics with sparklines */}
+        {/* KPI strip — hero card + neutral cards, all clickable */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-          <StatCard label="Knowledge nodes" value={graphNodes.toLocaleString()} color="#C9A66B" Icon={Network} spark={cumulative} />
-          <StatCard label="Relationships" value={graphEdges.toLocaleString()} color="#8AA9C9" Icon={Share2} spark={cumulative} />
-          <StatCard label="Entities" value={total.toLocaleString()} sub={`${ingested14d} in 14d`} color="#C28379" Icon={Boxes} spark={cumulative} />
-          <StatCard label="Documents" value={documents.toLocaleString()} color="#8FAE97" Icon={FileText} spark={daily} />
+          <KpiCard hero label="Knowledge nodes" value={graphNodes.toLocaleString()} chip={`+${ingested14d}`} chipHint="last 14 days" onClick={() => onNavigate?.('knowledge')} />
+          <KpiCard label="Relationships" value={graphEdges.toLocaleString()} chip={avgDegree ? avgDegree.toFixed(1) : '0'} chipHint="avg links per node" onClick={() => onNavigate?.('knowledge')} />
+          <KpiCard label="Entities" value={total.toLocaleString()} chip={`${composition.length}`} chipHint={`type${composition.length === 1 ? '' : 's'} in the graph`} onClick={() => onNavigate?.('knowledge')} />
+          <KpiCard label="Documents" value={documents.toLocaleString()} chip={`${kbsCount}`} chipHint={`knowledge base${kbsCount === 1 ? '' : 's'}`} onClick={() => onNavigate?.('knowledge')} />
         </div>
 
         {/* Ingestion line chart + entity composition donut */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
           <div className="card-elev rounded-2xl p-5 lg:col-span-2">
-            <PanelHead Icon={TrendingUp} color="#C9A66B" title="Knowledge ingestion" hint={`${ingested14d} entities · last 14 days`} />
+            <PanelHead Icon={TrendingUp} title="Knowledge ingestion" hint={`${ingested14d} entities · last 14 days`} />
             {timeline.length ? (
               <AreaChart
                 labels={tlLabels}
@@ -339,7 +359,7 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
             ) : <EmptyHint text="Connect a source — ingestion volume will chart here as the graph builds." />}
           </div>
           <div className="card-elev rounded-2xl p-5">
-            <PanelHead Icon={PieChart} color="#8FAE97" title="Composition" hint="by type" />
+            <PanelHead Icon={PieChart} title="Composition" hint="by type" />
             {composition.length
               ? <Donut data={composition} unit="entities" />
               : <EmptyHint text="No entities yet. Selected items populate the graph after their first sync." />}
@@ -349,13 +369,13 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
         {/* Source distribution + work-item status (graph overview fallback) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
           <div className="card-elev rounded-2xl p-5">
-            <PanelHead Icon={BarChart3} color="#8AA9C9" title="Knowledge by source" />
+            <PanelHead Icon={BarChart3} title="Knowledge by source" />
             {sourceBars.length
               ? <BarList data={sourceBars} />
               : <EmptyHint text="Once a connector finishes syncing, its share of the graph appears here." />}
           </div>
           <div className="card-elev rounded-2xl p-5">
-            <PanelHead Icon={Target} color="#9C93B0" title={statusBars.length ? 'Work item status' : 'Graph overview'} />
+            <PanelHead Icon={Target} title={statusBars.length ? 'Work item status' : 'Graph overview'} />
             {statusBars.length ? (
               <BarList data={statusBars} />
             ) : (
@@ -380,7 +400,7 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* Recent activity feed */}
           <div className="card-elev rounded-2xl p-5 lg:col-span-7">
-            <PanelHead Icon={History} color="#C28379" title="Recent activity" hint={recent.length ? `${recent.length} latest` : undefined} />
+            <PanelHead Icon={History} title="Recent activity" hint={recent.length ? `${recent.length} latest` : undefined} />
             {recent.length ? (
               <div className="flex flex-col">
                 {recent.map((r, i) => {
@@ -395,7 +415,7 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
                       rel="noreferrer"
                       className="group flex items-center gap-3 py-2.5 border-b border-[#2E2C2A] last:border-0 -mx-1.5 px-1.5 rounded-lg hover:bg-[#2A2826] transition-colors"
                     >
-                      <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: tm.color + '1a', border: `1px solid ${tm.color}33` }}>
+                      <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-[#1E1D1C] border border-[#33302E]">
                         <tm.Icon size={15} style={{ color: tm.color }} strokeWidth={1.85} />
                       </span>
                       <div className="flex-1 min-w-0">
@@ -407,8 +427,8 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
                         </p>
                       </div>
                       {r.status && (
-                        <span className="text-[10.5px] font-geist font-medium px-2 py-0.5 rounded-md shrink-0 hidden sm:inline-block"
-                          style={{ color: statusColor(r.status), background: statusColor(r.status) + '1a', border: `1px solid ${statusColor(r.status)}30` }}>
+                        <span className="hidden sm:flex items-center gap-1.5 text-[10.5px] font-geist font-medium px-2 py-1 rounded-md shrink-0 bg-[#1E1D1C] border border-[#33302E] text-[#A8A39B]">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: statusColor(r.status) }} />
                           {r.status}
                         </span>
                       )}
@@ -426,7 +446,7 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
           {/* Right rail: quick nav + connected sources */}
           <div className="lg:col-span-5 flex flex-col gap-5">
             <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => onNavigate?.('applications')} className="card-elev card-elev-hover rounded-2xl p-4 text-left flex flex-col gap-3">
+              <button onClick={() => onNavigate?.('applications')} className="card-elev card-elev-hover rounded-2xl p-4 text-left flex flex-col gap-3 transition-transform duration-150 active:translate-y-[2px]">
                 <div className="flex items-center justify-between">
                   <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#1E1D1C] border border-[#3D3A37]"><Boxes size={17} className="text-[#9C968E]" strokeWidth={1.85} /></span>
                   <ArrowRight size={15} className="text-[#6B6762]" />
@@ -436,7 +456,7 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
                   <p className="text-[11.5px] font-geist text-[#8C8880] mt-1.5">Applications</p>
                 </div>
               </button>
-              <button onClick={() => onNavigate?.('knowledge')} className="card-elev card-elev-hover rounded-2xl p-4 text-left flex flex-col gap-3">
+              <button onClick={() => onNavigate?.('knowledge')} className="card-elev card-elev-hover rounded-2xl p-4 text-left flex flex-col gap-3 transition-transform duration-150 active:translate-y-[2px]">
                 <div className="flex items-center justify-between">
                   <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#1E1D1C] border border-[#3D3A37]"><Database size={17} className="text-[#9C968E]" strokeWidth={1.85} /></span>
                   <ArrowRight size={15} className="text-[#6B6762]" />
@@ -466,13 +486,13 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
                       </p>
                     </div>
                     {s.connected ? (
-                      <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10.5px] font-geist font-medium text-[#8FAE97] bg-[#1E2A22] border border-[#2E4636] shrink-0">
-                        <span className={`w-1.5 h-1.5 rounded-full bg-[#8FAE97] ${s.syncing ? 'animate-pulse' : ''}`} /> {s.syncing ? 'Sync' : 'Active'}
+                      <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10.5px] font-geist font-medium text-[#A8A39B] bg-[#1E1D1C] border border-[#33302E] shrink-0">
+                        <span className={`w-1.5 h-1.5 rounded-full bg-[#8FAE97] ${s.syncing ? 'animate-pulse' : ''}`} /> {s.syncing ? 'Syncing' : 'Active'}
                       </span>
                     ) : COMING_SOON.includes(s.id) ? (
-                      <span className="text-[9.5px] font-geist font-semibold text-[#C9A66B] bg-[#2A2318] border border-[#5A4A28] px-1.5 py-1 rounded-md uppercase tracking-wide shrink-0">Soon</span>
+                      <span className="text-[9.5px] font-geist font-semibold text-[#8C8880] bg-[#1E1D1C] border border-[#33302E] px-1.5 py-1 rounded-md uppercase tracking-wide shrink-0">Soon</span>
                     ) : (
-                      <button onClick={() => onNavigate?.('integrations')} className="bg-[#F4F0EB] hover:bg-[#EAE5DF] text-[#1E1D1C] px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.2)]">Connect</button>
+                      <button onClick={() => onNavigate?.('integrations')} className="btn-bump btn-bump-accent px-3 py-1.5 text-[11px] shrink-0">Connect</button>
                     )}
                   </div>
                 ))}

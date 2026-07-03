@@ -445,19 +445,18 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
             </div>
           </div>
           {/* Tabs */}
-          <div className="px-6 lg:px-10 border-b border-[#3D3A37]">
-            <div className="flex items-center gap-1 overflow-x-auto">
+          <div className="px-6 lg:px-10 pb-3 border-b border-[#3D3A37]">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
               {TABS.map((t) => {
                 const on = tab === t.id;
                 return (
                   <button key={t.id} onClick={() => setTab(t.id)}
-                    className={`relative flex items-center gap-2 px-3.5 py-3 text-[13px] font-geist font-medium whitespace-nowrap transition-colors ${on ? 'text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#C7C2BC]'}`}>
-                    <t.Icon size={15} strokeWidth={1.85} />
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-geist font-medium whitespace-nowrap transition-colors ${on ? 'bg-[#C9A66B] text-[#1A1917]' : 'text-[#8C8880] hover:text-[#F4F0EB] hover:bg-[#2E2C2A]'}`}>
+                    <t.Icon size={15} strokeWidth={on ? 2.1 : 1.85} />
                     {t.label}
                     {t.count != null && (
-                      <span className={`text-[10.5px] tabular-nums px-1.5 py-0.5 rounded-md border ${on ? 'bg-[#33302E] border-[#4A4744] text-[#C7C2BC]' : 'bg-[#1E1D1C] border-[#3D3A37] text-[#8C8880]'}`}>{t.count}</span>
+                      <span className={`text-[10.5px] tabular-nums px-1.5 py-0.5 rounded-md border ${on ? 'bg-[#1A1917]/10 border-[#1A1917]/20 text-[#1A1917]' : 'bg-[#1E1D1C] border-[#3D3A37] text-[#8C8880]'}`}>{t.count}</span>
                     )}
-                    {on && <span className="absolute left-2 right-2 bottom-0 h-[2px] rounded-full bg-[#C9A66B]" />}
                   </button>
                 );
               })}

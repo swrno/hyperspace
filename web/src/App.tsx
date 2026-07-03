@@ -732,7 +732,7 @@ const SettingsModal = ({ isOpen, onClose, settings, onSave, onClearAll, connecto
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-[14px] font-geist font-semibold text-[#F4F0EB]">{p.name}</span>
-                          {comingSoon && <span className="text-[10px] font-geist font-semibold text-[#C9A66B] bg-[#2A2318] border border-[#5A4A28] px-1.5 py-0.5 rounded-md uppercase tracking-wide">Soon</span>}
+                          {comingSoon && <span className="text-[10px] font-geist font-semibold text-[#8C8880] bg-[#1E1D1C] border border-[#33302E] px-1.5 py-0.5 rounded-md uppercase tracking-wide">Soon</span>}
                           {!comingSoon && connected && (
                             <span className="flex items-center gap-1.5 text-[10px] font-geist font-semibold text-[#8FAE97] bg-[#1E2A22] border border-[#2E4636] px-1.5 py-0.5 rounded-md">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#8FAE97]"></span> Connected
@@ -2164,7 +2164,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       </div>
 
       {/* Primary navigation */}
-      <div className={`flex flex-col gap-0.5 ${isSidebarCollapsed ? 'mt-4 items-center' : 'px-3 mt-1'}`}>
+      <div className={`flex flex-col gap-1.5 ${isSidebarCollapsed ? 'mt-4 items-center' : 'px-3 mt-1'}`}>
         {([
           { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, path: '/' },
           { id: 'applications', label: 'Applications', Icon: LayoutGrid, path: '/app' },
@@ -2178,7 +2178,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
               key={id}
               onClick={() => { setActiveScreen(id); navigate(path); setIsSidebarOpen(false); }}
               title={label}
-              className={`flex items-center rounded-lg transition-colors ${isSidebarCollapsed ? 'justify-center p-2' : 'gap-3 px-2.5 py-2'} ${active ? 'bg-[#3D3A37] text-[#F4F0EB]' : 'text-[#A8A39B] hover:text-[#F4F0EB] hover:bg-[#2E2C2A]'}`}
+              className={`flex items-center rounded-lg transition-[background-color,color,transform,box-shadow] duration-150 active:translate-y-[2px] ${isSidebarCollapsed ? 'justify-center p-2' : 'gap-3 px-2.5 py-2'} ${active ? 'bg-[#C9A66B] text-[#1A1917] shadow-[0_3px_0_0_#8F7444] active:shadow-[0_1px_0_0_#8F7444]' : 'text-[#A8A39B] hover:text-[#F4F0EB] hover:bg-[#2E2C2A]'}`}
             >
               <div className="w-5 h-5 flex items-center justify-center shrink-0">
                 <Icon size={18} strokeWidth={active ? 2.2 : 2} />
@@ -2341,7 +2341,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                       {platformIcon(p, 20)}
                     </span>
                     {comingSoon ? (
-                      <span className="text-[11px] font-geist font-semibold text-[#C9A66B] bg-[#2A2318] border border-[#5A4A28] px-2 py-1 rounded-md uppercase tracking-wide">Coming Soon</span>
+                      <span className="text-[11px] font-geist font-semibold text-[#8C8880] bg-[#1E1D1C] border border-[#33302E] px-2 py-1 rounded-md uppercase tracking-wide">Coming Soon</span>
                     ) : connected ? (
                       <span className="flex items-center gap-1.5 text-[11px] font-geist font-medium text-[#8FAE97] bg-[#1A2A1E] border border-[#2E4636] px-2 py-1 rounded-md">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#8FAE97] animate-pulse" />
@@ -3274,15 +3274,14 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 <div className="bg-[#2A2826] border border-[#3D3A37] rounded-xl overflow-hidden">
                   <div className="px-4 py-2 border-b border-[#3D3A37] text-[11px] font-mono text-[#8C8880]">typescript</div>
                   <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed text-[#D4D4D4] font-mono custom-scrollbar">
-                    <span className="text-[#C586C0]">import</span> {'{ InfuseClient }'} <span className="text-[#C586C0]">from</span> <span className="text-[#CE9178]">'infuseai-sdk'</span>;<br /><br />
-                    <span className="text-[#569CD6]">const</span> client = <span className="text-[#569CD6]">new</span> InfuseClient({'{'}<br />
-                    {'  '}clientId: <span className="text-[#CE9178]">'client_e7bcfb5cadf64f...'</span>,<br />
-                    {'  '}appId: <span className="text-[#CE9178]">'{app.appId || `app_${app.id.replace(/-/g, '').substring(0, 16)}...`}'</span>,<br />
+                    <span className="text-[#569CD6]">const</span> hyper = <span className="text-[#569CD6]">new</span> Hyper({'{'}<br />
+                    {'  '}user_id: UID,<br />
+                    {'  '}api_key: <span className="text-[#CE9178]">'{(app.apiKey || 'sk_live_').substring(0, 16)}...'</span>, <span className="text-[#6A9955]">// Access check</span><br />
+                    {'  '}app_id: <span className="text-[#CE9178]">'{app.appId || `app_${app.id.replace(/-/g, '').substring(0, 16)}...`}'</span>, <span className="text-[#6A9955]">// Which app to search in</span><br />
+                    {'  '}customer_id: CUSTOMER_ID, <span className="text-[#6A9955]">// Your app's end user — omitted? one is created & returned; resolves memory</span><br />
                     {'}'});<br /><br />
-                    <span className="text-[#6A9955]">// Send a message to the bot</span><br />
-                    <span className="text-[#569CD6]">const</span> response = <span className="text-[#C586C0]">await</span> client.chat.completions.create({'{'}<br />
-                    {'  '}messages: [{'{'} role: <span className="text-[#CE9178]">'user'</span>, content: <span className="text-[#CE9178]">'Hello!'</span> {'}'}]<br />
-                    {'}'});
+                    <span className="text-[#569CD6]">const</span> res1 = <span className="text-[#C586C0]">await</span> hyper.query({'{'} user_query: <span className="text-[#CE9178]">'What is the last PR?'</span> {'}'});<br />
+                    <span className="text-[#569CD6]">const</span> res2 = <span className="text-[#C586C0]">await</span> hyper.deep_search({'{'} user_query: <span className="text-[#CE9178]">'Tell me about this in detail.'</span> {'}'});
                   </pre>
                 </div>
               </div>
@@ -3567,7 +3566,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           renderAdminDashboard()
         ) : activeScreen === 'dashboard' ? (
           <ErrorBoundary label="the dashboard">
-            <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={handleNavigate} onAsk={onAskFromHub} platformIcon={platformIcon} kbsCount={kbList.length} />
+            <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={handleNavigate} onAsk={onAskFromHub} platformIcon={platformIcon} kbsCount={kbList.length} appsCount={applications.length} />
           </ErrorBoundary>
         ) : activeScreen === 'knowledge' ? (
           <ErrorBoundary label="knowledge bases">

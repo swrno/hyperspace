@@ -87,7 +87,6 @@ export function StatCard({ label, value, sub, color, Icon, spark, onClick }: {
 }) {
   const inner = (
     <>
-      <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-[0.12] blur-2xl" style={{ background: color }} />
       <div className="flex items-center justify-between">
         <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: color + '1f', border: `1px solid ${color}40` }}>
           <Icon size={17} style={{ color }} strokeWidth={1.85} />
