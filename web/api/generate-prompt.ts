@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { generateReply, DEFAULT_CHAIN, llmConfigured } from './lib/llm.js';
 
 const META_PROMPT = `You are a world-class prompt engineer specializing in production AI assistants. Given a short description of what an AI assistant should do, you write a complete, professional system prompt for it.
 
@@ -23,8 +24,7 @@ export default async function generatePromptHandler(req: Request, res: Response)
     const { topic, appName, kbNames = [] } = req.body;
     if (!topic) return res.status(400).json({ error: 'Topic is required' });
 
-    const groqKey = process.env.GROQ_API_KEY;
-    if (!groqKey) return res.status(500).json({ error: 'GROQ_API_KEY is missing' });
+    if (!llmConfigured()) return res.status(500).json({ error: 'No LLM provider configured' });
 
     // Build a rich user message so the generator has full context.
     const parts = [`Assistant description: ${topic}`];
@@ -33,27 +33,15 @@ export default async function generatePromptHandler(req: Request, res: Response)
 
     const userMessage = parts.join('\n') + '\n\nWrite the system prompt now.';
 
-    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: META_PROMPT },
-          { role: 'user', content: userMessage },
-        ],
-        temperature: 0.4,
-        max_tokens: 2048,
-      }),
-    });
-
-    if (!groqRes.ok) {
-      const errTxt = await groqRes.text();
-      throw new Error(`Groq API Error: ${groqRes.status} ${errTxt}`);
-    }
-
-    const groqData = await (groqRes.json() as any);
-    const generatedPrompt = groqData.choices?.[0]?.message?.content || '';
+    // Fireworks (primary, multi-key) → Groq → Gemini.
+    const generatedPrompt = await generateReply(
+      [
+        { role: 'system', content: META_PROMPT },
+        { role: 'user', content: userMessage },
+      ],
+      DEFAULT_CHAIN,
+      { temperature: 0.4, maxTokens: 2048 },
+    );
 
     return res.status(200).json({ prompt: generatedPrompt.trim() });
   } catch (error: any) {
