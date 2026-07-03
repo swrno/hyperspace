@@ -16,8 +16,10 @@ function mockCollection() {
   });
   return {
     findOne: async () => null,
+    findOneAndUpdate: async () => null,
     insertOne: async () => ({ insertedId: 'mock-id' }),
     updateOne: async () => ({ modifiedCount: 1 }),
+    createIndex: async () => 'mock-index',
     deleteOne: async () => ({ deletedCount: 1 }),
     deleteMany: async () => ({ deletedCount: 0 }),
     countDocuments: async () => 0,

@@ -928,29 +928,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     setAuthError('');
     setAuthSuccessMsg('');
 
-    // Secure Custom Administrator credentials check
-    if (loginEmail.trim().toLowerCase() === 'soulsoumya1234@gmail.com') {
-      if (loginPassword === 'SoumyaAdmin@2026!') {
-        const mockAdminUser: User = {
-          uid: 'admin-orgmind-uid',
-          email: 'soulsoumya1234@gmail.com',
-          name: 'Admin',
-          role: 'admin',
-          avatar: ''
-        };
-        setUser(mockAdminUser);
-        setIdToken('admin-super-bypass-token-2026');
-        localStorage.setItem('orgmind_admin_session', JSON.stringify(mockAdminUser));
-        setAuthSuccessMsg('Welcome back, Admin!');
-        setAuthFormLoading(false);
-        return;
-      } else {
-        setAuthError('Incorrect password for administrator account.');
-        setAuthFormLoading(false);
-        return;
-      }
-    }
-
+    // The admin account (ADMIN_EMAIL) is a normal Firebase user; the server
+    // grants it the admin role on login. No client-side password or bypass token.
     try {
       const { signInWithEmailAndPassword } = await import('./firebase');
       await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
@@ -1105,7 +1084,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   // account switches) — a global key leaked one account's sources into another.
   const uidFromToken = (token: string | null): string => {
     if (!token) return 'anon';
-    if (token === 'admin-super-bypass-token-2026') return 'admin-soulsoumya-uid';
     try {
       const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
       return payload.user_id || payload.sub || 'anon';
@@ -1292,40 +1270,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   // Firebase Auth State change listener
   useEffect(() => {
-    // 1. Recover Admin Session if present
-    const savedAdmin = localStorage.getItem('orgmind_admin_session');
-    if (savedAdmin) {
-      setAuthLoading(true);
-      try {
-        const parsed = JSON.parse(savedAdmin);
-        setUser(parsed);
-        setIdToken('admin-super-bypass-token-2026');
-
-        // Load chats from MongoDB
-        fetch('/api/chats', {
-          headers: { 'Authorization': `Bearer admin-super-bypass-token-2026` }
-        })
-          .then(res => res.ok ? res.json() : null)
-          .then(data => {
-            if (data) {
-              setChats(data.chats || []);
-              if (data.user) {
-                setUser(prev => ({
-                  ...prev,
-                  role: data.user.role || prev?.role,
-                  tier: data.user.tier || prev?.tier || 'ultra'
-                } as User));
-              }
-            }
-          })
-          .catch(err => console.error(err))
-          .finally(() => setAuthLoading(false));
-      } catch (e) {
-        console.error(e);
-        setAuthLoading(false);
-      }
-      return;
-    }
+    // Clear any legacy admin-bypass session left in localStorage by older builds.
+    localStorage.removeItem('orgmind_admin_session');
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setAuthLoading(true);
