@@ -28,7 +28,7 @@
  *     type values: People | Organisation | Product | Location | Concept | Technology | Event
  *   (:Entity)-[:RELATES_TO {description}]->(:Entity)   (co-occurrence within same chunk/PR/Issue)
  *
- * Embeddings: gemini-embedding-001 (3072 dims)
+ * Embeddings: all-MiniLM-L6-v2 via Transformers.js, local (384 dims)
  *   Chunk.embedding      = embed(chunk_text_content)
  *   Entity.embedding     = embed(name + ' ' + description)
  *   PR.embedding         = embed(pr_text_content)

@@ -33,13 +33,30 @@ export async function runCypher(cypher: string, params: Record<string, any> = {}
   }
 }
 
-const VECTOR_INDEX_OPTIONS = `OPTIONS {indexConfig: {\`vector.dimensions\`: 3072, \`vector.similarity_function\`: 'cosine'}}`;
+// Must match EMBED_DIM in lib/embeddings.ts (all-MiniLM-L6-v2 → 384).
+const EMBED_DIM = 384;
+const VECTOR_INDEX_OPTIONS = `OPTIONS {indexConfig: {\`vector.dimensions\`: ${EMBED_DIM}, \`vector.similarity_function\`: 'cosine'}}`;
 
 /** One-time schema setup — vector + full-text indexes. Safe to call on every startup. */
 export async function ensureSchema(): Promise<void> {
   if (!configured()) return;
   const session = getDriver().session();
   const vi = async (name: string, label: string, prop: string) => {
+    // Recreate if an index already exists at a different dimension — a VECTOR
+    // INDEX's dimension is fixed at creation, so switching embedding models
+    // (e.g. 3072 → 1024) requires a drop + recreate. Cheap for small graphs.
+    try {
+      const rows = await session.run(
+        `SHOW INDEXES YIELD name, options WHERE name = $name
+         RETURN options.indexConfig['vector.dimensions'] AS dim`,
+        { name },
+      );
+      const dim = rows.records[0]?.get('dim');
+      const current = dim == null ? null : Number(dim);
+      if (current !== null && current !== EMBED_DIM) {
+        await session.run(`DROP INDEX ${name} IF EXISTS`).catch(() => {});
+      }
+    } catch { /* SHOW INDEXES unsupported / transient — fall through to CREATE */ }
     await session.run(
       `CREATE VECTOR INDEX ${name} IF NOT EXISTS FOR (n:${label}) ON n.${prop} ${VECTOR_INDEX_OPTIONS}`
     ).catch(() => {});
