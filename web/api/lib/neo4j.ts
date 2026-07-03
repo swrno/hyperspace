@@ -1,6 +1,11 @@
 /// <reference types="node" />
 import neo4j, { type Driver, type Session } from 'neo4j-driver';
 
+/** Wrap a JS number as a Neo4j Integer. The driver serializes plain JS numbers
+ *  as floats (e.g. 26.0), which Cypher rejects where an integer is required
+ *  (LIMIT, db.index.vector.queryNodes k). Always int() such params. */
+export const int = neo4j.int;
+
 let _driver: Driver | null = null;
 
 export function configured(): boolean {
