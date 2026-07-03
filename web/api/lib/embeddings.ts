@@ -1,71 +1,50 @@
 /// <reference types="node" />
 /**
- * Text embeddings via Google's gemini-embedding-001 model (3072 dims).
- * Reuses GEMINI_API_KEY which is already required for other features.
+ * Text embeddings via sentence-transformers/all-MiniLM-L6-v2, run locally with
+ * Transformers.js (ONNX / CPU) — no external API and no rate limits. 384-dim,
+ * mean-pooled and L2-normalized (cosine-ready). The model is downloaded from the
+ * HF hub once (~90MB) and cached; the first call after boot pays the load cost.
  *
- * taskType:
- *   'RETRIEVAL_DOCUMENT' — for content being stored (higher recall)
- *   'RETRIEVAL_QUERY'    — for search queries
+ * `taskType` is accepted for signature compatibility but has no effect —
+ * all-MiniLM-L6-v2 is a symmetric model (no query instruction prefix, unlike BGE).
  */
 
-const MODEL = 'gemini-embedding-001';
-const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const MAX_CHARS = 8_000; // Gemini embedding input limit
+import { pipeline } from '@huggingface/transformers';
 
-function key(): string {
-  const k = process.env.GEMINI_API_KEY;
-  if (!k) throw new Error('GEMINI_API_KEY is required for embeddings');
-  return k;
+export const EMBED_DIM = 384; // all-MiniLM-L6-v2 output dimension
+const MODEL = 'Xenova/all-MiniLM-L6-v2';
+// MiniLM caps at ~256 tokens (~1000 chars); the pipeline truncates past that, so
+// text beyond this is not reflected in the embedding.
+const MAX_CHARS = 1_000;
+const SUB_BATCH = 16; // bound memory/latency for large batches (e.g. per-sentence semantic chunking)
+
+let _extractor: Promise<any> | null = null;
+function getExtractor(): Promise<any> {
+  if (!_extractor) _extractor = pipeline('feature-extraction', MODEL);
+  return _extractor;
 }
 
+/** Embed one text. Returns a 384-dim unit vector (or [] on empty input). */
 export async function embed(
   text: string,
   taskType: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY' = 'RETRIEVAL_DOCUMENT',
-  _retries = 5,
 ): Promise<number[]> {
-  for (let attempt = 0; attempt <= _retries; attempt++) {
-    const res = await fetch(`${BASE}/${MODEL}:embedContent?key=${key()}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: `models/${MODEL}`,
-        content: { parts: [{ text: text.slice(0, MAX_CHARS) }] },
-        taskType,
-      }),
-    });
-
-    if (res.status === 429 && attempt < _retries) {
-      // Exponential backoff: 2s, 4s, 8s, 16s, 32s
-      const delay = Math.min(2000 * Math.pow(2, attempt), 32000);
-      console.warn(`[embeddings] 429 rate limit, retrying in ${delay}ms (attempt ${attempt + 1}/${_retries})`);
-      await new Promise((r) => setTimeout(r, delay));
-      continue;
-    }
-
-    if (!res.ok) {
-      const err = await res.text().catch(() => '');
-      throw new Error(`Embedding API error ${res.status}: ${err.slice(0, 200)}`);
-    }
-
-    const data = await (res.json() as any);
-    return data.embedding?.values ?? [];
-  }
-  return [];
+  const [v] = await embedBatch([text], taskType);
+  return v ?? [];
 }
 
-/** Embed multiple texts in parallel (batched to avoid rate limits). */
+/** Embed many texts locally, sub-batched to bound memory. Returns 384-dim vectors. */
 export async function embedBatch(
   texts: string[],
-  taskType: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY' = 'RETRIEVAL_DOCUMENT',
-  concurrency = 2,
+  _taskType: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY' = 'RETRIEVAL_DOCUMENT',
 ): Promise<number[][]> {
+  if (!texts?.length) return [];
+  const extractor = await getExtractor();
   const results: number[][] = [];
-  for (let i = 0; i < texts.length; i += concurrency) {
-    const batch = texts.slice(i, i + concurrency);
-    const embeddings = await Promise.all(batch.map((t) => embed(t, taskType)));
-    results.push(...embeddings);
-    // Brief pause between batches to stay within free-tier RPM limits
-    if (i + concurrency < texts.length) await new Promise((r) => setTimeout(r, 500));
+  for (let i = 0; i < texts.length; i += SUB_BATCH) {
+    const batch = texts.slice(i, i + SUB_BATCH).map((t) => String(t || '').slice(0, MAX_CHARS));
+    const out = await extractor(batch, { pooling: 'mean', normalize: true });
+    results.push(...(out.tolist() as number[][]));
   }
   return results;
 }
