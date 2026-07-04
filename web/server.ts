@@ -18,6 +18,8 @@ import { ensureSchema } from './api/lib/neo4j.js';
 import appsHandler from './api/apps.js';
 import appChatHandler from './api/app-chat.js';
 import generatePromptHandler from './api/generate-prompt.js';
+import { sdkQueryHandler, sdkIngestHandler } from './api/sdk.js';
+import appUsersHandler from './api/app-users.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -60,6 +62,19 @@ app.post('/api/app-chat', async (req, res) => {
 // Generate Prompt Endpoint
 app.post('/api/generate-prompt', async (req, res) => {
   await generatePromptHandler(req, res);
+});
+
+// hyper-sdk public surface — apiKey/appId/clientId auth, not Firebase (lib/sdkAuth.ts)
+app.post('/api/sdk/query', async (req, res) => {
+  await sdkQueryHandler(req, res);
+});
+app.post('/api/sdk/ingest', async (req, res) => {
+  await sdkIngestHandler(req, res);
+});
+
+// Owner-facing: end-users of an app + their conversation history
+app.get('/api/app-users', async (req, res) => {
+  await appUsersHandler(req, res);
 });
 
 // Knowledge Source Connectors Endpoint

@@ -1,0 +1,51 @@
+Now we will be doing user level personalisation. We will have multiple users in a app. We will only store only the User ID. 
+
+
+First I see we have not implemented any cognee related things till now. We have to first find and replace where we are using the term Memory, we have to say it Knowledge Base. After all the replacement we will go for intregration of cognee into our platfrom.
+
+We will use cognee for storing the key info from the user conversation so that we can use it for personalisation.
+
+
+Dont get confused between cognee and neo4j. Cognee we are using for memory and neo4j we are using for knowledge base.
+
+if we pass the user id while sending the query. It will check the user id exists or not. If the user id exists it will fetch the user information from cognee and use it for personalisation. 
+
+If the user id does not exist it will create a new user in mongodb and store the user information key info in cognee. 
+
+We will store only user specific information in cognee. We will not store any other information in cognee.
+
+
+How we will segrigating the one user information from other user? on each node we are ingesting in cognee we will add property of user id there. While retrival we will restrict out search to that specific user id. So that we will get only that user information.
+
+
+We will use cognee SDK for user level personalisation. We will use the user id to store and retrieve the user information from cognee.
+
+
+Also in the API keys section we need to veryfy the client, apikey, appid, userid. 
+
+
+After all this we will be writing out own package /packages/hyper-sdk which can intract with our Backend and with that sdk we can intregrate our platfrom with any other platform.
+
+
+import { HyperClient } from '@hyper-sdk';
+
+const simpleRetriver = new HyperClient.simpleRetriver({
+  apiKey: process.env.HYPER_API_KEY,
+  appId: process.env.HYPER_APP_ID,
+  userId: process.env.HYPER_USER_ID,
+  clientId: process.env.HYPER_CLIENT_ID,
+});
+
+const hyperRetriver = new HyperClient.hyperRetriever({
+  apiKey: process.env.HYPER_API_KEY,
+  appId: process.env.HYPER_APP_ID,
+  userId: process.env.HYPER_USER_ID,
+  clientId: process.env.HYPER_CLIENT_ID,
+});
+
+Similarly design the ingestor as well. We will be using the ingestor to ingest the user information into cognee. Ingesation will be done through sdk into out knowledge base. Memory we will build automatically from the user conversation. We will use the user id to store the user information into cognee.
+
+
+Store the users into the MongoDb under app. strore raw conversations under user. 
+
+Design the UI to see the chathistory as well. 

@@ -1,0 +1,19 @@
+{
+  "name": "hyper-sdk",
+  "version": "0.1.0",
+  "description": "Client SDK for integrating third-party applications with the hypr platform (retrieval + per-end-user memory).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

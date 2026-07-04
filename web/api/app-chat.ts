@@ -1,9 +1,11 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { vectorSearch, hybridSearch, multiHopSearch } from './cognee.js';
+import { recallUserContext, rememberUserFact } from './lib/cogneeMemory.js';
 import { verifyToken } from './auth.js';
 import { retrieveNodeGraphContext } from './retrieval.js';
 import { generateReply, DEFAULT_CHAIN, llmConfigured } from './lib/llm.js';
+import { ensureAppUser, appendConversationTurn } from './lib/appUsers.js';
 
 export default async function appChatHandler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -27,6 +29,13 @@ export default async function appChatHandler(req: Request, res: Response) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
     }
+
+    // The end-user this conversation personalizes for — distinct from `userId`
+    // above (the app *owner*'s Firebase uid). Third-party SDK callers pass
+    // their own end-user id; the owner's in-app playground has no such caller,
+    // so the session id doubles as a lightweight per-thread identity there.
+    const endUserId = String(req.body.endUserId || sessionId || 'default');
+    await ensureAppUser(appId, endUserId).catch(() => {});
 
     if (!llmConfigured()) {
       return res.status(500).json({ error: 'No LLM provider configured (set FIREWORKS_API_KEY or FIREWORKS_API_KEYS)' });
@@ -167,6 +176,18 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
       finalSystemPrompt += `\n\n# Retrieved Context\nNo specific documents were retrieved for this query. Let the user know what knowledge bases you have access to and suggest they ask more specific questions.`;
     }
 
+    // Memory (Cognee) — key facts this specific end-user has shared before,
+    // scoped to their own dataset. Separate from the Knowledge Base retrieval
+    // above (Neo4j): this is about the person, not the app's documents. Timed
+    // out short so a slow Cognee Cloud round-trip never stalls the reply.
+    const memory = await Promise.race([
+      recallUserContext(endUserId, message).catch(() => null),
+      new Promise<null>((r) => setTimeout(() => r(null), 3000)),
+    ]);
+    if (memory) {
+      finalSystemPrompt += `\n\n# Facts remembered about this user\nThese are facts about the USER (not about you, the assistant), recalled from their past conversations — quoted verbatim, phrasing may be first- or second-person from the original context:\n"""\n${memory}\n"""`;
+    }
+
     // Reasoning models expose their chain-of-thought via a separate field
     // (stripped out server-side into `reasoning`); this guards against models
     // that inline it as prose instead, which would otherwise leak "let me
@@ -205,6 +226,13 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
       { id: appId },
       { $push: { messages: { $each: [userMsgObj, aiMsgObj] } } }
     );
+
+    // Raw conversation, scoped to the end-user (not the owner's `apps` doc,
+    // which mixes every end-user's history into one array). Fire-and-forget —
+    // never block the response on a storage write.
+    appendConversationTurn(appId, endUserId, sessionId, [userMsgObj, aiMsgObj]).catch(() => {});
+    // Extract durable facts from this turn for future personalization.
+    rememberUserFact(endUserId, `User: ${message}\nAssistant: ${replyContent}`).catch(() => {});
 
     return res.status(200).json({
       userMessage: userMsgObj,

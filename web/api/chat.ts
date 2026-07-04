@@ -1,7 +1,8 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken, checkRateLimit, logMessageUsage } from './auth.js';
-import { graphSearch, multiHopSearch, recallMemory, rememberMemory } from './cognee.js';
+import { graphSearch, multiHopSearch } from './cognee.js';
+import { recallUserContext, rememberUserFact } from './lib/cogneeMemory.js';
 import { retrieveContext, retrieveNodeGraphContext } from './retrieval.js';
 import { routeQuery } from './lib/router.js';
 import { generateReply as llmGenerate, NORMAL_CHAIN, DEEP_CHAIN, type ProviderModel } from './lib/llm.js';
@@ -31,7 +32,7 @@ function buildKbContext(kb) {
 // memory (README §8) so future answers are personalised.
 function maybeRememberPSI(userId, message) {
   if (/\b(i am|i'm|i prefer|i work on|my role|call me|i use|my team|i focus on|only show|i'm working)\b/i.test(message)) {
-    rememberMemory(`User context: ${message}`, { userId }).catch(() => {});
+    rememberUserFact(userId, `User context: ${message}`).catch(() => {});
   }
 }
 
@@ -149,7 +150,7 @@ export default async function handler(req: Request, res: Response) {
     let systemContent;
     if (kbScope) {
       const [memory, nodeGraph] = await Promise.all([
-        withTimeout(recallMemory(message, { userId: user.uid }), 2500),
+        withTimeout(recallUserContext(user.uid, message), 2500),
         retrieveNodeGraphContext(user.uid, message, { kbId }).catch(() => null),
       ]);
       const blocks = [];
@@ -169,7 +170,7 @@ export default async function handler(req: Request, res: Response) {
         withTimeout(mode.deep ? multiHopSearch(message, graphOpts) : graphSearch(message, graphOpts), mode.timeout),
         retrieveContext(user.uid, message).catch(() => null),
         retrieveNodeGraphContext(user.uid, message).catch(() => null),
-        withTimeout(recallMemory(message, { userId: user.uid }), 2500),
+        withTimeout(recallUserContext(user.uid, message), 2500),
       ]);
 
       const ctxParts = [];

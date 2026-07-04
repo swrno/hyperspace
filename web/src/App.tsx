@@ -15,7 +15,7 @@ import {
   Mic, Image as ImageIcon, Search, Pencil, RefreshCw, Shield, Users, LogOut, Key,
   LayoutDashboard, Database, Blocks, MessagesSquare, ArrowRight, ArrowUpRight,
   LayoutGrid, AppWindow, Link2, Link2Off, SlidersHorizontal, Cpu, Unlink,
-  Activity, Clock, Code, PlaySquare, Loader2, Telescope, ArrowUp, Gauge, type LucideIcon
+  Activity, Clock, Code, PlaySquare, Loader2, Telescope, ArrowUp, Gauge, History, type LucideIcon
 } from 'lucide-react';
 import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -1068,6 +1068,12 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const [appSearchMode, setAppSearchMode] = useState<SearchMode>('normal');
   const [appSearchDropdownOpen, setAppSearchDropdownOpen] = useState(false);
   const [appConfigModelOpen, setAppConfigModelOpen] = useState(false);
+  // End-user chat history (SDK-driven conversations, distinct from the owner's own Playground testing)
+  const [appEndUsers, setAppEndUsers] = useState<{ userId: string; turnCount: number; lastActiveAt: string }[]>([]);
+  const [appEndUsersLoading, setAppEndUsersLoading] = useState(false);
+  const [selectedEndUserId, setSelectedEndUserId] = useState<string | null>(null);
+  const [endUserConversations, setEndUserConversations] = useState<{ sessionId: string; messages: Message[]; updatedAt: string }[]>([]);
+  const [endUserConversationsLoading, setEndUserConversationsLoading] = useState(false);
   const [appSettingsForm, setAppSettingsForm] = useState<{
     systemPrompt: string; model: string; temperature: number; maxTokens: number;
   } | null>(null);
@@ -1530,6 +1536,32 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     const app = applications.find(a => a.id === activeAppId);
     if (app) setAppSettingsForm({ systemPrompt: app.systemPrompt, model: app.model, temperature: app.temperature, maxTokens: app.maxTokens });
   }, [activeAppId]);
+
+  // Load this app's end-users (real conversations via the SDK) whenever it becomes active
+  useEffect(() => {
+    setSelectedEndUserId(null);
+    setEndUserConversations([]);
+    const app = applications.find(a => a.id === activeAppId);
+    if (!app?.appId || !idToken) { setAppEndUsers([]); return; }
+    setAppEndUsersLoading(true);
+    fetch(`/api/app-users?appId=${encodeURIComponent(app.appId)}`, { headers: { Authorization: `Bearer ${idToken}` } })
+      .then(r => r.ok ? r.json() : { users: [] })
+      .then(data => setAppEndUsers(data.users || []))
+      .catch(() => setAppEndUsers([]))
+      .finally(() => setAppEndUsersLoading(false));
+  }, [activeAppId, idToken]);
+
+  const loadEndUserConversations = (userId: string) => {
+    const app = applications.find(a => a.id === activeAppId);
+    if (!app?.appId || !idToken) return;
+    setSelectedEndUserId(userId);
+    setEndUserConversationsLoading(true);
+    fetch(`/api/app-users?appId=${encodeURIComponent(app.appId)}&userId=${encodeURIComponent(userId)}`, { headers: { Authorization: `Bearer ${idToken}` } })
+      .then(r => r.ok ? r.json() : { conversations: [] })
+      .then(data => setEndUserConversations(data.conversations || []))
+      .catch(() => setEndUserConversations([]))
+      .finally(() => setEndUserConversationsLoading(false));
+  };
 
   // Scroll app playground messages to bottom
   useEffect(() => {
@@ -3129,25 +3161,25 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
             {/* Playground */}
             <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl flex flex-col overflow-hidden h-[600px]">
-              <div className="px-5 py-4 border-b border-[#3D3A37] flex items-center justify-between bg-[#1E1D1C] shrink-0">
-                <h3 className="font-semibold text-[#F4F0EB] text-[15px] flex items-center gap-2">
-                  <MessagesSquare size={16} className="text-[#8C8880]" />
-                  Playground (Preview to your Chatbot)
+              <div className="px-5 py-4 border-b border-[#3D3A37] flex items-center justify-between gap-3 bg-[#1E1D1C] shrink-0">
+                <h3 className="font-semibold text-[#F4F0EB] text-[15px] flex items-center gap-2 min-w-0">
+                  <MessagesSquare size={16} className="text-[#8C8880] shrink-0" />
+                  <span className="truncate">Playground (Preview to your Chatbot)</span>
                 </h3>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   {(() => {
                     const sessions = Array.from(new Set(app.messages.map(m => m.sessionId || 'default')));
                     const current = appSessions[app.id] || 'default';
                     if (!sessions.includes(current)) sessions.push(current);
                     const labelFor = (s: string) => (s === 'default' ? 'Default Session' : `Session ${sessions.indexOf(s)}`);
                     return (
-                      <div className="relative">
+                      <div className="relative shrink-0">
                         <button
                           onClick={() => setAppSessionDropdownOpen(o => !o)}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#1E1D1C] border border-[#3D3A37] rounded-lg text-[12px] font-medium text-[#C9C5C0] hover:border-[#57534E] hover:text-[#F4F0EB] transition-colors"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#1E1D1C] border border-[#3D3A37] rounded-lg text-[12px] font-medium text-[#C9C5C0] hover:border-[#57534E] hover:text-[#F4F0EB] transition-colors whitespace-nowrap"
                         >
                           <span>{labelFor(current)}</span>
-                          <ChevronDown size={11} className={`transition-transform ${appSessionDropdownOpen ? 'rotate-180' : ''}`} />
+                          <ChevronDown size={11} className={`shrink-0 transition-transform ${appSessionDropdownOpen ? 'rotate-180' : ''}`} />
                         </button>
                         {appSessionDropdownOpen && (
                           <>
@@ -3171,7 +3203,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                   })()}
                   <button
                     onClick={() => setAppSessions(prev => ({ ...prev, [app.id]: `session_${Date.now()}` }))}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A66B] rounded-lg text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A66B] rounded-lg text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors shrink-0 whitespace-nowrap"
                   >
                     <Plus size={12} /> New Chat
                   </button>
@@ -3265,6 +3297,15 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                     </button>
                   </div>
                 </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-[#8C8880] uppercase tracking-wider mb-2">CLIENT ID</div>
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={app.clientId || 'client_...'} className="flex-1 bg-transparent border border-[#3D3A37] rounded-xl px-4 py-2.5 text-[13px] text-[#C7C2BC] focus:outline-none" />
+                    <button className="flex items-center gap-2 px-3 py-2.5 border border-[#3D3A37] rounded-xl text-[12px] font-medium text-[#8C8880] hover:text-[#F4F0EB] hover:bg-[#2A2826] transition-colors shrink-0">
+                      <Copy size={14} /> Copy
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3280,15 +3321,76 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 <div className="bg-[#2A2826] border border-[#3D3A37] rounded-xl overflow-hidden">
                   <div className="px-4 py-2 border-b border-[#3D3A37] text-[11px] font-mono text-[#8C8880]">typescript</div>
                   <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed text-[#D4D4D4] font-mono custom-scrollbar">
-                    <span className="text-[#569CD6]">const</span> hyper = <span className="text-[#569CD6]">new</span> Hyper({'{'}<br />
-                    {'  '}user_id: UID,<br />
-                    {'  '}api_key: <span className="text-[#CE9178]">'{(app.apiKey || 'sk_live_').substring(0, 16)}...'</span>, <span className="text-[#6A9955]">// Access check</span><br />
-                    {'  '}app_id: <span className="text-[#CE9178]">'{app.appId || `app_${app.id.replace(/-/g, '').substring(0, 16)}...`}'</span>, <span className="text-[#6A9955]">// Which app to search in</span><br />
-                    {'  '}customer_id: CUSTOMER_ID, <span className="text-[#6A9955]">// Your app's end user — omitted? one is created & returned; resolves memory</span><br />
-                    {'}'});<br /><br />
-                    <span className="text-[#569CD6]">const</span> res1 = <span className="text-[#C586C0]">await</span> hyper.query({'{'} user_query: <span className="text-[#CE9178]">'What is the last PR?'</span> {'}'});<br />
-                    <span className="text-[#569CD6]">const</span> res2 = <span className="text-[#C586C0]">await</span> hyper.deep_search({'{'} user_query: <span className="text-[#CE9178]">'Tell me about this in detail.'</span> {'}'});
+                    <span className="text-[#C586C0]">import</span> {'{ HyperClient }'} <span className="text-[#C586C0]">from</span> <span className="text-[#CE9178]">'hyper-sdk'</span>;<br /><br />
+                    <span className="text-[#569CD6]">const</span> config = {'{'}<br />
+                    {'  '}apiKey: <span className="text-[#CE9178]">'{(app.apiKey || 'sk_live_').substring(0, 16)}...'</span>,<br />
+                    {'  '}appId: <span className="text-[#CE9178]">'{app.appId || `app_${app.id.replace(/-/g, '').substring(0, 16)}...`}'</span>,<br />
+                    {'  '}clientId: <span className="text-[#CE9178]">'{(app.clientId || 'client_...').substring(0, 16)}...'</span>,<br />
+                    {'  '}userId: <span className="text-[#6A9955]">// your own end-user's id</span><br />
+                    {'}'};<br /><br />
+                    <span className="text-[#6A9955]">// Fast lookup, no personalization memory</span><br />
+                    <span className="text-[#569CD6]">const</span> simple = <span className="text-[#569CD6]">new</span> HyperClient.simpleRetriver(config);<br />
+                    <span className="text-[#569CD6]">const</span> answer = <span className="text-[#C586C0]">await</span> simple.query(<span className="text-[#CE9178]">'What is the last PR?'</span>);<br /><br />
+                    <span className="text-[#6A9955]">// Deep retrieval + this end-user's own memory</span><br />
+                    <span className="text-[#569CD6]">const</span> hyper = <span className="text-[#569CD6]">new</span> HyperClient.hyperRetriever(config);<br />
+                    <span className="text-[#569CD6]">const</span> personalized = <span className="text-[#C586C0]">await</span> hyper.query(<span className="text-[#CE9178]">'What did I ask about last time?'</span>);
                   </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* End-User Chat History — real conversations from SDK integrations */}
+            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl overflow-hidden">
+              <div className="px-6 py-5 border-b border-[#3D3A37] flex items-center justify-between">
+                <h3 className="font-semibold text-[#F4F0EB] text-[16px] flex items-center gap-2">
+                  <History size={16} className="text-[#8C8880]" /> End-User Chat History
+                </h3>
+                <span className="text-[11px] font-medium text-[#6B6762]">{appEndUsers.length} user{appEndUsers.length === 1 ? '' : 's'}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-[#3D3A37]" style={{ minHeight: 220 }}>
+                {/* User list */}
+                <div className="max-h-[360px] overflow-y-auto custom-scrollbar">
+                  {appEndUsersLoading ? (
+                    <p className="text-[12.5px] text-[#6B6762] p-6 text-center">Loading…</p>
+                  ) : appEndUsers.length === 0 ? (
+                    <p className="text-[12.5px] text-[#6B6762] p-6 text-center">No end-users yet. Conversations from the hyper-sdk (with a real `userId`) will appear here.</p>
+                  ) : (
+                    appEndUsers.map(u => (
+                      <button
+                        key={u.userId}
+                        onClick={() => loadEndUserConversations(u.userId)}
+                        className={`w-full flex flex-col items-start gap-0.5 px-5 py-3 text-left border-b border-[#252523] last:border-0 transition-colors ${selectedEndUserId === u.userId ? 'bg-[#2A2826]' : 'hover:bg-[#252523]'}`}
+                      >
+                        <span className="text-[13px] font-medium text-[#F4F0EB] truncate w-full">{u.userId}</span>
+                        <span className="text-[11px] text-[#6B6762]">{u.turnCount} turn{u.turnCount === 1 ? '' : 's'} · {formatMessageTime(u.lastActiveAt)}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                {/* Conversation viewer */}
+                <div className="max-h-[360px] overflow-y-auto custom-scrollbar p-4">
+                  {!selectedEndUserId ? (
+                    <p className="text-[12.5px] text-[#6B6762] text-center py-8">Select a user to view their conversation history.</p>
+                  ) : endUserConversationsLoading ? (
+                    <p className="text-[12.5px] text-[#6B6762] text-center py-8">Loading…</p>
+                  ) : endUserConversations.length === 0 ? (
+                    <p className="text-[12.5px] text-[#6B6762] text-center py-8">No conversations recorded for this user.</p>
+                  ) : (
+                    <div className="space-y-5">
+                      {endUserConversations.map(conv => (
+                        <div key={conv.sessionId}>
+                          <p className="text-[10.5px] font-semibold text-[#6B6762] uppercase tracking-wider mb-2">Session: {conv.sessionId}</p>
+                          <div className="space-y-2">
+                            {conv.messages.map((m, i) => (
+                              <div key={i} className={`text-[12.5px] px-3 py-2 rounded-lg max-w-[90%] ${m.role === 'user' ? 'bg-[#2A2826] ml-auto text-[#F4F0EB]' : 'bg-[#252523] text-[#C7C2BC]'}`}>
+                                {m.content}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

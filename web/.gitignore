@@ -4,3 +4,9 @@ node_modules
 .env.*.local
 dist
 *.tsbuildinfo
+
+# Cognee memory engine local state (embedded LanceDB/graph files + ONNX models)
+.cognee_system/
+.data_storage/
+.anon_id
+target/

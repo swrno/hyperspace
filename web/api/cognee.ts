@@ -720,45 +720,9 @@ export async function getDatasetGraph(userId: string, kbId?: string): Promise<{ 
   }
 }
 
-// ── 4. Personal memory ────────────────────────────────────────────────────────
-
-export async function rememberMemory(text: string, { userId }: any = {}): Promise<any> {
-  if (!configured() || !text?.trim()) return null;
-  try {
-    const embedding = await embed(text, 'RETRIEVAL_DOCUMENT');
-    await runCypher(
-      `CREATE (m:PersonalMemory {id: $id, text: $text, embedding: $embedding, userId: $userId, createdAt: $now})`,
-      { id: uid(), text, embedding, userId: userId || 'anon', now: new Date().toISOString() },
-    );
-    return { ok: true };
-  } catch (e: any) { console.warn('Neo4j rememberMemory error:', e.message); return null; }
-}
-
-export async function recallMemory(query: string, { userId }: any = {}): Promise<string | null> {
-  if (!configured() || !query?.trim()) return null;
-  await schemaReady();
-  try {
-    const queryEmbedding = await embed(query, 'RETRIEVAL_QUERY');
-    const records = await runCypher(
-      `CALL db.index.vector.queryNodes('personalMemory_embedding', 5, $embedding)
-       YIELD node AS m, score
-       WHERE m.userId = $userId AND score > 0.75
-       RETURN m.text AS text`,
-      { userId: userId || 'anon', embedding: queryEmbedding },
-    );
-    const texts = records.map((r: any) => r.text).filter(Boolean);
-    return texts.length ? texts.join('\n') : null;
-  } catch (e: any) { console.warn('Neo4j recallMemory error:', e.message); return null; }
-}
-
-// ── Back-compat shims ─────────────────────────────────────────────────────────
-
-export async function rememberText(text: string, opts: any = {}): Promise<any> {
-  return ingest(text, { userId: opts.userId, nodeSet: opts.nodeSet });
-}
-export async function recall(query: string, opts: any = {}): Promise<string | null> {
-  return graphSearch(query, { userId: opts?.userId });
-}
+// NOTE: personal-memory/personalization (formerly "PersonalMemory" nodes here)
+// now lives in api/lib/cogneeMemory.ts, backed by the real Cognee engine.
+// This file (Neo4j) is Knowledge Base only — documents, entities, graph search.
 
 export function formatConnectorPayload(kbId: string, userId: string, userEmail: string, platform: string, selectedItems: { name: string; meta?: string }[]): string {
   const platformNames: Record<string, string> = {

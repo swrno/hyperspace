@@ -76,7 +76,6 @@ export async function ensureSchema(): Promise<void> {
     await vi('file_embedding',          'File',          'embedding');
     await vi('calendar_embedding',      'Calendar',      'embedding');
     await vi('calendarEvent_embedding', 'CalendarEvent', 'embedding');
-    await vi('personalMemory_embedding','PersonalMemory','embedding');
 
     await session.run(
       `CREATE FULLTEXT INDEX chunk_text IF NOT EXISTS FOR (c:Chunk) ON EACH [c.chunk_text_content]`

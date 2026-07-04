@@ -42,12 +42,14 @@ export default async function appsHandler(req: Request, res: Response) {
       const appData = req.body;
       const appId = crypto.randomUUID();
       const apiKey = `sk_live_${crypto.randomBytes(16).toString('hex')}`;
-      
+      const clientId = `client_${crypto.randomBytes(8).toString('hex')}`;
+
       const newApp = {
         ...appData,
         id: appId,
         appId: `app_${appId.replace(/-/g, '')}`,
         apiKey: apiKey,
+        clientId,
         userId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
