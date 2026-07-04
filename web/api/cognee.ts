@@ -16,8 +16,10 @@
  *                                                -[:HAS_ENTITY]->  (:Entity)
  *                           -[:HAS_ISSUE]->   (:Issue   {id, number, title, issue_text_content, embedding, kb_id})
  *                                                -[:HAS_ENTITY]->  (:Entity)
- *                           -[:HAS_COMMIT]->  (:Commit  {id, sha, commit_text_content, embedding, kb_id})
+ *                           -[:HAS_COMMIT]->  (:Commit  {id, sha, commit_text_content, committed_at, embedding, kb_id})
  *                                                -[:HAS_ENTITY]->  (:Entity)
+ *                                                -[:NEXT]->        (:Commit)   (chronological, by committed_at)
+ *                                                -[:PREVIOUS]->    (:Commit)
  *                           -[:HAS_FILE]->    (:File    {id, file_type, file_text_content, embedding, kb_id})
  *                                                -[:HAS_ENTITY]->  (:Entity)
  *     -[:HAS_CALENDAR]-> (:Calendar {id, calender_id, name, description, embedding, kb_id})
@@ -339,6 +341,31 @@ export async function ingestGitHubEntity(
     }
   } catch (e: any) {
     console.warn(`Neo4j ingestGitHubEntity(${type}) error:`, e.message);
+  }
+}
+
+/**
+ * Wire NEXT/PREVIOUS between a Repo's Commit nodes in chronological order
+ * (by committed_at), mirroring the Chunk NEXT/PREVIOUS chain in addText().
+ * Call once after all commits for a repo have been ingested — safe to call
+ * repeatedly (MERGE), e.g. on delta syncs that add newer commits.
+ */
+export async function linkCommitOrder(kbId: string, repoId: string): Promise<void> {
+  if (!configured() || !repoId) return;
+  try {
+    await runCypher(
+      `MATCH (:Repo {id: $repoId, kb_id: $kbId})-[:HAS_COMMIT]->(c:Commit)
+       WHERE c.committed_at IS NOT NULL
+       WITH c ORDER BY c.committed_at ASC
+       WITH collect(c) AS commits
+       UNWIND range(0, size(commits) - 2) AS i
+       WITH commits[i] AS a, commits[i + 1] AS b
+       MERGE (a)-[:NEXT]->(b)
+       MERGE (b)-[:PREVIOUS]->(a)`,
+      { kbId: kbId || '__global__', repoId },
+    );
+  } catch (e: any) {
+    console.warn('Neo4j linkCommitOrder error:', e.message);
   }
 }
 

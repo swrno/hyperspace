@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken } from './auth.js';
-import { ingest as cogneeIngest, cognify, formatConnectorPayload, ingestGitHubEntity } from './cognee.js';
+import { ingest as cogneeIngest, cognify, formatConnectorPayload, ingestGitHubEntity, linkCommitOrder } from './cognee.js';
 import { textFromBase64 } from './lib/pdf.js';
 import { getConnection, getAccessToken } from './connections.js';
 import { buildNodeGraphForProvider } from './ingest.js';
@@ -292,10 +292,17 @@ export default async function handler(req: Request, res: Response) {
                       id: entity.id,
                       sha: entity.raw?.sha ?? entity.externalId ?? entity.id,
                       commit_text_content: entity.body || entity.title,
+                      committed_at: entity.updatedAt ?? null,
                       url: entity.url,
                     }, { kbId, userId: user.uid, repoId });
                     bumpIngest();
                   }
+                }
+
+                // Chain each repo's commits in chronological order (NEXT/PREVIOUS),
+                // mirroring the Chunk ordering pattern.
+                for (const repoId of repoIdMap.values()) {
+                  await linkCommitOrder(kbId, repoId);
                 }
 
                 // Ingest rich documents into Cognee AND persist a summary entry
