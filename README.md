@@ -7,10 +7,10 @@ This post details a production-grade blueprint that solves workspace search by t
 
 1. User will sign up.
 2. Authorise his Github (Will be able to select the repo), Google Docs (Will be able to select the files he wanted to ingest).
-3. After he selects we will start the Continous Ingesation pipeline through Backend SQS and we will convert them to KG.
+3. After he selects we will start the Continous Ingestion pipeline through Backend SQS and we will convert them to KG.
 4. Updation on every 1 Hr. (Optional)
 5. Chat Interface Real time with Langchain and Cognee GraphDB.
-
+b
 ## 1. The Core Problem of Enterprise AI & Workspace Search
 
 Traditional enterprise search suffers from what can be called the **"Context Fragment Tax."** Information within an organization is rarely localized; it is distributed across specialized platforms:
