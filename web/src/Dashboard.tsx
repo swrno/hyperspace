@@ -340,7 +340,7 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
 
         {/* KPI strip — hero card + neutral cards, all clickable */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-          <KpiCard hero label="Knowledge nodes" value={graphNodes.toLocaleString()} chip={`+${ingested14d}`} chipHint="last 14 days" onClick={() => onNavigate?.('knowledge')} />
+          <KpiCard hero label="Nodes" value={graphNodes.toLocaleString()} chip={`+${ingested14d}`} chipHint="last 14 days" onClick={() => onNavigate?.('knowledge')} />
           <KpiCard label="Relationships" value={graphEdges.toLocaleString()} chip={avgDegree ? avgDegree.toFixed(1) : '0'} chipHint="avg links per node" onClick={() => onNavigate?.('knowledge')} />
           <KpiCard label="Entities" value={total.toLocaleString()} chip={`${composition.length}`} chipHint={`type${composition.length === 1 ? '' : 's'} in the graph`} onClick={() => onNavigate?.('knowledge')} />
           <KpiCard label="Documents" value={documents.toLocaleString()} chip={`${kbsCount}`} chipHint={`knowledge base${kbsCount === 1 ? '' : 's'}`} onClick={() => onNavigate?.('knowledge')} />

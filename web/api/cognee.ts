@@ -493,6 +493,148 @@ export async function multiHopSearch(query: string, { userId, kbId, topK = 10 }:
   return unique.length ? unique.join('\n\n') : null;
 }
 
+// ── 2b. Dashboard analytics ──────────────────────────────────────────────────
+
+// Reverse of formatConnectorPayload's platformNames — lets us recover which
+// connector a Document came from out of its "# hypr Knowledge Source: X"
+// header, since Document nodes (unlike Repo/PR/Issue/Commit) don't carry a
+// "source:type:externalId" id.
+const PLATFORM_NAME_TO_ID: Record<string, string> = {
+  GitHub: 'github', 'Google Docs': 'gdocs', 'Google Slides': 'gslides',
+  'Google Sheets': 'gsheets', 'Google Calendar': 'gcal', Jira: 'jira',
+  Slack: 'slack', Salesforce: 'salesforce',
+};
+const EID_LABELS = new Set(['Repo', 'PR', 'Issue', 'Commit', 'PRComment', 'File', 'Calendar', 'CalendarEvent']);
+
+export interface GraphStats {
+  total: number;
+  documents: number;
+  graph: { nodes: number; edges: number };
+  byType: { key: string; n: number }[];
+  bySource: { key: string; n: number }[];
+  byStatus: { key: string; n: number }[];
+  timeline: { date: string; n: number }[];
+  recent: {
+    id: string; type: string; source: string; title: string;
+    url?: string; updatedAt?: string;
+  }[];
+}
+
+/**
+ * Dashboard analytics computed directly from the Neo4j knowledge graph —
+ * Repo/PR/Issue/Commit/File/Calendar/CalendarEvent ids are "source:type:
+ * externalId" (see lib/schema.ts eid()), so source + domain type come straight
+ * out of the id; Document nodes recover source from their "Knowledge Source"
+ * header; Entity nodes bucket by their `type` property (People/Organisation/…).
+ */
+export async function getUserGraphStats(userId: string): Promise<GraphStats | null> {
+  if (!configured() || !userId) return null;
+  await schemaReady();
+  try {
+    const [[sizeRow], rows] = await Promise.all([
+      runCypher(
+        `MATCH (n {userId: $userId}) WITH count(n) AS nodes
+         OPTIONAL MATCH (a {userId: $userId})-[r]->(b {userId: $userId})
+         RETURN nodes, count(r) AS edges`,
+        { userId },
+      ),
+      runCypher(
+        `MATCH (n {userId: $userId})
+         WHERE NOT n:Chunk AND NOT n:KnowledgeBase AND NOT n:PersonalMemory
+         RETURN labels(n)[0] AS label, n.id AS id,
+                coalesce(n.title, n.name, n.sha) AS title,
+                n.url AS url, n.type AS entityType,
+                n.createdAt AS createdAt,
+                coalesce(n.committed_at, n.date, n.createdAt) AS activityAt
+         LIMIT 2000`,
+        { userId },
+      ),
+    ]);
+
+    const byType = new Map<string, number>();
+    const bySource = new Map<string, number>();
+    const byDay = new Map<string, number>();
+    const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) || 0) + 1);
+
+    const since = Date.now() - 13 * 24 * 60 * 60 * 1000;
+    const recentCandidates: GraphStats['recent'] = [];
+    let documents = 0;
+
+    for (const r of rows) {
+      const label = r.label as string;
+      let type = label;
+      let source = 'other';
+      // Document/Chunk text can be multi-line with a markdown heading; keep
+      // titles to a single clean line for display.
+      const title = String(r.title || label).split('\n')[0].replace(/^#+\s*/, '').trim() || label;
+
+      if (EID_LABELS.has(label) && typeof r.id === 'string' && r.id.includes(':')) {
+        const [src, typ] = r.id.split(':');
+        source = src || 'other';
+        type = typ || label;
+      } else if (label === 'Document') {
+        documents++;
+        type = 'Document';
+        const m = /Knowledge Source:\s*(.+)$/m.exec(r.title || '');
+        source = (m && PLATFORM_NAME_TO_ID[m[1].trim()]) || 'kb';
+      } else if (label === 'Entity') {
+        type = r.entityType === 'People' ? 'Person' : (r.entityType || 'Concept');
+        source = 'knowledge_graph';
+      }
+
+      bump(byType, type);
+      bump(bySource, source);
+
+      if (r.createdAt) {
+        const created = new Date(r.createdAt).getTime();
+        if (!Number.isNaN(created) && created >= since) {
+          bump(byDay, String(r.createdAt).slice(0, 10));
+        }
+      }
+
+      // Entity nodes (extracted names/orgs/places) aren't "activity" — they'd
+      // flood the recent feed since a whole NER batch shares one timestamp.
+      // They still count in byType/bySource above; just excluded here.
+      if (label !== 'Entity') {
+        recentCandidates.push({
+          id: r.id || `${label}:${recentCandidates.length}`,
+          type, source, title,
+          url: r.url || undefined,
+          updatedAt: r.activityAt || r.createdAt || undefined,
+        });
+      }
+    }
+
+    const timeline: { date: string; n: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      timeline.push({ date: d, n: byDay.get(d) || 0 });
+    }
+
+    const recent = recentCandidates
+      .filter((r) => r.updatedAt)
+      .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime())
+      .slice(0, 8);
+
+    const toRows = (m: Map<string, number>) =>
+      [...m.entries()].map(([key, n]) => ({ key, n })).sort((a, b) => b.n - a.n);
+
+    return {
+      total: rows.length,
+      documents,
+      graph: { nodes: sizeRow?.nodes?.toNumber?.() ?? Number(sizeRow?.nodes) ?? 0, edges: sizeRow?.edges?.toNumber?.() ?? Number(sizeRow?.edges) ?? 0 },
+      byType: toRows(byType),
+      bySource: toRows(bySource),
+      byStatus: [], // no status property tracked on graph nodes yet
+      timeline,
+      recent,
+    };
+  } catch (e: any) {
+    console.warn('Neo4j getUserGraphStats error:', e.message);
+    return null;
+  }
+}
+
 // ── 3. Graph visualisation ────────────────────────────────────────────────────
 
 export async function getDatasetGraph(userId: string, kbId?: string): Promise<{ nodes: any[]; edges: any[] } | null> {
