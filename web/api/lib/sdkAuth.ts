@@ -1,5 +1,5 @@
 /**
- * Authentication for the public hyper-sdk surface (api/sdk.ts) — distinct from
+ * Authentication for the public hypr-sdk surface (api/sdk.ts) — distinct from
  * verifyToken() (Firebase, used everywhere else for the app *owner*). Callers
  * here are third-party integrations, identified by an (apiKey, appId,
  * clientId) triple that must all belong to the same app document, plus a

@@ -73,7 +73,7 @@ export interface Application {
   id: string;
   appId?: string;
   apiKey?: string;
-  /** Public client identifier for the hyper-sdk (paired with apiKey to authenticate SDK calls). */
+  /** Public client identifier for the hypr-sdk (paired with apiKey to authenticate SDK calls). */
   clientId?: string;
   name: string;
   description?: string;

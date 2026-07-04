@@ -64,7 +64,7 @@ app.post('/api/generate-prompt', async (req, res) => {
   await generatePromptHandler(req, res);
 });
 
-// hyper-sdk public surface — apiKey/appId/clientId auth, not Firebase (lib/sdkAuth.ts)
+// hypr-sdk public surface — apiKey/appId/clientId auth, not Firebase (lib/sdkAuth.ts)
 app.post('/api/sdk/query', async (req, res) => {
   await sdkQueryHandler(req, res);
 });

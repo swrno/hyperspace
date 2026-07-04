@@ -1,5 +1,5 @@
 /**
- * Public hyper-sdk surface — what @hyper-sdk's HyperClient talks to. Callers
+ * Public hypr-sdk surface — what hypr-sdk's HyperClient talks to. Callers
  * authenticate with (apiKey, appId, clientId) instead of a Firebase token (see
  * lib/sdkAuth.ts) and always supply their own end-user `userId`.
  *

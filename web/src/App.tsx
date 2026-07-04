@@ -3321,7 +3321,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 <div className="bg-[#2A2826] border border-[#3D3A37] rounded-xl overflow-hidden">
                   <div className="px-4 py-2 border-b border-[#3D3A37] text-[11px] font-mono text-[#8C8880]">typescript</div>
                   <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed text-[#D4D4D4] font-mono custom-scrollbar">
-                    <span className="text-[#C586C0]">import</span> {'{ HyperClient }'} <span className="text-[#C586C0]">from</span> <span className="text-[#CE9178]">'hyper-sdk'</span>;<br /><br />
+                    <span className="text-[#C586C0]">import</span> {'{ HyperClient }'} <span className="text-[#C586C0]">from</span> <span className="text-[#CE9178]">'hypr-sdk'</span>;<br /><br />
                     <span className="text-[#569CD6]">const</span> config = {'{'}<br />
                     {'  '}apiKey: <span className="text-[#CE9178]">'{(app.apiKey || 'sk_live_').substring(0, 16)}...'</span>,<br />
                     {'  '}appId: <span className="text-[#CE9178]">'{app.appId || `app_${app.id.replace(/-/g, '').substring(0, 16)}...`}'</span>,<br />
@@ -3353,7 +3353,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                   {appEndUsersLoading ? (
                     <p className="text-[12.5px] text-[#6B6762] p-6 text-center">Loading…</p>
                   ) : appEndUsers.length === 0 ? (
-                    <p className="text-[12.5px] text-[#6B6762] p-6 text-center">No end-users yet. Conversations from the hyper-sdk (with a real `userId`) will appear here.</p>
+                    <p className="text-[12.5px] text-[#6B6762] p-6 text-center">No end-users yet. Conversations from the hypr-sdk (with a real `userId`) will appear here.</p>
                   ) : (
                     appEndUsers.map(u => (
                       <button
