@@ -526,20 +526,25 @@ export interface GraphStats {
  * externalId" (see lib/schema.ts eid()), so source + domain type come straight
  * out of the id; Document nodes recover source from their "Knowledge Source"
  * header; Entity nodes bucket by their `type` property (People/Organisation/…).
+ *
+ * Pass `kbId` to scope every query to a single knowledge base (every node
+ * type carries `kb_id`) — used by the per-KB Insights panel; omit it for the
+ * account-wide dashboard.
  */
-export async function getUserGraphStats(userId: string): Promise<GraphStats | null> {
+export async function getUserGraphStats(userId: string, kbId?: string): Promise<GraphStats | null> {
   if (!configured() || !userId) return null;
   await schemaReady();
   try {
+    const match = kbId ? '{userId: $userId, kb_id: $kbId}' : '{userId: $userId}';
     const [[sizeRow], rows] = await Promise.all([
       runCypher(
-        `MATCH (n {userId: $userId}) WITH count(n) AS nodes
-         OPTIONAL MATCH (a {userId: $userId})-[r]->(b {userId: $userId})
+        `MATCH (n ${match}) WITH count(n) AS nodes
+         OPTIONAL MATCH (a ${match})-[r]->(b ${match})
          RETURN nodes, count(r) AS edges`,
-        { userId },
+        { userId, kbId: kbId ?? null },
       ),
       runCypher(
-        `MATCH (n {userId: $userId})
+        `MATCH (n ${match})
          WHERE NOT n:Chunk AND NOT n:KnowledgeBase AND NOT n:PersonalMemory
          RETURN labels(n)[0] AS label, n.id AS id,
                 coalesce(n.title, n.name, n.sha) AS title,
@@ -547,7 +552,7 @@ export async function getUserGraphStats(userId: string): Promise<GraphStats | nu
                 n.createdAt AS createdAt,
                 coalesce(n.committed_at, n.date, n.createdAt) AS activityAt
          LIMIT 2000`,
-        { userId },
+        { userId, kbId: kbId ?? null },
       ),
     ]);
 

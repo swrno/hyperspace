@@ -194,7 +194,7 @@ const formatTime = (isoString: string) => {
 // Platforms with real OAuth backends
 const OAUTH_PLATFORMS = ['github', 'jira', 'gdocs', 'gslides', 'gsheets', 'gcal'];
 // Platforms not yet implemented — show Coming Soon
-const COMING_SOON_PLATFORMS = ['slack', 'salesforce'];
+const COMING_SOON_PLATFORMS = ['jira', 'gsheets', 'slack', 'salesforce'];
 
 const parseMessageWithThink = (content: string) => {
   const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/);

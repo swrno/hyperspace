@@ -3,7 +3,7 @@ import { getDb } from './mongodb.js';
 import { verifyToken } from './auth.js';
 import { listConnections } from './connections.js';
 import { buildStructuralGraph } from './lib/graphbuild.js';
-import { getUserGraphStats } from './cognee.js';
+import { getUserGraphStats, type GraphStats } from './cognee.js';
 
 /**
  * Dashboard stats — real aggregates over the user's ingested knowledge graph.
@@ -11,7 +11,8 @@ import { getUserGraphStats } from './cognee.js';
  * for this user, falling back to the older Mongo kb_entities index (pre-Neo4j
  * connector syncs) so accounts that predate the graph pipeline still see numbers.
  *
- * GET /api/stats →
+ * GET /api/stats            → account-wide (all KBs + connectors)
+ * GET /api/stats?kbId=<id>  → scoped to a single knowledge base's own graph
  *   {
  *     total, documents, knowledgeBases,
  *     byType:   [{ key, n }],   // WorkItem / CodeChange / Commit / Sprint / …
@@ -35,6 +36,18 @@ export default async function handler(req: Request, res: Response) {
     const user = await verifyToken(req);
     const userId = user.uid;
     const db = await getDb();
+    const kbId = (req.query?.kbId as string | undefined) || undefined;
+
+    // Per-KB Insights — a single knowledge base's own live graph slice. No
+    // Mongo kb_entities fallback here (that index isn't KB-scoped); an empty
+    // graph just means the KB has no ingested content yet.
+    if (kbId) {
+      const kbDoc = await db.collection('knowledge_bases').findOne({ _id: kbId, userId });
+      if (!kbDoc) return res.status(404).json({ error: 'Knowledge base not found' });
+      const graphStats = await getUserGraphStats(userId, kbId);
+      const empty: GraphStats = { total: 0, documents: 0, graph: { nodes: 0, edges: 0 }, byType: [], bySource: [], byStatus: [], timeline: [], recent: [] };
+      return res.status(200).json({ ...(graphStats || empty), knowledgeBases: 1 });
+    }
 
     const [graphStats, connections, kbs] = await Promise.all([
       getUserGraphStats(userId),

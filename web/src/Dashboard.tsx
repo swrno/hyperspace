@@ -23,7 +23,7 @@ const SRC_META: Record<string, MetaEntry> = {
   slack:      { label: 'Slack',           color: '#C28379' },
   salesforce: { label: 'Salesforce',      color: '#9C93B0' },
 };
-const COMING_SOON = ['slack', 'salesforce'];
+const COMING_SOON = ['jira', 'gsheets', 'slack', 'salesforce'];
 
 const TYPE_META: Record<string, MetaEntry & { Icon: LucideIcon }> = {
   WorkItem:   { label: 'Work items',    color: '#8AA9C9', Icon: CircleDot },
