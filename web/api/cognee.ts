@@ -78,6 +78,9 @@ export async function resolveDatasetId(userId: string, kbId?: string): Promise<s
 /** Create Entity nodes from extracted entities, link to a parent node, add RELATES_TO edges. */
 async function writeEntities(
   entities: NamedEntity[],
+  // Must bind the variable name `p` (matched below in `CREATE (p)-[:HAS_ENTITY]->(e)`).
+  // A mismatched variable here doesn't error — Cypher just declares `p` fresh in
+  // the CREATE, silently producing a blank, disconnected node per entity.
   parentCypher: string, // e.g. `(p:Chunk {chunk_id: $parentId, kb_id: $kbId})`
   parentParams: Record<string, any>,
   kbId: string,
@@ -269,7 +272,7 @@ export async function ingestGitHubEntity(
       );
       if (issueText) {
         const entities = await extractNamedEntities(issueText);
-        if (entities.length) await writeEntities(entities, `(i:Issue {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
+        if (entities.length) await writeEntities(entities, `(p:Issue {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'Commit' && repoId) {
       const commitText = (props.commit_text_content || props.message || '').trim();
@@ -283,7 +286,7 @@ export async function ingestGitHubEntity(
       );
       if (commitText) {
         const entities = await extractNamedEntities(commitText);
-        if (entities.length) await writeEntities(entities, `(cm:Commit {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
+        if (entities.length) await writeEntities(entities, `(p:Commit {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'PRComment' && prId) {
       const commentText = (props.comment || '').trim();
@@ -307,7 +310,7 @@ export async function ingestGitHubEntity(
       );
       if (fileText) {
         const entities = await extractNamedEntities(fileText);
-        if (entities.length) await writeEntities(entities, `(f:File {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
+        if (entities.length) await writeEntities(entities, `(p:File {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'Calendar') {
       const calText = `${props.name || ''} ${props.description || ''}`.trim();
@@ -331,7 +334,7 @@ export async function ingestGitHubEntity(
       );
       if (evtText) {
         const entities = await extractNamedEntities(evtText);
-        if (entities.length) await writeEntities(entities, `(evt:CalendarEvent {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
+        if (entities.length) await writeEntities(entities, `(p:CalendarEvent {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     }
   } catch (e: any) {
