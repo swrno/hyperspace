@@ -101,7 +101,7 @@ async function generateReply(messages, modeId) {
 
 async function generateTitle(message) {
   try {
-    const out = await generateReply([
+    const { content: out } = await generateReply([
       { role: 'system', content: 'Generate a short 3-5 word title for a conversation that starts with the user message below. Reply with only the title - no quotes, no punctuation.' },
       { role: 'user', content: message },
     ], 'normal');
@@ -190,7 +190,7 @@ export default async function handler(req: Request, res: Response) {
       { role: 'user', content: message },
     ];
 
-    const reply = await generateReply(messages, modeId);
+    const { content: reply, reasoning } = await generateReply(messages, modeId);
     if (!reply) throw new Error('Empty response from AI providers');
 
     await logMessageUsage(user);
@@ -200,7 +200,7 @@ export default async function handler(req: Request, res: Response) {
     let title;
     if (!history.length) title = await generateTitle(message);
 
-    return res.status(200).json({ response: reply, title, retrievalMode: modeId });
+    return res.status(200).json({ response: reply, reasoning: reasoning || undefined, title, retrievalMode: modeId });
   } catch (error) {
     console.error('Error in /api/chat:', error.message);
     const status = error.message.includes('Authorization') ? 418 : 500;

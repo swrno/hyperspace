@@ -472,7 +472,7 @@ export async function multiHopSearch(query: string, { userId, kbId, topK = 10 }:
   let subQueries: string[] = [query];
   if (llmConfigured() && query.trim().split(/\s+/).length >= 4) {
     try {
-      const raw = await generateReply(
+      const { content: raw } = await generateReply(
         [
           { role: 'system', content: 'Decompose the user question into 1–3 short, specific retrieval sub-questions. Return ONLY a valid JSON array of strings, no explanation, no markdown.' },
           { role: 'user', content: query },

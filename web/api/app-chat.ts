@@ -167,6 +167,12 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
       finalSystemPrompt += `\n\n# Retrieved Context\nNo specific documents were retrieved for this query. Let the user know what knowledge bases you have access to and suggest they ask more specific questions.`;
     }
 
+    // Reasoning models expose their chain-of-thought via a separate field
+    // (stripped out server-side into `reasoning`); this guards against models
+    // that inline it as prose instead, which would otherwise leak "let me
+    // think..." drafting into the visible answer.
+    finalSystemPrompt += `\n\n# Output Discipline\nRespond with ONLY the final answer. Do not narrate your reasoning process, list the steps you took, or include drafting notes ("let me think...", "first I'll...") in the response — think privately and output just the polished answer.`;
+
     messages.push({ role: 'system', content: finalSystemPrompt });
     
     // Add history
@@ -182,7 +188,7 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
     const chain = model
       ? [['fireworks', model], ...DEFAULT_CHAIN] as typeof DEFAULT_CHAIN
       : DEFAULT_CHAIN;
-    const replyContent = await generateReply(messages, chain, {
+    const { content: replyContent, reasoning } = await generateReply(messages, chain, {
       temperature: temperature ?? 0.7,
       maxTokens: maxTokens ?? 1024,
       topP: topP ?? 1,
@@ -191,9 +197,9 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
     // Save messages to MongoDB
     const db = await getDb();
     const appsCollection = db.collection('apps');
-    
+
     const userMsgObj = { id: Date.now(), role: 'user', content: message, timestamp: new Date().toISOString(), sessionId };
-    const aiMsgObj = { id: Date.now() + 1, role: 'assistant', content: replyContent, timestamp: new Date().toISOString(), sessionId };
+    const aiMsgObj = { id: Date.now() + 1, role: 'assistant', content: replyContent, reasoning: reasoning || undefined, timestamp: new Date().toISOString(), sessionId };
 
     await appsCollection.updateOne(
       { id: appId },

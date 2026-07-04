@@ -83,10 +83,25 @@ class LLMError extends Error {
 }
 
 type CallOpts = { maxTokens?: number; temperature?: number; topP?: number };
+export type LLMReply = { content: string; reasoning: string };
+
+/**
+ * Reasoning models (deepseek-v4-pro, kimi-k2p6, glm-5p2, gpt-oss-120b, …)
+ * usually return chain-of-thought in a separate `reasoning_content` field, but
+ * some inline it as <think>…</think> in `content` instead. Normalize both into
+ * one shape so the visible answer never contains leaked "let me think…" prose.
+ */
+function splitReasoning(content: string, reasoningContent?: string): LLMReply {
+  const inline = content.match(/<think>([\s\S]*?)<\/think>/);
+  if (inline) {
+    return { content: content.replace(inline[0], '').trim(), reasoning: inline[1].trim() };
+  }
+  return { content: content.trim(), reasoning: (reasoningContent || '').trim() };
+}
 
 async function callOpenAICompatible(
   url: string, key: string | undefined, model: string, messages: ChatMessage[], opts: CallOpts,
-): Promise<string> {
+): Promise<LLMReply> {
   if (!key) throw new Error('key not set');
   const res = await fetch(url, {
     method: 'POST',
@@ -99,7 +114,8 @@ async function callOpenAICompatible(
     }),
   });
   if (!res.ok) throw new LLMError(res.status, await res.text().catch(() => ''));
-  return (await (res.json() as any)).choices?.[0]?.message?.content?.trim() || '';
+  const msg = (await (res.json() as any)).choices?.[0]?.message || {};
+  return splitReasoning(msg.content || '', msg.reasoning_content);
 }
 
 // Round-robin cursor so load spreads across Fireworks keys across calls.
@@ -113,7 +129,7 @@ let _fwCursor = 0;
 // won't be fixed by a different key, so we fail fast to the next model.
 const FW_ROTATE_STATUS = new Set([401, 402, 403, 429, 503]);
 
-async function callFireworks(model: string, messages: ChatMessage[], opts: CallOpts): Promise<string> {
+async function callFireworks(model: string, messages: ChatMessage[], opts: CallOpts): Promise<LLMReply> {
   const keys = fireworksKeys();
   if (!keys.length) throw new Error('FIREWORKS_API_KEY not set');
   let lastErr: any;
@@ -169,24 +185,27 @@ export async function rerankFireworks(query: string, documents: string[], topN?:
   return documents.slice(0, topN);
 }
 
-const CALL: Record<Provider, (m: string, msgs: ChatMessage[], o: CallOpts) => Promise<string>> = {
+const CALL: Record<Provider, (m: string, msgs: ChatMessage[], o: CallOpts) => Promise<LLMReply>> = {
   fireworks: callFireworks,
 };
 
 /**
  * Run a message list through a model fallback chain, returning the first
- * non-empty completion. Throws only if every model in the chain fails.
+ * non-empty completion split into { content, reasoning }. `reasoning` is the
+ * model's chain-of-thought (if any) — keep it out of the user-visible answer;
+ * callers that don't care about it can just destructure `.content`. Throws
+ * only if every model in the chain fails.
  */
 export async function generateReply(
   messages: ChatMessage[],
   chain: ProviderModel[] = DEFAULT_CHAIN,
   opts: CallOpts = {},
-): Promise<string> {
+): Promise<LLMReply> {
   let lastErr: any;
   for (const [provider, model] of chain) {
     try {
       const out = await CALL[provider](model, messages, opts);
-      if (out) return out;
+      if (out.content) return out;
     } catch (e: any) {
       lastErr = e;
       console.warn(`Provider ${provider} (${model}) failed:`, e.message);

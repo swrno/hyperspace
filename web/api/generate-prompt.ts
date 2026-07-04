@@ -34,7 +34,7 @@ export default async function generatePromptHandler(req: Request, res: Response)
     const userMessage = parts.join('\n') + '\n\nWrite the system prompt now.';
 
     // Fireworks only (multi-key), primary model falling back to the other.
-    const generatedPrompt = await generateReply(
+    const { content: generatedPrompt } = await generateReply(
       [
         { role: 'system', content: META_PROMPT },
         { role: 'user', content: userMessage },
