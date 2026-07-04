@@ -1,12 +1,7 @@
 /**
  * Shared LLM routing for every server-side model call (chat, app-chat, prompt
- * generation, ingestion NER). One place owns provider order, model ids, and the
- * multi-key Fireworks rotation so quotas are spread and a single provider/key
- * outage never breaks a feature.
- *
- * Provider order: Fireworks (primary) → Groq (fallback) → Gemini (last resort).
- * Fireworks is primary because Groq's on-demand TPM limits are too low; Groq
- * stays wired as a fallback but is rarely expected to be hit.
+ * generation, ingestion NER). One place owns the model ids and the multi-key
+ * Fireworks rotation so a single key outage never breaks a feature.
  *
  * Fireworks multi-key: set FIREWORKS_API_KEYS to a comma-separated list (or a
  * single FIREWORKS_API_KEY). Calls round-robin across keys and, on a rate-limit
@@ -14,33 +9,22 @@
  */
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-export type Provider = 'fireworks' | 'groq' | 'gemini' | 'openrouter';
+export type Provider = 'fireworks';
 export type ProviderModel = [Provider, string];
 
-// Canonical model ids per provider. Change here, everywhere updates.
+// Canonical Fireworks model ids. Change here, everywhere updates.
 export const MODELS = {
-  // Fireworks (primary). Maverick is the default; large/reasoning slots reuse it
-  // until we settle on a bigger id we've verified against the account.
-  fireworksPrimary: 'accounts/fireworks/models/llama4-maverick-instruct-basic',
-  fireworksLarge:   'accounts/fireworks/models/llama4-maverick-instruct-basic',
-  // Groq (fallback).
-  groq:        'openai/gpt-oss-120b',
-  groqSmall:   'llama-3.1-8b-instant',
-  // Gemini (last resort).
-  geminiFast:  'gemini-2.5-flash',
-  geminiPro:   'gemini-2.5-pro',
+  fireworksPrimary: 'accounts/fireworks/models/glm-5p2',
+  fireworksLarge:   'accounts/fireworks/models/kimi-k2p7-code',
 } as const;
 
-/** Default Fireworks-primary chain for general-purpose calls. */
+/** Default chain for general-purpose calls: primary model, falling back to the other. */
 export const DEFAULT_CHAIN: ProviderModel[] = [
   ['fireworks', MODELS.fireworksPrimary],
-  ['groq', MODELS.groq],
-  ['gemini', MODELS.geminiFast],
+  ['fireworks', MODELS.fireworksLarge],
 ];
 
 const FIREWORKS_URL = 'https://api.fireworks.ai/inference/v1/chat/completions';
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 /** All configured Fireworks keys (FIREWORKS_API_KEYS csv, else FIREWORKS_API_KEY). */
 export function fireworksKeys(): string[] {
@@ -53,7 +37,7 @@ export function fireworksKeys(): string[] {
 
 /** True if at least one provider can be called. */
 export function llmConfigured(): boolean {
-  return !!(fireworksKeys().length || process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY);
+  return !!fireworksKeys().length;
 }
 
 class LLMError extends Error {
@@ -94,7 +78,7 @@ let _fwCursor = 0;
 //   429 rate-limited · 503 capacity. With multiple keys under tight credit
 //   limits, one exhausted key must transparently fail over to another.
 // Everything else (400/413 bad or oversized request) is the request's fault and
-// won't be fixed by a different key, so we fail fast to the next provider.
+// won't be fixed by a different key, so we fail fast to the next model.
 const FW_ROTATE_STATUS = new Set([401, 402, 403, 429, 503]);
 
 async function callFireworks(model: string, messages: ChatMessage[], opts: CallOpts): Promise<string> {
@@ -118,37 +102,13 @@ async function callFireworks(model: string, messages: ChatMessage[], opts: CallO
   throw lastErr;
 }
 
-const callGroq = (model: string, messages: ChatMessage[], opts: CallOpts) =>
-  callOpenAICompatible(GROQ_URL, process.env.GROQ_API_KEY, model, messages, opts);
-const callOpenRouter = (model: string, messages: ChatMessage[], opts: CallOpts) =>
-  callOpenAICompatible(OPENROUTER_URL, process.env.OPENROUTER_API_KEY, model, messages, opts);
-
-async function callGemini(model: string, messages: ChatMessage[], opts: CallOpts): Promise<string> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY not set');
-  const systemText = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
-  const contents = messages.filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: systemText ? { parts: [{ text: systemText }] } : undefined,
-      contents,
-      generationConfig: { temperature: opts.temperature ?? 0.6, maxOutputTokens: opts.maxTokens ?? 2048 },
-    }),
-  });
-  if (!res.ok) throw new LLMError(res.status, await res.text().catch(() => ''));
-  return (await (res.json() as any)).candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('').trim() || '';
-}
-
 const CALL: Record<Provider, (m: string, msgs: ChatMessage[], o: CallOpts) => Promise<string>> = {
-  fireworks: callFireworks, groq: callGroq, gemini: callGemini, openrouter: callOpenRouter,
+  fireworks: callFireworks,
 };
 
 /**
- * Run a message list through a provider fallback chain, returning the first
- * non-empty completion. Throws only if every provider in the chain fails.
+ * Run a message list through a model fallback chain, returning the first
+ * non-empty completion. Throws only if every model in the chain fails.
  */
 export async function generateReply(
   messages: ChatMessage[],

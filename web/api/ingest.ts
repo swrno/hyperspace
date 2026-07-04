@@ -279,7 +279,7 @@ export async function syncAllDue(intervalMinutes = 30) {
 
 // NOTE: the node graph no longer runs its own LLM NER. Cognee is the sole
 // entity/relationship extractor (via cognify) so the two pipelines don't compete
-// for Groq's rate-limited quota. The node graph keeps only structural nodes,
+// for Fireworks quota. The node graph keeps only structural nodes,
 // content, embeddings, gcal's structured entities, and Jira linked-issue edges.
 
 /** Populate .metadata.embedding on each EntityNode in one paced batch; never throws. */

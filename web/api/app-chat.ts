@@ -3,7 +3,7 @@ import { getDb } from './mongodb.js';
 import { multiHopSearch } from './cognee.js';
 import { verifyToken } from './auth.js';
 import { retrieveNodeGraphContext } from './retrieval.js';
-import { generateReply, DEFAULT_CHAIN, MODELS, llmConfigured } from './lib/llm.js';
+import { generateReply, DEFAULT_CHAIN, llmConfigured } from './lib/llm.js';
 
 export default async function appChatHandler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -29,7 +29,7 @@ export default async function appChatHandler(req: Request, res: Response) {
     }
 
     if (!llmConfigured()) {
-      return res.status(500).json({ error: 'No LLM provider configured (set FIREWORKS_API_KEYS or GROQ_API_KEY)' });
+      return res.status(500).json({ error: 'No LLM provider configured (set FIREWORKS_API_KEY or FIREWORKS_API_KEYS)' });
     }
 
     const messages = [];
@@ -171,8 +171,8 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
     // Add new user message
     messages.push({ role: 'user', content: message });
 
-    // Fireworks (primary, multi-key) → Groq → Gemini. A caller-supplied `model`
-    // (a Fireworks id) leads the chain; otherwise the default Fireworks primary.
+    // Fireworks only (multi-key). A caller-supplied `model` (a Fireworks id)
+    // leads the chain; otherwise the default Fireworks primary.
     const chain = model
       ? [['fireworks', model], ...DEFAULT_CHAIN] as typeof DEFAULT_CHAIN
       : DEFAULT_CHAIN;

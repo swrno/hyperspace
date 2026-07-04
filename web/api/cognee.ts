@@ -41,7 +41,7 @@
 
 import { configured, runCypher, ensureSchema, int } from './lib/neo4j.js';
 import { embed, embedBatch, semanticChunkText } from './lib/embeddings.js';
-import { generateReply, DEFAULT_CHAIN, MODELS, llmConfigured, type ProviderModel } from './lib/llm.js';
+import { generateReply, DEFAULT_CHAIN, llmConfigured, type ProviderModel } from './lib/llm.js';
 import { extractNamedEntities, type NamedEntity } from './lib/ner.js';
 
 // Lazily ensure the Neo4j vector/full-text indexes exist — but only once, and
@@ -458,9 +458,8 @@ export async function multiHopSearch(query: string, { userId, kbId, topK = 10 }:
   let subQueries: string[] = [query];
   if (llmConfigured() && query.trim().split(/\s+/).length >= 4) {
     try {
-      // A small, fast model is enough to decompose the question. Groq's tiny
-      // instant model leads here (cheap); Fireworks/Gemini back it up.
-      const decomChain: ProviderModel[] = [['groq', MODELS.groqSmall], ...DEFAULT_CHAIN];
+      // A small, fast model is enough to decompose the question.
+      const decomChain: ProviderModel[] = DEFAULT_CHAIN;
       const raw = await generateReply(
         [
           { role: 'system', content: 'Decompose the user question into 1–3 short, specific retrieval sub-questions. Return ONLY a valid JSON array of strings, no explanation, no markdown.' },

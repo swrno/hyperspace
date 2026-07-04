@@ -23,8 +23,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SYNC_INTERVAL_MINUTES = Number(process.env.SYNC_INTERVAL_MINUTES || 30);
 
-if (!process.env.GEMINI_API_KEY) {
-  console.warn('⚠️ WARNING: GEMINI_API_KEY is not set in .env file.');
+if (!process.env.FIREWORKS_API_KEY && !process.env.FIREWORKS_API_KEYS) {
+  console.warn('⚠️ WARNING: FIREWORKS_API_KEY is not set in .env file.');
   console.warn('The chatbot will not function correctly without it.');
 }
 

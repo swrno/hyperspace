@@ -57,8 +57,8 @@ Formatting (important):
 - Use a fenced code block ONLY for genuine multi-line code, config, or terminal commands, and always tag the language (\`\`\`js). NEVER wrap a single short value or path in a fenced block.
 - Use ## / ### headings only when the answer has multiple real sections. Use tables for comparisons. Bold key terms sparingly.`;
 
-// LLM provider routing (Fireworks primary → Groq → Gemini) with multi-key
-// Fireworks rotation lives in lib/llm.ts. Modes below only choose the chain.
+// LLM routing (Fireworks only, multi-key rotation) lives in lib/llm.ts.
+// Modes below only choose which Fireworks model leads the chain.
 
 // Per-mode answer depth instruction (drives how long/structured the reply is).
 export const MODE_STYLE = {
@@ -78,15 +78,15 @@ export const MODE_STYLE = {
 const MODES: Record<string, { searchType: string; topK: number; timeout: number; maxTokens: number; chain: ProviderModel[] }> = {
   normal: {
     searchType: 'GRAPH_COMPLETION', topK: 8, timeout: 6000, maxTokens: 1024,
-    chain: [['fireworks', MODELS.fireworksPrimary], ['groq', MODELS.groq], ['gemini', MODELS.geminiFast]],
+    chain: [['fireworks', MODELS.fireworksPrimary], ['fireworks', MODELS.fireworksLarge]],
   },
   deep: {
     searchType: 'GRAPH_COMPLETION_DECOMPOSITION', topK: 12, timeout: 10000, maxTokens: 2800,
-    chain: [['fireworks', MODELS.fireworksLarge], ['groq', MODELS.groq], ['gemini', MODELS.geminiPro]],
+    chain: [['fireworks', MODELS.fireworksLarge], ['fireworks', MODELS.fireworksPrimary]],
   },
   hyper: {
     searchType: 'GRAPH_COMPLETION_COT', topK: 16, timeout: 15000, maxTokens: 4096,
-    chain: [['fireworks', MODELS.fireworksLarge], ['groq', MODELS.groq], ['gemini', MODELS.geminiPro]],
+    chain: [['fireworks', MODELS.fireworksLarge], ['fireworks', MODELS.fireworksPrimary]],
   },
 };
 export const resolveMode = (m) => (MODES[m] ? m : 'normal');
