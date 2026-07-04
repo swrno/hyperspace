@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, type ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
+import React, { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { getTimeBasedGreeting } from './greetings';
 import type {
   ActiveScreen, AdminUser, Chat, Connector, Connectors,
-  ConnectorItem, ConnectorStage, Message, Platform, Settings, User, Application,
+  Message, Platform, Settings, User, Application,
 } from './types';
 import {
   Send, Trash2, Download, Sun, Moon, Copy, Menu, X,
@@ -15,12 +15,13 @@ import {
   Mic, Image as ImageIcon, Search, Pencil, RefreshCw, Shield, Users, LogOut, Key,
   LayoutDashboard, Database, Blocks, MessagesSquare, ArrowRight, ArrowUpRight,
   LayoutGrid, AppWindow, Link2, Link2Off, SlidersHorizontal, Cpu, Unlink,
-  Activity, Clock, Code, PlaySquare, Loader2
+  Activity, Clock, Code, PlaySquare, Loader2, Telescope, ArrowUp, Gauge, type LucideIcon
 } from 'lucide-react';
 import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import Dashboard from './Dashboard';
 import KnowledgeBases from './KnowledgeBases';
+import ApiKeys from './ApiKeys';
 import ErrorBoundary from './ErrorBoundary';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
@@ -208,6 +209,107 @@ const parseMessageWithThink = (content: string) => {
   }
   return { reasoning: null, content };
 };
+
+/* Flatten react-markdown children (strings, nested elements) into raw code text. */
+const extractCodeText = (node: ReactNode): string => {
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(extractCodeText).join('');
+  if (React.isValidElement(node)) return extractCodeText((node.props as { children?: ReactNode }).children);
+  return '';
+};
+
+/* Fenced code block styled like Claude's: language label + copy button in a
+   header bar, hljs-highlighted body on the app's dark surface. */
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  const highlighted = useMemo(() => {
+    if (language && hljs.getLanguage(language)) {
+      return hljs.highlight(code, { language, ignoreIllegals: true }).value;
+    }
+    const auto = hljs.highlightAuto(code);
+    return auto.relevance > 5 ? auto.value : null;
+  }, [language, code]);
+  const copy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <div className="my-3 rounded-xl border border-[#3D3A37] bg-[#161514] overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#1E1D1C] border-b border-[#3D3A37]">
+        <span className="text-[11px] text-[#8C8880] font-geist-mono lowercase select-none">{language || 'text'}</span>
+        <button
+          onClick={copy}
+          className="flex items-center gap-1.5 text-[11px] text-[#8C8880] hover:text-[#F4F0EB] transition-colors"
+          aria-label="Copy code"
+        >
+          {copied ? <Check size={12} className="text-[#C9A66B]" /> : <Copy size={12} />}
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="p-4 overflow-x-auto leading-relaxed">
+        {highlighted !== null
+          ? <code className="hljs font-geist-mono text-[12.5px]" style={{ background: 'transparent', padding: 0 }} dangerouslySetInnerHTML={{ __html: highlighted }} />
+          : <code className="font-geist-mono text-[12.5px] text-[#C9D1D9]">{code}</code>}
+      </pre>
+    </div>
+  );
+}
+
+/* On-brand GFM markdown for chat — no `prose`, explicit dark-surface styling. */
+const mdComponents: Components = {
+  p: ({ children }) => <p className="my-2 leading-relaxed first:mt-0 last:mb-0">{children}</p>,
+  a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="text-[#C9A66B] underline underline-offset-2 hover:text-[#D8B48C] transition-colors">{children}</a>,
+  ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1 marker:text-[#6B6762]">{children}</ul>,
+  ol: ({ children }) => <ol className="my-2 ml-5 list-decimal space-y-1 marker:text-[#6B6762]">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  h1: ({ children }) => <h1 className="text-[17px] font-semibold text-[#F4F0EB] mt-3 mb-1.5 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-[15.5px] font-semibold text-[#F4F0EB] mt-3 mb-1.5 first:mt-0">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-[14px] font-semibold text-[#F4F0EB] mt-2.5 mb-1 first:mt-0">{children}</h3>,
+  strong: ({ children }) => <strong className="font-semibold text-[#F4F0EB]">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  blockquote: ({ children }) => <blockquote className="border-l-2 border-[#57534E] pl-3 my-2 text-[#C7C2BC]">{children}</blockquote>,
+  hr: () => <hr className="my-3 border-[#3D3A37]" />,
+  code: ({ className, children }) => (
+    (className || '').includes('language-')
+      ? <code className={`${className || ''} font-geist-mono text-[12.5px]`}>{children}</code>
+      : <code className="px-1.5 py-0.5 rounded-md bg-[#161514] border border-[#3D3A37] text-[#D8B48C] text-[12.5px] font-geist-mono">{children}</code>
+  ),
+  pre: ({ children }) => {
+    const child = React.Children.toArray(children)[0];
+    const props = React.isValidElement(child)
+      ? (child.props as { className?: string; children?: ReactNode })
+      : { className: '', children };
+    const match = /language-([\w+-]+)/.exec(props.className || '');
+    return <CodeBlock language={match?.[1] || ''} code={extractCodeText(props.children).replace(/\n$/, '')} />;
+  },
+  table: ({ children }) => <div className="my-2.5 overflow-x-auto rounded-lg border border-[#3D3A37]"><table className="w-full text-[13px] border-collapse">{children}</table></div>,
+  thead: ({ children }) => <thead className="bg-[#1E1D1C]">{children}</thead>,
+  th: ({ children }) => <th className="text-left font-semibold text-[#F4F0EB] px-3 py-2 border-b border-[#3D3A37]">{children}</th>,
+  td: ({ children }) => <td className="px-3 py-2 border-t border-[#2E2C2A] text-[#C7C2BC] align-top">{children}</td>,
+};
+
+/* LLMs often format a GitHub issue reference as an ATX heading (e.g.
+   "# #11: While pasting the PAT …"), which react-markdown renders as a giant
+   <h1>. Demote any heading whose text is an issue-style "#<number>" reference
+   back to inline bold, leaving genuine section headings (## Summary) intact. */
+const normalizeAiMarkdown = (md: string) =>
+  md.replace(/^\s{0,3}#{1,6}[ \t]+(#\d[^\n]*?)\s*$/gm, '**$1**');
+
+/** Chat-styled GFM markdown renderer used in the app playground. */
+function ChatMarkdown({ children }: { children: string }) {
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{normalizeAiMarkdown(children)}</ReactMarkdown>;
+}
+
+/** Retrieval-depth modes shown in the playground composer. */
+type SearchMode = 'normal' | 'hyper' | 'deep';
+const SEARCH_MODES: { id: SearchMode; label: string; desc: string; Icon: LucideIcon }[] = [
+  { id: 'normal', label: 'Normal Search', desc: 'Fast vector lookup over the top matches', Icon: Search },
+  { id: 'hyper',  label: 'Hyper Search',  desc: 'Hybrid vector + graph, fused with RRF',    Icon: Gauge },
+  { id: 'deep',   label: 'Deep Search',   desc: 'Multi-hop graph traversal for hard questions', Icon: Telescope },
+];
 
 const groupChatsByDate = (chats: Chat[]) => {
   const groups: Record<string, Chat[]> = {
@@ -630,7 +732,7 @@ const SettingsModal = ({ isOpen, onClose, settings, onSave, onClearAll, connecto
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-[14px] font-geist font-semibold text-[#F4F0EB]">{p.name}</span>
-                          {comingSoon && <span className="text-[10px] font-geist font-semibold text-[#C9A66B] bg-[#2A2318] border border-[#5A4A28] px-1.5 py-0.5 rounded-md uppercase tracking-wide">Soon</span>}
+                          {comingSoon && <span className="text-[10px] font-geist font-semibold text-[#8C8880] bg-[#1E1D1C] border border-[#33302E] px-1.5 py-0.5 rounded-md uppercase tracking-wide">Soon</span>}
                           {!comingSoon && connected && (
                             <span className="flex items-center gap-1.5 text-[10px] font-geist font-semibold text-[#8FAE97] bg-[#1E2A22] border border-[#2E4636] px-1.5 py-0.5 rounded-md">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#8FAE97]"></span> Connected
@@ -685,9 +787,11 @@ const SettingsModal = ({ isOpen, onClose, settings, onSave, onClearAll, connecto
                   <p className="text-[15px] font-geist font-semibold text-[#F4F0EB] truncate">{user?.name}</p>
                   <p className="text-[12px] font-geist text-[#8C8880] truncate">{user?.email}</p>
                 </div>
-                <span className={`shrink-0 text-[10px] font-geist font-semibold uppercase tracking-[0.1em] px-2.5 py-1 rounded-md border ${tierAccent ? 'bg-[#1E1D1C] text-[#9C968E] border-[#4A4744]' : 'bg-[#33302E] text-[#F4F0EB] border-[#57534E]'}`}>
-                  {tierLabel}
-                </span>
+                {tierLabel !== 'Free' && (
+                  <span className="shrink-0 text-[10px] font-geist font-semibold uppercase tracking-[0.1em] px-2.5 py-1 rounded-md border bg-[#33302E] text-[#F4F0EB] border-[#57534E]">
+                    {tierLabel}
+                  </span>
+                )}
               </div>
               <div className="space-y-2">
                 <button
@@ -824,29 +928,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     setAuthError('');
     setAuthSuccessMsg('');
 
-    // Secure Custom Administrator credentials check
-    if (loginEmail.trim().toLowerCase() === 'soulsoumya1234@gmail.com') {
-      if (loginPassword === 'SoumyaAdmin@2026!') {
-        const mockAdminUser: User = {
-          uid: 'admin-orgmind-uid',
-          email: 'soulsoumya1234@gmail.com',
-          name: 'Admin',
-          role: 'admin',
-          avatar: ''
-        };
-        setUser(mockAdminUser);
-        setIdToken('admin-super-bypass-token-2026');
-        localStorage.setItem('orgmind_admin_session', JSON.stringify(mockAdminUser));
-        setAuthSuccessMsg('Welcome back, Admin!');
-        setAuthFormLoading(false);
-        return;
-      } else {
-        setAuthError('Incorrect password for administrator account.');
-        setAuthFormLoading(false);
-        return;
-      }
-    }
-
+    // The admin account (ADMIN_EMAIL) is a normal Firebase user; the server
+    // grants it the admin role on login. No client-side password or bypass token.
     try {
       const { signInWithEmailAndPassword } = await import('./firebase');
       await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
@@ -960,7 +1043,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   // Connector / knowledge-graph ingestion state
   const [connectors, setConnectors] = useState<Connectors>({}); // { [platformId]: { connected, account, status, lastSync } }
   const [connectorModal, setConnectorModal] = useState<string | null>(null); // open platform id
-  const [connectorStage, setConnectorStage] = useState<ConnectorStage>('auth'); // only 'auth' stage used now
   const [connectorBusy, setConnectorBusy] = useState(false);
   const [rateLimitMsg, setRateLimitMsg] = useState('');
   const [showCookieConsent, setShowCookieConsent] = useState(() => !localStorage.getItem('orgmind_cookie_consent'));
@@ -981,6 +1063,10 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const appMessagesEndRef = useRef<HTMLDivElement>(null);
   const [appCopiedId, setAppCopiedId] = useState<number | string | null>(null);
   const [appModelDropdownOpen, setAppModelDropdownOpen] = useState(false);
+  const [appSessionDropdownOpen, setAppSessionDropdownOpen] = useState(false);
+  const [appSearchMode, setAppSearchMode] = useState<SearchMode>('normal');
+  const [appSearchDropdownOpen, setAppSearchDropdownOpen] = useState(false);
+  const [appConfigModelOpen, setAppConfigModelOpen] = useState(false);
   const [appSettingsForm, setAppSettingsForm] = useState<{
     systemPrompt: string; model: string; temperature: number; maxTokens: number;
   } | null>(null);
@@ -998,7 +1084,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   // account switches) — a global key leaked one account's sources into another.
   const uidFromToken = (token: string | null): string => {
     if (!token) return 'anon';
-    if (token === 'admin-super-bypass-token-2026') return 'admin-soulsoumya-uid';
     try {
       const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
       return payload.user_id || payload.sub || 'anon';
@@ -1072,7 +1157,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   const openConnector = (platformId: string) => {
     setConnectorModal(platformId);
-    setConnectorStage('auth');
     setConnectorBusy(false);
   };
 
@@ -1083,12 +1167,15 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   const authorizePlatform = async (platformId: string) => {
     setConnectorBusy(true);
-    // Real OAuth disabled for UI mockup mode.
-    // if (OAUTH_PLATFORMS.includes(platformId) && idToken) {
-    //   window.location.href = `/api/auth/${platformId}/authorize?token=${encodeURIComponent(idToken)}`;
-    //   return;
-    // }
-    // Simulated: mark as connected after a short delay
+    // Real OAuth: bounce the browser to the provider's consent screen. The
+    // Firebase token rides as a query param since this is a full-page redirect,
+    // not a fetch (see authorizeHandler in api/oauth.ts). The callback returns
+    // to /?connected=<platform>, handled by the effect below.
+    if (OAUTH_PLATFORMS.includes(platformId) && idToken) {
+      window.location.href = `/api/auth/${platformId}/authorize?token=${encodeURIComponent(idToken)}`;
+      return;
+    }
+    // Non-OAuth (mockup) connectors: mark as connected after a short delay.
     setTimeout(() => {
       saveConnector(platformId, {
         connected: true,
@@ -1150,7 +1237,9 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     const connected = params.get('connected');
     if (params.get('screen') === 'integrations') navigate('/integration');
     if (connected) {
-      // OAuth complete — just reload connector state. No item selection step.
+      // OAuth complete — refresh connector state. Integrations only links the
+      // account; picking what to ingest (repos / docs / slides…) happens per
+      // knowledge base in the Knowledge tab.
       loadConnectors(idToken);
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -1181,40 +1270,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
 
   // Firebase Auth State change listener
   useEffect(() => {
-    // 1. Recover Admin Session if present
-    const savedAdmin = localStorage.getItem('orgmind_admin_session');
-    if (savedAdmin) {
-      setAuthLoading(true);
-      try {
-        const parsed = JSON.parse(savedAdmin);
-        setUser(parsed);
-        setIdToken('admin-super-bypass-token-2026');
-
-        // Load chats from MongoDB
-        fetch('/api/chats', {
-          headers: { 'Authorization': `Bearer admin-super-bypass-token-2026` }
-        })
-          .then(res => res.ok ? res.json() : null)
-          .then(data => {
-            if (data) {
-              setChats(data.chats || []);
-              if (data.user) {
-                setUser(prev => ({
-                  ...prev,
-                  role: data.user.role || prev?.role,
-                  tier: data.user.tier || prev?.tier || 'ultra'
-                } as User));
-              }
-            }
-          })
-          .catch(err => console.error(err))
-          .finally(() => setAuthLoading(false));
-      } catch (e) {
-        console.error(e);
-        setAuthLoading(false);
-      }
-      return;
-    }
+    // Clear any legacy admin-bypass session left in localStorage by older builds.
+    localStorage.removeItem('orgmind_admin_session');
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setAuthLoading(true);
@@ -1442,6 +1499,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     if (p.startsWith('/app')) setActiveScreen('applications');
     else if (p.startsWith('/kb')) setActiveScreen('knowledge');
     else if (p.startsWith('/integration')) setActiveScreen('integrations');
+    else if (p.startsWith('/keys')) setActiveScreen('api-keys');
     else if (p === '/' || (!p.startsWith('/c') && !p.startsWith('/login'))) setActiveScreen('dashboard');
   }, [location.pathname]);
 
@@ -1450,6 +1508,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     if (screen === 'knowledge') navigate('/kb');
     else if (screen === 'applications') navigate('/app');
     else if (screen === 'integrations') navigate('/integration');
+    else if (screen === 'api-keys') navigate('/keys');
     else if (screen === 'dashboard') navigate('/');
     else if (screen === 'admin') navigate('/admin');
   };
@@ -2051,12 +2110,13 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       </div>
 
       {/* Primary navigation */}
-      <div className={`flex flex-col gap-0.5 ${isSidebarCollapsed ? 'mt-4 items-center' : 'px-3 mt-1'}`}>
+      <div className={`flex flex-col gap-1.5 ${isSidebarCollapsed ? 'mt-4 items-center' : 'px-3 mt-1'}`}>
         {([
           { id: 'dashboard', label: 'Dashboard', Icon: LayoutDashboard, path: '/' },
           { id: 'applications', label: 'Applications', Icon: LayoutGrid, path: '/app' },
           { id: 'knowledge', label: 'Knowledge', Icon: Database, path: '/kb' },
           { id: 'integrations', label: 'Integrations', Icon: Blocks, path: '/integration' },
+          { id: 'api-keys', label: 'API Keys', Icon: Key, path: '/keys' },
         ] as const).map(({ id, label, Icon, path }) => {
           const active = activeScreen === id;
           return (
@@ -2064,7 +2124,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
               key={id}
               onClick={() => { setActiveScreen(id); navigate(path); setIsSidebarOpen(false); }}
               title={label}
-              className={`flex items-center rounded-lg transition-colors ${isSidebarCollapsed ? 'justify-center p-2' : 'gap-3 px-2.5 py-2'} ${active ? 'bg-[#3D3A37] text-[#F4F0EB]' : 'text-[#A8A39B] hover:text-[#F4F0EB] hover:bg-[#2E2C2A]'}`}
+              className={`flex items-center rounded-lg transition-[background-color,color,transform,box-shadow] duration-150 active:translate-y-[2px] ${isSidebarCollapsed ? 'justify-center p-2' : 'gap-3 px-2.5 py-2'} ${active ? 'bg-[#C9A66B] text-[#1A1917] shadow-[0_3px_0_0_#8F7444] active:shadow-[0_1px_0_0_#8F7444]' : 'text-[#A8A39B] hover:text-[#F4F0EB] hover:bg-[#2E2C2A]'}`}
             >
               <div className="w-5 h-5 flex items-center justify-center shrink-0">
                 <Icon size={18} strokeWidth={active ? 2.2 : 2} />
@@ -2104,15 +2164,11 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             {!isSidebarCollapsed && (
               <div className="flex flex-col min-w-0">
                 <span className="text-[13px] font-bold text-[#F4F0EB] truncate">{user?.name}</span>
-                <span className="text-[10px] text-[#8C8880] truncate">
-                  {user?.role === 'admin'
-                    ? 'Administrator'
-                    : user?.tier === 'ultra'
-                      ? 'Ultra Account'
-                      : user?.tier === 'pro'
-                        ? 'Pro Account'
-                        : 'Free Account'}
-                </span>
+                {(user?.role === 'admin' || user?.tier === 'ultra' || user?.tier === 'pro') && (
+                  <span className="text-[10px] text-[#8C8880] truncate">
+                    {user?.role === 'admin' ? 'Administrator' : user?.tier === 'ultra' ? 'Ultra Account' : 'Pro Account'}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -2231,7 +2287,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                       {platformIcon(p, 20)}
                     </span>
                     {comingSoon ? (
-                      <span className="text-[11px] font-geist font-semibold text-[#C9A66B] bg-[#2A2318] border border-[#5A4A28] px-2 py-1 rounded-md uppercase tracking-wide">Coming Soon</span>
+                      <span className="text-[11px] font-geist font-semibold text-[#8C8880] bg-[#1E1D1C] border border-[#33302E] px-2 py-1 rounded-md uppercase tracking-wide">Coming Soon</span>
                     ) : connected ? (
                       <span className="flex items-center gap-1.5 text-[11px] font-geist font-medium text-[#8FAE97] bg-[#1A2A1E] border border-[#2E4636] px-2 py-1 rounded-md">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#8FAE97] animate-pulse" />
@@ -2846,6 +2902,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     ];
 
     const activeModel = APP_MODELS.find(m => m.id === app.model) ?? APP_MODELS[0];
+    const activeSearchMode = SEARCH_MODES.find(m => m.id === appSearchMode) ?? SEARCH_MODES[0];
 
     const renderAppInputBox = () => (
       <div className="relative flex flex-col bg-[#2A2826] px-4 pt-4 pb-3 rounded-[12px] border border-[#3D3A37] transition-colors duration-200">
@@ -2870,14 +2927,15 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 150) + 'px';
           }}
         />
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between mt-2 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
           {/* Model picker */}
           <div className="relative">
             <button
               onClick={() => setAppModelDropdownOpen(o => !o)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E1D1C] border border-[#3D3A37] rounded-lg text-[12px] font-medium text-[#C9C5C0] hover:border-[#57534E] hover:text-[#F4F0EB] transition-colors"
             >
-              <span>{activeModel.name}</span>
+              <span className="whitespace-nowrap">{activeModel.name}</span>
               <ChevronDown size={11} className={`transition-transform ${appModelDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
@@ -2886,8 +2944,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 {/* backdrop */}
                 <div className="fixed inset-0 z-40" onClick={() => setAppModelDropdownOpen(false)} />
                 {/* dropdown */}
-                <div className="absolute bottom-full left-0 mb-2 w-[280px] bg-[#1E1D1C] border border-[#3D3A37] rounded-[14px] shadow-2xl z-50 overflow-hidden">
-                  <div className="p-1.5">
+                <div className="absolute bottom-full left-0 mb-2 w-[272px] bg-[#1E1D1C] border border-[#3D3A37] rounded-[14px] shadow-2xl z-50 overflow-hidden">
+                  <div className="p-1.5 space-y-1">
                     {APP_MODELS.map((m) => (
                       <button
                         key={m.id}
@@ -2895,20 +2953,20 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                           updateApp(app.id, { model: m.id });
                           setAppModelDropdownOpen(false);
                         }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-left transition-colors ${
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-[10px] text-left transition-colors ${
                           m.id === app.model ? 'bg-[#2A2826]' : 'hover:bg-[#252523]'
                         }`}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-[13.5px] font-semibold text-[#F4F0EB]">{m.name}</span>
+                            <span className="text-[13px] font-semibold text-[#F4F0EB]">{m.name}</span>
                             {m.badge && (
                               <span className="px-1.5 py-0.5 bg-[#C9A66B]/15 text-[#C9A66B] text-[9px] font-bold uppercase tracking-wider rounded-md border border-[#C9A66B]/25">
                                 {m.badge}
                               </span>
                             )}
                           </div>
-                          <p className="text-[11.5px] text-[#6B6762] mt-0.5">{m.desc}</p>
+                          <p className="text-[11px] text-[#6B6762] mt-0.5 leading-snug">{m.desc}</p>
                         </div>
                         {m.id === app.model && (
                           <Check size={14} className="text-[#C9A66B] shrink-0" />
@@ -2916,10 +2974,10 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                       </button>
                     ))}
                   </div>
-                  <div className="border-t border-[#3D3A37] px-3 py-2.5">
+                  <div className="border-t border-[#3D3A37] px-3 py-1.5">
                     <button
                       onClick={() => setAppModelDropdownOpen(false)}
-                      className="w-full flex items-center justify-between text-[12px] text-[#8C8880] hover:text-[#F4F0EB] transition-colors py-1"
+                      className="w-full flex items-center justify-between text-[11.5px] text-[#8C8880] hover:text-[#F4F0EB] transition-colors py-1"
                     >
                       <span>More models in Settings</span>
                       <ChevronRight size={12} />
@@ -2930,12 +2988,49 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             )}
           </div>
 
+          {/* Search mode picker */}
+          <div className="relative">
+            <button
+              onClick={() => setAppSearchDropdownOpen(o => !o)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E1D1C] border border-[#3D3A37] rounded-lg text-[12px] font-medium text-[#C9C5C0] hover:border-[#57534E] hover:text-[#F4F0EB] transition-colors"
+            >
+              <activeSearchMode.Icon size={13} className="text-[#C9A66B]" />
+              <span className="whitespace-nowrap">{activeSearchMode.label}</span>
+              <ChevronDown size={11} className={`transition-transform ${appSearchDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {appSearchDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setAppSearchDropdownOpen(false)} />
+                <div className="absolute bottom-full left-0 mb-2 w-[272px] bg-[#1E1D1C] border border-[#3D3A37] rounded-[14px] shadow-2xl z-50 overflow-hidden p-1.5 space-y-1">
+                  {SEARCH_MODES.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setAppSearchMode(m.id); setAppSearchDropdownOpen(false); }}
+                      className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-[10px] text-left transition-colors ${m.id === appSearchMode ? 'bg-[#2A2826]' : 'hover:bg-[#252523]'}`}
+                    >
+                      <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-[#252523] border border-[#3D3A37] mt-0.5">
+                        <m.Icon size={14} className="text-[#C9A66B]" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[13px] font-semibold text-[#F4F0EB]">{m.label}</span>
+                        <p className="text-[11px] text-[#6B6762] mt-0.5 leading-snug">{m.desc}</p>
+                      </div>
+                      {m.id === appSearchMode && <Check size={14} className="text-[#C9A66B] shrink-0 mt-1.5" />}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          </div>
+
           <button
             onClick={() => handleAppSend(app.id)}
             disabled={appIsLoading || !appInput.trim()}
-            className="w-8 h-8 flex items-center justify-center bg-[#3D3A37] hover:bg-[#4A4744] text-[#F4F0EB] rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-8 h-8 flex items-center justify-center bg-[#F4F0EB] hover:bg-white text-[#1A1917] rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-[#F4F0EB]"
           >
-            <Send size={14} />
+            <ArrowUp size={16} strokeWidth={2.25} />
           </button>
         </div>
       </div>
@@ -2954,7 +3049,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 <h1 className="text-[28px] font-semibold tracking-tight text-[#F4F0EB] leading-none mb-2">{app.name}</h1>
                 <p className="text-[14px] text-[#8C8880]">{app.description || 'Assistant for your customers.'}</p>
                 <div className="mt-4 flex items-center gap-2">
-                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-400 text-[11px] font-semibold rounded-md border border-blue-500/20 uppercase tracking-wide">
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-[#8AA9C9]/10 text-[#8AA9C9] text-[11px] font-semibold rounded-md border border-[#8AA9C9]/20 uppercase tracking-wide">
                     <Database size={12} /> {app.linkedKbIds.length} Knowledge Bases
                   </span>
                 </div>
@@ -2967,7 +3062,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
         </div>
 
         {/* Content Grid */}
-        <div className="px-6 lg:px-10 pb-12 max-w-[1200px] mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="px-6 lg:px-10 pb-12 max-w-[1200px] mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
@@ -2980,21 +3075,40 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                   Playground (Preview to your Chatbot)
                 </h3>
                 <div className="flex items-center gap-2">
-                  <select
-                    value={appSessions[app.id] || 'default'}
-                    onChange={(e) => setAppSessions(prev => ({ ...prev, [app.id]: e.target.value }))}
-                    className="bg-transparent border border-[#3D3A37] text-[12px] rounded-lg px-2.5 py-1.5 text-[#8C8880] focus:outline-none focus:border-[#57534E]"
-                  >
-                    {(() => {
-                      const sessions = Array.from(new Set(app.messages.map(m => m.sessionId || 'default')));
-                      if (!sessions.includes(appSessions[app.id] || 'default')) {
-                        sessions.push(appSessions[app.id] || 'default');
-                      }
-                      return sessions.map((s, idx) => (
-                        <option key={s} value={s}>{s === 'default' ? 'Default Session' : `Session ${idx}`}</option>
-                      ));
-                    })()}
-                  </select>
+                  {(() => {
+                    const sessions = Array.from(new Set(app.messages.map(m => m.sessionId || 'default')));
+                    const current = appSessions[app.id] || 'default';
+                    if (!sessions.includes(current)) sessions.push(current);
+                    const labelFor = (s: string) => (s === 'default' ? 'Default Session' : `Session ${sessions.indexOf(s)}`);
+                    return (
+                      <div className="relative">
+                        <button
+                          onClick={() => setAppSessionDropdownOpen(o => !o)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#1E1D1C] border border-[#3D3A37] rounded-lg text-[12px] font-medium text-[#C9C5C0] hover:border-[#57534E] hover:text-[#F4F0EB] transition-colors"
+                        >
+                          <span>{labelFor(current)}</span>
+                          <ChevronDown size={11} className={`transition-transform ${appSessionDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {appSessionDropdownOpen && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setAppSessionDropdownOpen(false)} />
+                            <div className="absolute top-full right-0 mt-2 w-[200px] bg-[#1E1D1C] border border-[#3D3A37] rounded-[14px] shadow-2xl z-50 overflow-hidden p-1.5">
+                              {sessions.map((s) => (
+                                <button
+                                  key={s}
+                                  onClick={() => { setAppSessions(prev => ({ ...prev, [app.id]: s })); setAppSessionDropdownOpen(false); }}
+                                  className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-[10px] text-left text-[12.5px] transition-colors ${s === current ? 'bg-[#2A2826] text-[#F4F0EB]' : 'text-[#C7C2BC] hover:bg-[#252523]'}`}
+                                >
+                                  <span className="truncate">{labelFor(s)}</span>
+                                  {s === current && <Check size={13} className="text-[#C9A66B] shrink-0" />}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <button
                     onClick={() => setAppSessions(prev => ({ ...prev, [app.id]: `session_${Date.now()}` }))}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A66B] rounded-lg text-[11px] font-medium text-[#1A1917] hover:bg-[#B8965B] transition-colors"
@@ -3027,7 +3141,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                                 <div className="w-[28px] h-[28px] shrink-0 rounded-full bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mt-0.5">
                                   <img src="/particles.png" className="w-[14px] h-[14px] opacity-80" alt="ai" />
                                 </div>
-                                <div className="flex-1 min-w-0 font-basel text-[14px] text-[#E8E6E3] prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-[#1E1D1C] prose-pre:border prose-pre:border-[#3D3A37]">
+                                <div className="flex-1 min-w-0 font-basel text-[14px] text-[#E8E6E3]">
                                   {(() => {
                                     const parsed = parseMessageWithThink(msg.content);
                                     const displayReasoning = msg.reasoning || parsed.reasoning;
@@ -3039,7 +3153,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                                             <ReasoningContent>{displayReasoning}</ReasoningContent>
                                           </Reasoning>
                                         )}
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsed.content}</ReactMarkdown>
+                                        <ChatMarkdown>{parsed.content}</ChatMarkdown>
                                       </>
                                     );
                                   })()}
@@ -3106,15 +3220,14 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 <div className="bg-[#2A2826] border border-[#3D3A37] rounded-xl overflow-hidden">
                   <div className="px-4 py-2 border-b border-[#3D3A37] text-[11px] font-mono text-[#8C8880]">typescript</div>
                   <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed text-[#D4D4D4] font-mono custom-scrollbar">
-                    <span className="text-[#C586C0]">import</span> {'{ InfuseClient }'} <span className="text-[#C586C0]">from</span> <span className="text-[#CE9178]">'infuseai-sdk'</span>;<br /><br />
-                    <span className="text-[#569CD6]">const</span> client = <span className="text-[#569CD6]">new</span> InfuseClient({'{'}<br />
-                    {'  '}clientId: <span className="text-[#CE9178]">'client_e7bcfb5cadf64f...'</span>,<br />
-                    {'  '}appId: <span className="text-[#CE9178]">'{app.appId || `app_${app.id.replace(/-/g, '').substring(0, 16)}...`}'</span>,<br />
+                    <span className="text-[#569CD6]">const</span> hyper = <span className="text-[#569CD6]">new</span> Hyper({'{'}<br />
+                    {'  '}user_id: UID,<br />
+                    {'  '}api_key: <span className="text-[#CE9178]">'{(app.apiKey || 'sk_live_').substring(0, 16)}...'</span>, <span className="text-[#6A9955]">// Access check</span><br />
+                    {'  '}app_id: <span className="text-[#CE9178]">'{app.appId || `app_${app.id.replace(/-/g, '').substring(0, 16)}...`}'</span>, <span className="text-[#6A9955]">// Which app to search in</span><br />
+                    {'  '}customer_id: CUSTOMER_ID, <span className="text-[#6A9955]">// Your app's end user — omitted? one is created & returned; resolves memory</span><br />
                     {'}'});<br /><br />
-                    <span className="text-[#6A9955]">// Send a message to the bot</span><br />
-                    <span className="text-[#569CD6]">const</span> response = <span className="text-[#C586C0]">await</span> client.chat.completions.create({'{'}<br />
-                    {'  '}messages: [{'{'} role: <span className="text-[#CE9178]">'user'</span>, content: <span className="text-[#CE9178]">'Hello!'</span> {'}'}]<br />
-                    {'}'});
+                    <span className="text-[#569CD6]">const</span> res1 = <span className="text-[#C586C0]">await</span> hyper.query({'{'} user_query: <span className="text-[#CE9178]">'What is the last PR?'</span> {'}'});<br />
+                    <span className="text-[#569CD6]">const</span> res2 = <span className="text-[#C586C0]">await</span> hyper.deep_search({'{'} user_query: <span className="text-[#CE9178]">'Tell me about this in detail.'</span> {'}'});
                   </pre>
                 </div>
               </div>
@@ -3206,16 +3319,41 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
               <div className="bg-[#252523] p-4 rounded-xl border border-[#3D3A37] mb-3">
                 <div className="text-[10px] font-semibold text-[#6B6762] uppercase tracking-wider mb-1">Model</div>
                 {editingAppField === 'model' ? (
-                  <select
-                    value={appSettingsForm?.model || ''}
-                    onChange={(e) => setAppSettingsForm(prev => prev ? { ...prev, model: e.target.value } : null)}
-                    className="w-full bg-transparent text-[13.5px] font-medium text-[#F4F0EB] border-b border-[#3D3A37] focus:border-[#C9A66B] outline-none py-1 appearance-none cursor-pointer"
-                  >
-                    <option value="qwen/qwen3-32b">qwen/qwen3-32b</option>
-                    <option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b</option>
-                    <option value="meta-llama/llama-4-scout-17b-16e-instruct">meta-llama/llama-4-scout-17b-16e-instruct</option>
-                    <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
-                  </select>
+                  <div className="relative">
+                    <button
+                      onClick={() => setAppConfigModelOpen(o => !o)}
+                      className="w-full flex items-center justify-between gap-2 bg-[#1E1D1C] text-[13.5px] font-medium text-[#F4F0EB] border border-[#3D3A37] rounded-lg hover:border-[#57534E] focus:border-[#C9A66B] outline-none px-3 py-2 transition-colors"
+                    >
+                      <span className="truncate font-mono text-[12.5px]">{appSettingsForm?.model || app.model}</span>
+                      <ChevronDown size={14} className={`text-[#8C8880] shrink-0 transition-transform ${appConfigModelOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {appConfigModelOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setAppConfigModelOpen(false)} />
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-[#1E1D1C] border border-[#3D3A37] rounded-[14px] shadow-2xl z-50 overflow-hidden p-1.5 space-y-1">
+                          {APP_MODELS.map((m) => {
+                            const selected = (appSettingsForm?.model || app.model) === m.id;
+                            return (
+                              <button
+                                key={m.id}
+                                onClick={() => { setAppSettingsForm(prev => prev ? { ...prev, model: m.id } : null); setAppConfigModelOpen(false); }}
+                                className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-[10px] text-left transition-colors ${selected ? 'bg-[#2A2826]' : 'hover:bg-[#252523]'}`}
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[13px] font-semibold text-[#F4F0EB]">{m.name}</span>
+                                    {m.badge && <span className="px-1.5 py-0.5 bg-[#C9A66B]/15 text-[#C9A66B] text-[9px] font-bold uppercase tracking-wider rounded-md border border-[#C9A66B]/25">{m.badge}</span>}
+                                  </div>
+                                  <p className="text-[10.5px] text-[#6B6762] mt-0.5 font-mono truncate">{m.id}</p>
+                                </div>
+                                {selected && <Check size={14} className="text-[#C9A66B] shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 ) : (
                   <div className="text-[13.5px] font-medium text-[#F4F0EB]">{app.model}</div>
                 )}
@@ -3267,7 +3405,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                     <Check size={12} /> Done
                   </button>
                 ) : (
-                  <button onClick={() => setEditingAppField('kbs')} className="text-[12px] text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-colors font-medium">
+                  <button onClick={() => setEditingAppField('kbs')} className="text-[12px] text-[#8AA9C9] hover:text-[#A9C0D6] flex items-center gap-1.5 transition-colors font-medium">
                     <SettingsIcon size={13} /> Manage
                   </button>
                 )}
@@ -3285,7 +3423,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                     >
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${app.linkedKbIds.includes(kb.id)
                           ? 'bg-[#C9A66B]/20 text-[#C9A66B] border-[#C9A66B]/30'
-                          : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                          : 'bg-[#8AA9C9]/10 text-[#8AA9C9] border-[#8AA9C9]/20'
                         }`}>
                         <span className="text-[10px] font-bold">KB</span>
                       </div>
@@ -3306,7 +3444,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                       const kb = kbList.find(k => k.id === kbId);
                       return (
                         <div key={kbId} className="bg-[#252523] px-3.5 py-3 rounded-xl border border-[#3D3A37] flex items-center gap-3 group hover:border-[#57534E] transition-colors cursor-pointer">
-                          <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0 border border-blue-500/20">
+                          <div className="w-8 h-8 rounded-lg bg-[#8AA9C9]/10 flex items-center justify-center text-[#8AA9C9] shrink-0 border border-[#8AA9C9]/20">
                             <span className="text-[10px] font-bold">KB</span>
                           </div>
                           <span className="text-[13px] font-medium text-[#F4F0EB] truncate flex-1">{kb?.name || 'Unknown KB'}</span>
@@ -3322,22 +3460,19 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             </div>
 
             {/* Danger Zone */}
-            <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-6">
-              <h3 className="font-semibold text-red-400 text-[15px] mb-4">Danger Zone</h3>
-              <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20">
-                <div className="text-[13px] text-red-400 font-medium">Delete this App</div>
-                <div className="text-[12px] text-red-400/70 mt-1 mb-4 leading-relaxed">Once deleted, it cannot be recovered. Please be certain.</div>
-                <button
-                  className="px-4 py-2.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-lg text-[12px] font-medium transition-colors w-full"
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to delete ${app.name}?`)) {
-                      deleteApp(app.id);
-                    }
-                  }}
-                >
-                  Delete Application
-                </button>
-              </div>
+            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
+              <h3 className="font-semibold text-[#F4F0EB] text-[15px] mb-1">Danger Zone</h3>
+              <p className="text-[12px] text-[#8C8880] mb-4 leading-relaxed">Deleting this app is permanent — it can't be recovered.</p>
+              <button
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-transparent border border-[#F87171]/30 text-[#F87171] hover:bg-[#F87171]/10 hover:border-[#F87171]/50 rounded-lg text-[12.5px] font-medium transition-colors"
+                onClick={() => {
+                  if (confirm(`Are you sure you want to delete ${app.name}?`)) {
+                    deleteApp(app.id);
+                  }
+                }}
+              >
+                <Trash2 size={14} /> Delete application
+              </button>
             </div>
 
           </div>
@@ -3377,7 +3512,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           renderAdminDashboard()
         ) : activeScreen === 'dashboard' ? (
           <ErrorBoundary label="the dashboard">
-            <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={handleNavigate} onAsk={onAskFromHub} platformIcon={platformIcon} kbsCount={kbList.length} />
+            <Dashboard user={user} idToken={idToken} connectors={connectors} onNavigate={handleNavigate} onAsk={onAskFromHub} platformIcon={platformIcon} kbsCount={kbList.length} appsCount={applications.length} />
           </ErrorBoundary>
         ) : activeScreen === 'knowledge' ? (
           <ErrorBoundary label="knowledge bases">
@@ -3385,6 +3520,10 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           </ErrorBoundary>
         ) : activeScreen === 'integrations' ? (
           renderIntegrations()
+        ) : activeScreen === 'api-keys' ? (
+          <ErrorBoundary label="API keys">
+            <ApiKeys />
+          </ErrorBoundary>
         ) : activeScreen === 'applications' ? (
           renderApplications()
         ) : null}
@@ -3406,7 +3545,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       {/* ── Connector Modal ── */}
       {connectorModal && (() => {
         const p = PLATFORM_MAP[connectorModal];
-        const c = connectors[connectorModal];
         return (
           <div className="fixed inset-0 z-[300] flex items-center justify-center animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={closeConnector}>
             <div className="bg-[#252523] border border-[#3D3A37] rounded-2xl w-full max-w-[460px] mx-4 shadow-2xl overflow-hidden flex flex-col font-geist" onClick={e => e.stopPropagation()}>
@@ -3418,14 +3556,10 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-[18px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-tight">
-                    {connectorStage === 'auth' ? `Connect ${p.name}` : connectorStage === 'select' ? p.selectTitle : 'Building knowledge graph'}
+                    Connect {p.name}
                   </h3>
                   <p className="text-[12.5px] font-geist text-[#8C8880] leading-snug mt-1 truncate">
-                    {connectorStage === 'auth'
-                      ? 'Read-only access · you choose what to ingest'
-                      : connectorStage === 'select'
-                        ? `${c?.account || p.name} · pick what feeds the graph`
-                        : 'Extracting entities & relationships → Cognee'}
+                    Read-only access · pick what to ingest in Knowledge
                   </p>
                 </div>
                 <button onClick={closeConnector} className="text-[#6B6762] hover:text-[#F4F0EB] transition-colors shrink-0 -mt-1 -mr-1 p-1">
@@ -3433,33 +3567,30 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 </button>
               </div>
 
-              {/* Stage: Authorize */}
-              {connectorStage === 'auth' && (
-                <>
-                  <div className="px-6 py-5">
-                    <p className="text-[13px] font-geist text-[#C7C2BC] leading-relaxed mb-4">{p.authBlurb}</p>
-                    <div className="rounded-xl border border-[#3D3A37] bg-[#1E1D1C] divide-y divide-[#33302E] overflow-hidden">
-                      {p.scopes.map((s, i) => (
-                        <div key={i} className="flex items-center gap-3 px-3.5 py-3">
-                          <Check size={15} className="text-[#8FAE97] shrink-0" strokeWidth={2.75} />
-                          <span className="text-[12.5px] font-geist text-[#C7C2BC]">{s}</span>
-                        </div>
-                      ))}
+              {/* Authorize — item selection happens per-KB in the Knowledge tab */}
+              <div className="px-6 py-5">
+                <p className="text-[13px] font-geist text-[#C7C2BC] leading-relaxed mb-4">{p.authBlurb}</p>
+                <div className="rounded-xl border border-[#3D3A37] bg-[#1E1D1C] divide-y divide-[#33302E] overflow-hidden">
+                  {p.scopes.map((s, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3.5 py-3">
+                      <Check size={15} className="text-[#8FAE97] shrink-0" strokeWidth={2.75} />
+                      <span className="text-[12.5px] font-geist text-[#C7C2BC]">{s}</span>
                     </div>
-                    <p className="mt-3.5 text-[11px] font-geist text-[#6B6762] leading-relaxed">
-                      Read-only and revocable anytime. hypr never writes to your {p.name}.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-[#3D3A37]">
-                    <button onClick={closeConnector} className="px-4 py-2.5 text-[13px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
-                      Cancel
-                    </button>
-                    <button onClick={() => authorizePlatform(p.id)} disabled={connectorBusy} className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] font-geist disabled:cursor-wait">
-                      {connectorBusy ? (<><RefreshCw size={13} className="animate-spin" /> Authorizing…</>) : (<>Authorize {p.name}</>)}
-                    </button>
-                  </div>
-                </>
-              )}
+                  ))}
+                </div>
+                <p className="mt-3.5 text-[11px] font-geist text-[#6B6762] leading-relaxed">
+                  Read-only and revocable anytime. hypr never writes to your {p.name}.
+                  Choose which {p.nounPlural} feed each graph from the Knowledge tab.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-2.5 px-5 py-4 border-t border-[#3D3A37]">
+                <button onClick={closeConnector} className="px-4 py-2.5 text-[13px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors">
+                  Cancel
+                </button>
+                <button onClick={() => authorizePlatform(p.id)} disabled={connectorBusy} className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] font-geist disabled:cursor-wait">
+                  {connectorBusy ? (<><RefreshCw size={13} className="animate-spin" /> Authorizing…</>) : (<>Authorize {p.name}</>)}
+                </button>
+              </div>
 
             </div>
           </div>

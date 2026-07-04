@@ -65,6 +65,7 @@ export type ActiveScreen =
   | 'applications'
   | 'knowledge'
   | 'integrations'
+  | 'api-keys'
   | 'admin';
 
 /** An application created by the user, with its own chat scope, prompt and LLM settings. */
@@ -150,6 +151,7 @@ export interface RecentItem {
   type: string;
   source: string;
   status?: string;
+  url?: string;
   repoRef?: string;
   projectRef?: string;
   updatedAt?: string;
@@ -162,6 +164,7 @@ export interface Stats {
   connections?: StatsConnection[];
   bySource?: { key: string; n: number }[];
   byType?: { key: string; n: number }[];
+  byStatus?: { key: string; n: number }[];
   timeline?: { date: string; n: number }[];
   graph?: { nodes: number; edges: number };
   recent?: RecentItem[];

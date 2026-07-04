@@ -16,6 +16,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
         <Route path="/kb" element={<App />} />
         <Route path="/kb/:kbId" element={<App />} />
         <Route path="/integration" element={<App />} />
+        <Route path="/keys" element={<App />} />
         <Route path="/c/:chatId" element={<App />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

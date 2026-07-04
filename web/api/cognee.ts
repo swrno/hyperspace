@@ -28,7 +28,7 @@
  *     type values: People | Organisation | Product | Location | Concept | Technology | Event
  *   (:Entity)-[:RELATES_TO {description}]->(:Entity)   (co-occurrence within same chunk/PR/Issue)
  *
- * Embeddings: gemini-embedding-001 (3072 dims)
+ * Embeddings: all-MiniLM-L6-v2 via Transformers.js, local (384 dims)
  *   Chunk.embedding      = embed(chunk_text_content)
  *   Entity.embedding     = embed(name + ' ' + description)
  *   PR.embedding         = embed(pr_text_content)
@@ -37,10 +37,24 @@
  *   PRComment.embedding  = embed(comment)
  */
 
-import { configured, runCypher, ensureSchema } from './lib/neo4j.js';
-import { embed, embedBatch, chunkText } from './lib/embeddings.js';
+import { configured, runCypher, ensureSchema, int } from './lib/neo4j.js';
+import { embed, embedBatch, semanticChunkText } from './lib/embeddings.js';
+import { generateReply, DEFAULT_CHAIN, MODELS, llmConfigured, type ProviderModel } from './lib/llm.js';
 
-ensureSchema().catch((e: any) => console.warn('Neo4j schema setup warning:', e.message));
+// Lazily ensure the Neo4j vector/full-text indexes exist — but only once, and
+// only after env is loaded. Calling ensureSchema() at import time ran BEFORE
+// dotenv.config() populated NEO4J_* (ESM evaluates imports first), so
+// configured() was false and the indexes were silently never created — which is
+// why searches failed with "no such index chunk_embedding". Every ingest/search
+// path awaits this gate, so the first real DB touch builds the schema.
+let _schemaReady: Promise<void> | null = null;
+function schemaReady(): Promise<void> {
+  if (!_schemaReady) _schemaReady = ensureSchema().catch((e: any) => {
+    console.warn('Neo4j schema setup warning:', e.message);
+    _schemaReady = null; // allow a later retry if setup failed transiently
+  });
+  return _schemaReady;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -62,35 +76,30 @@ export async function resolveDatasetId(userId: string, kbId?: string): Promise<s
 
 interface ExtractedEntity { name: string; description: string; type: string }
 
-async function extractEntities(text: string, groqKey: string): Promise<ExtractedEntity[]> {
+// Entity extraction runs on every chunk during ingestion, so it leans on the
+// shared Fireworks-primary chain (multi-key) to avoid Groq's tight TPM limits.
+async function extractEntities(text: string): Promise<ExtractedEntity[]> {
+  if (!llmConfigured()) return [];
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Extract key named entities from the text. Return ONLY a valid JSON array, no explanation.\n' +
-              'Each item: {"name":"...","description":"one sentence","type":"People|Organisation|Product|Location|Concept|Technology|Event"}.\n' +
-              'Limit to the 5 most important entities.',
-          },
-          { role: 'user', content: text.slice(0, 2000) },
-        ],
-        temperature: 0,
-        max_tokens: 400,
-      }),
-    });
-    if (!res.ok) return [];
-    const data = await (res.json() as any);
-    const raw = data.choices?.[0]?.message?.content || '';
+    const raw = await generateReply(
+      [
+        {
+          role: 'system',
+          content:
+            'Extract the salient named entities from the text. Return ONLY a valid JSON array, no explanation.\n' +
+            'Each item: {"name":"...","description":"1-2 sentences: what it is AND why it matters in this text","type":"People|Organisation|Product|Location|Concept|Technology|Event"}.\n' +
+            'Include up to 15 distinct, specific entities (skip generic filler). Prefer concrete, informative descriptions grounded in the text.',
+        },
+        { role: 'user', content: text.slice(0, 4000) },
+      ],
+      DEFAULT_CHAIN,
+      { temperature: 0, maxTokens: 1500 },
+    );
     const match = raw.match(/\[[\s\S]*\]/);
     if (!match) return [];
     const parsed = JSON.parse(match[0]);
     return Array.isArray(parsed)
-      ? parsed.slice(0, 5).filter((e: any) => e?.name && e?.description)
+      ? parsed.slice(0, 15).filter((e: any) => e?.name && e?.description)
       : [];
   } catch { return []; }
 }
@@ -151,19 +160,25 @@ export async function addText(
   { userId, kbId, nodeSet, docName, docId }: any = {},
 ): Promise<{ chunks: number; entities: number } | null> {
   if (!configured() || !text?.trim()) return null;
+  await schemaReady();
 
   try {
-    const rawChunks = chunkText(text);
+    const rawChunks = await semanticChunkText(text);
     if (!rawChunks.length) return null;
 
-    const groqKey = process.env.GROQ_API_KEY || '';
     const now = new Date().toISOString();
     const kbNodeId = kbId || '__global__';
     const userNodeId = userId || 'anon';
     const docNodeId = docId || uid();
     const docNodeName = docName || rawChunks[0].split('\n')[0].slice(0, 120);
 
-    const chunkEmbeddings = await embedBatch(rawChunks, 'RETRIEVAL_DOCUMENT');
+    // Contextual embeddings — prefix the document name so each chunk vector
+    // carries document context (better retrieval). The stored chunk_text_content
+    // below stays the raw chunk; only the embedding input is contextualized.
+    const chunkEmbeddings = await embedBatch(
+      rawChunks.map((c) => `${docNodeName}\n\n${c}`),
+      'RETRIEVAL_DOCUMENT',
+    );
 
     const chunkRows = rawChunks.map((t, i) => ({
       chunk_id: uid(), chunk_text_content: t, embedding: chunkEmbeddings[i],
@@ -205,11 +220,11 @@ export async function addText(
       );
     }
 
-    // Extract entities per chunk (requires Groq).
+    // Extract entities per chunk (requires an LLM provider).
     let totalEntities = 0;
-    if (groqKey) {
+    if (llmConfigured()) {
       for (const chunk of chunkRows) {
-        const entities = await extractEntities(chunk.chunk_text_content, groqKey);
+        const entities = await extractEntities(chunk.chunk_text_content);
         if (!entities.length) continue;
         await writeEntities(
           entities,
@@ -246,9 +261,9 @@ export async function ingestGitHubEntity(
   { kbId, userId, repoId, prId, calendarId }: { kbId: string; userId: string; repoId?: string; prId?: string; calendarId?: string },
 ): Promise<void> {
   if (!configured()) return;
+  await schemaReady();
   const kbNodeId = kbId || '__global__';
   const now = new Date().toISOString();
-  const groqKey = process.env.GROQ_API_KEY || '';
 
   try {
     if (type === 'Repo') {
@@ -269,8 +284,8 @@ export async function ingestGitHubEntity(
          MERGE (r)-[:HAS_PR]->(p)`,
         { kbId: kbNodeId, repoId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (groqKey && prText) {
-        const entities = await extractEntities(prText, groqKey);
+      if (llmConfigured() &&prText) {
+        const entities = await extractEntities(prText);
         if (entities.length) await writeEntities(entities, `(p:PR {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'Issue' && repoId) {
@@ -283,8 +298,8 @@ export async function ingestGitHubEntity(
          MERGE (r)-[:HAS_ISSUE]->(i)`,
         { kbId: kbNodeId, repoId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (groqKey && issueText) {
-        const entities = await extractEntities(issueText, groqKey);
+      if (llmConfigured() &&issueText) {
+        const entities = await extractEntities(issueText);
         if (entities.length) await writeEntities(entities, `(i:Issue {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'Commit' && repoId) {
@@ -297,8 +312,8 @@ export async function ingestGitHubEntity(
          MERGE (r)-[:HAS_COMMIT]->(cm)`,
         { kbId: kbNodeId, repoId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (groqKey && commitText) {
-        const entities = await extractEntities(commitText, groqKey);
+      if (llmConfigured() &&commitText) {
+        const entities = await extractEntities(commitText);
         if (entities.length) await writeEntities(entities, `(cm:Commit {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'PRComment' && prId) {
@@ -321,8 +336,8 @@ export async function ingestGitHubEntity(
          MERGE (r)-[:HAS_FILE]->(f)`,
         { kbId: kbNodeId, repoId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (groqKey && fileText) {
-        const entities = await extractEntities(fileText, groqKey);
+      if (llmConfigured() &&fileText) {
+        const entities = await extractEntities(fileText);
         if (entities.length) await writeEntities(entities, `(f:File {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'Calendar') {
@@ -345,8 +360,8 @@ export async function ingestGitHubEntity(
          MERGE (c)-[:HAS_EVENT]->(evt)`,
         { kbId: kbNodeId, calendarId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (groqKey && evtText) {
-        const entities = await extractEntities(evtText, groqKey);
+      if (llmConfigured() &&evtText) {
+        const entities = await extractEntities(evtText);
         if (entities.length) await writeEntities(entities, `(evt:CalendarEvent {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     }
@@ -363,6 +378,7 @@ export async function vectorSearch(
 ): Promise<string[]> {
   const topK = Math.floor(rawTopK);
   if (!configured() || !query?.trim()) return [];
+  await schemaReady();
   try {
     const queryEmbedding = await embed(query, 'RETRIEVAL_QUERY');
     const records = await runCypher(
@@ -377,7 +393,7 @@ export async function vectorSearch(
               nxt.chunk_text_content  AS nextText,
               score
        ORDER BY score DESC LIMIT $topK`,
-      { topK: topK * 2, embedding: queryEmbedding, kbId: kbId || '', userId: userId || '' },
+      { topK: int(topK * 2), embedding: queryEmbedding, kbId: kbId || '', userId: userId || '' },
     );
     return [...new Set(
       records.map((r: any) => [r.prevText, r.text, r.nextText].filter(Boolean).join('\n')).filter(Boolean)
@@ -394,6 +410,7 @@ export async function graphSearch(
 ): Promise<string | null> {
   const topK = Math.floor(rawTopK);
   if (!configured() || !query?.trim()) return null;
+  await schemaReady();
   try {
     const escaped = query.replace(/[+\-&|!(){}[\]^"~*?:\\/]/g, '\\$&');
     const records = await runCypher(
@@ -406,7 +423,7 @@ export async function graphSearch(
        RETURN c.chunk_text_content AS text, score,
               collect(DISTINCT rc.chunk_text_content)[..2] AS relatedChunks
        ORDER BY score DESC LIMIT $topK`,
-      { query: escaped, kbId: kbId || '', userId: userId || '', topK },
+      { query: escaped, kbId: kbId || '', userId: userId || '', topK: int(topK) },
     );
     const parts = records.map((r: any) => {
       let t = r.text || '';
@@ -437,30 +454,26 @@ export async function hybridSearch(query: string, { userId, kbId, topK = 10 }: a
   return merged.length ? merged.join('\n\n') : null;
 }
 
-export async function multiHopSearch(query: string, { userId, kbId, topK = 10, groqKey }: any = {}): Promise<string | null> {
+export async function multiHopSearch(query: string, { userId, kbId, topK = 10 }: any = {}): Promise<string | null> {
   if (!configured() || !query?.trim()) return null;
   let subQueries: string[] = [query];
-  if (groqKey && query.trim().split(/\s+/).length >= 4) {
+  if (llmConfigured() && query.trim().split(/\s+/).length >= 4) {
     try {
-      const decomRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
-          messages: [
-            { role: 'system', content: 'Decompose the user question into 1–3 short, specific retrieval sub-questions. Return ONLY a valid JSON array of strings, no explanation, no markdown.' },
-            { role: 'user', content: query },
-          ],
-          temperature: 0, max_tokens: 200,
-        }),
-      });
-      if (decomRes.ok) {
-        const d = await (decomRes.json() as any);
-        const match = (d.choices?.[0]?.message?.content || '').match(/\[[\s\S]*\]/);
-        if (match) {
-          const parsed = JSON.parse(match[0]);
-          if (Array.isArray(parsed) && parsed.length) subQueries = parsed.slice(0, 3).map(String).filter(Boolean);
-        }
+      // A small, fast model is enough to decompose the question. Groq's tiny
+      // instant model leads here (cheap); Fireworks/Gemini back it up.
+      const decomChain: ProviderModel[] = [['groq', MODELS.groqSmall], ...DEFAULT_CHAIN];
+      const raw = await generateReply(
+        [
+          { role: 'system', content: 'Decompose the user question into 1–3 short, specific retrieval sub-questions. Return ONLY a valid JSON array of strings, no explanation, no markdown.' },
+          { role: 'user', content: query },
+        ],
+        decomChain,
+        { temperature: 0, maxTokens: 200 },
+      );
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        if (Array.isArray(parsed) && parsed.length) subQueries = parsed.slice(0, 3).map(String).filter(Boolean);
       }
     } catch (e: any) { console.warn('Query decomposition failed:', e.message); }
   }
@@ -566,6 +579,7 @@ export async function rememberMemory(text: string, { userId }: any = {}): Promis
 
 export async function recallMemory(query: string, { userId }: any = {}): Promise<string | null> {
   if (!configured() || !query?.trim()) return null;
+  await schemaReady();
   try {
     const queryEmbedding = await embed(query, 'RETRIEVAL_QUERY');
     const records = await runCypher(

@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowUpRight, ArrowRight, Plus, Database, Blocks, Search,
-  Network, FileText, Loader2, Activity, type LucideIcon,
+  ArrowRight, ArrowUpRight, Plus, Database, FileText, Boxes,
+  TrendingUp, PieChart, BarChart3, History, GitPullRequest, GitCommitHorizontal,
+  CalendarDays, FolderGit2, CircleDot, User, Target, ExternalLink, Layers,
+  type LucideIcon,
 } from 'lucide-react';
+import { AreaChart, Donut, BarList, Skeleton } from './charts';
 import type {
-  ActiveScreen, Connectors, PlatformIconFn, RecentItem, Stats, StatsConnection, User,
+  ActiveScreen, Connectors, PlatformIconFn, RecentItem, Stats, StatsConnection, User as AppUser,
 } from './types';
 
-interface MetaEntry {
-  label: string;
-  color: string;
-}
+interface MetaEntry { label: string; color: string }
 
 /* Warm, desaturated palette — color is a hint, never decoration. */
 const SRC_META: Record<string, MetaEntry> = {
@@ -25,16 +25,27 @@ const SRC_META: Record<string, MetaEntry> = {
 };
 const COMING_SOON = ['slack', 'salesforce'];
 
-const TYPE_META: Record<string, MetaEntry> = {
-  WorkItem:   { label: 'Work items',   color: '#8AA9C9' },
-  CodeChange: { label: 'Pull requests', color: '#8FAE97' },
-  Commit:     { label: 'Commits',      color: '#BBB5A9' },
-  Sprint:     { label: 'Sprints',      color: '#C9A66B' },
-  Project:    { label: 'Projects',     color: '#9C93B0' },
-  Repository: { label: 'Repositories', color: '#C28379' },
-  Document:   { label: 'Documents',    color: '#A9B8C9' },
-  Event:      { label: 'Events',       color: '#9FB9A6' },
-  Person:     { label: 'People',       color: '#A8A29A' },
+const TYPE_META: Record<string, MetaEntry & { Icon: LucideIcon }> = {
+  WorkItem:   { label: 'Work items',    color: '#8AA9C9', Icon: CircleDot },
+  CodeChange: { label: 'Pull requests', color: '#8FAE97', Icon: GitPullRequest },
+  Commit:     { label: 'Commits',       color: '#BBB5A9', Icon: GitCommitHorizontal },
+  Sprint:     { label: 'Sprints',       color: '#C9A66B', Icon: Target },
+  Project:    { label: 'Projects',      color: '#9C93B0', Icon: FolderGit2 },
+  Repository: { label: 'Repositories',  color: '#C28379', Icon: FolderGit2 },
+  Document:   { label: 'Documents',     color: '#A9B8C9', Icon: FileText },
+  Event:      { label: 'Events',        color: '#9FB9A6', Icon: CalendarDays },
+  Person:     { label: 'People',        color: '#A8A29A', Icon: User },
+};
+const typeMeta = (k: string): MetaEntry & { Icon: LucideIcon } =>
+  TYPE_META[k] || { label: k, color: '#9C968E', Icon: Layers };
+
+/* WorkItem / activity status → a single warm signal colour. */
+const statusColor = (s?: string): string => {
+  const k = (s || '').toLowerCase();
+  if (/(done|closed|merged|complete|resolved|shipped)/.test(k)) return '#8FAE97';
+  if (/(progress|review|active|doing)/.test(k)) return '#C9A66B';
+  if (/(block|error|fail|overdue|stuck)/.test(k)) return '#C28379';
+  return '#8AA9C9';
 };
 
 const fmtAgo = (iso?: string): string | null => {
@@ -50,104 +61,53 @@ const fmtAgo = (iso?: string): string | null => {
   return d < 7 ? `${d}d ago` : new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-interface DonutSegment {
-  n: number;
-  color: string;
-}
-
-/* ── Donut (circle) chart — pure SVG, no deps ─────────────────────────────── */
-function Donut({ segments, total, size = 176, thickness = 24 }: {
-  segments: DonutSegment[];
-  total: number;
-  size?: number;
-  thickness?: number;
-}) {
-  const r = (size - thickness) / 2;
-  const C = 2 * Math.PI * r;
-  let acc = 0;
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#33302E" strokeWidth={thickness} />
-          {total > 0 && segments.map((s, i) => {
-            const dash = (s.n / total) * C;
-            const seg = (
-              <circle
-                key={i}
-                cx={size / 2}
-                cy={size / 2}
-                r={r}
-                fill="none"
-                stroke={s.color}
-                strokeWidth={thickness}
-                strokeDasharray={`${dash} ${C - dash}`}
-                strokeDashoffset={-acc}
-              />
-            );
-            acc += dash;
-            return seg;
-          })}
-        </g>
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[30px] font-geist font-semibold text-[#F4F0EB] leading-none tabular-nums">{total}</span>
-        <span className="text-[10.5px] font-geist text-[#8C8880] mt-1 uppercase tracking-[0.12em]">nodes</span>
-      </div>
-    </div>
-  );
-}
-
-/* ── Activity bars — pure SVG/flex, no deps ───────────────────────────────── */
-function Bars({ data }: { data: { n: number; date: string }[] }) {
-  const max = Math.max(1, ...data.map((d) => d.n));
-  return (
-    <div className="flex items-end gap-1 h-[140px]">
-      {data.map((d, i) => (
-        <div key={i} className="flex-1 h-full flex flex-col justify-end group relative">
-          <div
-            className="w-full rounded-t-[3px] bg-[#4C5A50] group-hover:bg-[#8FAE97] transition-colors"
-            style={{ height: `${Math.max((d.n / max) * 100, d.n > 0 ? 4 : 1.5)}%` }}
-          />
-          <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 px-2 py-1 rounded-md bg-[#1E1D1C] border border-[#3D3A37] text-[10.5px] font-geist text-[#F4F0EB] whitespace-nowrap tabular-nums">
-            {d.n} · {new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function StatCard({ label, value, sub, Icon }: {
-  label: string;
-  value: number | string;
-  sub?: string;
-  Icon: LucideIcon;
-}) {
-  return (
-    <div className="card-elev rounded-2xl p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[12px] font-geist font-medium text-[#8C8880] tracking-tight">{label}</span>
-        <span className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#1E1D1C] border border-[#3D3A37]">
-          <Icon size={15} className="text-[#9C968E]" strokeWidth={1.75} />
-        </span>
-      </div>
-      <div className="flex items-end justify-between">
-        <span className="font-geist font-semibold text-[#F4F0EB] text-[34px] leading-none tracking-tight tabular-nums">{value}</span>
-        {sub && <span className="text-[11.5px] font-geist font-medium text-[#8C8880] mb-0.5">{sub}</span>}
-      </div>
-    </div>
-  );
-}
+/**
+ * Representative analytics shown only while the real graph is still empty
+ * (fresh account / pre-ingestion), so the dashboard demonstrates itself.
+ * Modeled on the README's GraphRAG domain. The instant /api/stats returns real
+ * entities, the live snapshot takes over and the "Sample data" badge disappears.
+ */
+const agoIso = (mins: number) => new Date(Date.now() - mins * 60000).toISOString();
+const dayIso = (back: number) => new Date(Date.now() - back * 86400000).toISOString().slice(0, 10);
+const SAMPLE_DAILY = [9, 14, 11, 6, 4, 22, 19, 27, 13, 31, 24, 8, 17, 12];
+const SAMPLE_STATS: Stats = {
+  total: 164,
+  documents: 17,
+  graph: { nodes: 198, edges: 437 },
+  byType: [
+    { key: 'Commit', n: 58 }, { key: 'WorkItem', n: 34 }, { key: 'CodeChange', n: 21 },
+    { key: 'Document', n: 17 }, { key: 'Person', n: 12 }, { key: 'Event', n: 9 },
+    { key: 'Sprint', n: 6 }, { key: 'Repository', n: 4 }, { key: 'Project', n: 3 },
+  ],
+  bySource: [
+    { key: 'github', n: 83 }, { key: 'jira', n: 49 }, { key: 'gdocs', n: 17 },
+    { key: 'gcal', n: 9 }, { key: 'gslides', n: 6 },
+  ],
+  byStatus: [
+    { key: 'Done', n: 14 }, { key: 'In Progress', n: 11 }, { key: 'To Do', n: 6 }, { key: 'In Review', n: 3 },
+  ],
+  timeline: SAMPLE_DAILY.map((n, i) => ({ date: dayIso(13 - i), n })),
+  recent: [
+    { id: 's1', type: 'CodeChange', source: 'github', title: '#142 · Fix token refresh race in auth middleware', status: 'Merged', repoRef: 'hyperspace/api', updatedAt: agoIso(28) },
+    { id: 's2', type: 'WorkItem', source: 'jira', title: 'HYP-218 · Graph self-correction: de-duplicate entity nodes', status: 'In Progress', projectRef: 'HYP', updatedAt: agoIso(124) },
+    { id: 's3', type: 'Commit', source: 'github', title: 'a3f9c2 · Add Reciprocal Rank Fusion to retrieval loop', repoRef: 'hyperspace/engine', updatedAt: agoIso(190) },
+    { id: 's4', type: 'Document', source: 'gdocs', title: 'Enterprise GraphRAG — Architecture v2', updatedAt: agoIso(320) },
+    { id: 's5', type: 'WorkItem', source: 'jira', title: 'HYP-203 · 30-min delta sync for GitHub audit logs', status: 'Done', projectRef: 'HYP', updatedAt: agoIso(505) },
+    { id: 's6', type: 'CodeChange', source: 'github', title: '#138 · Cognee upsert: OPEN → MERGED edge transition', status: 'Merged', repoRef: 'hyperspace/engine', updatedAt: agoIso(1490) },
+    { id: 's7', type: 'Event', source: 'gcal', title: 'Sprint 14 planning · retrieval quality', updatedAt: agoIso(1620) },
+    { id: 's8', type: 'Commit', source: 'github', title: '7b1e90 · Multi-hop traversal: follow Issue → PR → Commit', repoRef: 'hyperspace/engine', updatedAt: agoIso(2880) },
+  ],
+};
 
 interface DashboardProps {
-  user: User | null;
+  user: AppUser | null;
   idToken: string | null;
   connectors?: Connectors;
   onNavigate?: (screen: ActiveScreen) => void;
   onAsk?: (q: string) => void;
   platformIcon?: PlatformIconFn;
   kbsCount?: number;
+  appsCount?: number;
 }
 
 interface SourceRow extends MetaEntry {
@@ -158,8 +118,59 @@ interface SourceRow extends MetaEntry {
   syncStatus?: StatsConnection['initialSyncStatus'];
 }
 
-export default function Dashboard({ user, idToken, connectors = {}, onNavigate, onAsk, platformIcon, kbsCount = 0 }: DashboardProps) {
-  const [query, setQuery] = useState('');
+/* Quiet section header used across the analytics panels — monochrome icon,
+   title, optional right-aligned hint. Color stays in the data, not the chrome. */
+function PanelHead({ Icon, title, hint }: { Icon: LucideIcon; title: string; hint?: string }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-5">
+      <Icon size={15} className="text-[#8C8880] shrink-0" strokeWidth={1.9} />
+      <h3 className="text-[13.5px] font-geist font-semibold text-[#F4F0EB] tracking-tight">{title}</h3>
+      {hint && <span className="text-[11.5px] font-geist text-[#6B6762] ml-auto tabular-nums">{hint}</span>}
+    </div>
+  );
+}
+
+function EmptyHint({ text }: { text: string }) {
+  return <p className="text-[12.5px] font-geist text-[#8C8880] py-10 text-center">{text}</p>;
+}
+
+/* KPI card: label top-left, quiet arrow top-right, big number, one muted
+   meta line. Flat surfaces, hairline borders — no gradients, no glow.
+   `hero` renders the single solid-accent variant (flat gold, dark ink). */
+function KpiCard({ label, value, chip, chipHint, hero, onClick }: {
+  label: string; value: string; chip?: string; chipHint?: string; hero?: boolean; onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`group rounded-xl p-5 flex flex-col text-left transition-[background-color,border-color,transform] duration-150 active:translate-y-[2px] ${hero
+        ? 'bg-[#C9A66B] hover:bg-[#CEAC72]'
+        : 'card-elev card-elev-hover'}`}
+    >
+      <div className="flex items-start justify-between gap-2 w-full">
+        <span className={`text-[12.5px] font-geist font-medium truncate ${hero ? 'text-[#1A1917]/70' : 'text-[#9C968E]'}`}>{label}</span>
+        <ArrowUpRight
+          size={15}
+          strokeWidth={1.9}
+          className={`shrink-0 -mt-0.5 -mr-0.5 transition-all duration-150 group-hover:translate-x-px group-hover:-translate-y-px ${hero
+            ? 'text-[#1A1917]/50 group-hover:text-[#1A1917]'
+            : 'text-[#57534E] group-hover:text-[#C7C2BC]'}`}
+        />
+      </div>
+      <p className={`text-[30px] font-geist font-semibold tracking-tight tabular-nums leading-none mt-5 ${hero ? 'text-[#1A1917]' : 'text-[#F4F0EB]'}`}>{value}</p>
+      <div className="flex items-center gap-2 mt-3.5 min-h-[20px]">
+        {chip && (
+          <span className={`text-[10.5px] font-geist font-semibold tabular-nums shrink-0 px-1.5 py-[3px] rounded-md leading-none ${hero
+            ? 'bg-[#1A1917]/15 text-[#1A1917]'
+            : 'bg-[#33302E] text-[#C7C2BC]'}`}>{chip}</span>
+        )}
+        {chipHint && <span className={`text-[11.5px] font-geist truncate ${hero ? 'text-[#1A1917]/65' : 'text-[#8C8880]'}`}>{chipHint}</span>}
+      </div>
+    </button>
+  );
+}
+
+export default function Dashboard({ user, idToken, connectors = {}, onNavigate, onAsk, platformIcon, kbsCount = 0, appsCount = 0 }: DashboardProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -168,39 +179,31 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
   const partOfDay = hour < 5 ? 'Late night' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Working late';
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const loadStats = async () => {
-    setLoading(true);
-    setTimeout(() => {
-      setStats({
-        total: 1240,
-        documents: 42,
-        knowledgeBases: 3,
-        connections: [],
-        bySource: [{ key: 'github', n: 12 }, { key: 'gdocs', n: 4 }],
-        byType: [{ key: 'Document', n: 20 }, { key: 'Code', n: 85 }],
-        timeline: [],
-        graph: { nodes: 1540, edges: 3200 },
-        recent: []
-      });
-      setLoading(false);
-    }, 400);
-  };
-
-  // Poll while anything is actively ingesting so counts climb in real time.
-  useEffect(() => {
-    loadStats();
-    const anyIngesting = (stats?.connections || []).some((c) => c.initialSyncStatus === 'in_progress');
-    const interval = setInterval(loadStats, anyIngesting ? 4000 : 30000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line
-  }, [idToken, (stats?.connections || []).some((c) => c.initialSyncStatus === 'in_progress')]);
-
   const icon = (id: string, size?: number) => (platformIcon ? platformIcon({ id }, size) : null);
 
+  /* ── Live data: poll the real graph stats; faster while ingesting ─────── */
   const liveByProvider = useMemo<Record<string, StatsConnection>>(
     () => Object.fromEntries((stats?.connections || []).map((c) => [c.provider, c])),
     [stats]
   );
+  const anyIngesting = (stats?.connections || []).some((c) => c.initialSyncStatus === 'in_progress');
+
+  useEffect(() => {
+    let alive = true;
+    const loadStats = async () => {
+      if (!idToken) { setLoading(false); return; }
+      try {
+        const res = await fetch('/api/stats', { headers: { Authorization: `Bearer ${idToken}` } });
+        if (res.ok && alive) setStats(await res.json());
+      } catch { /* keep last good snapshot */ }
+      if (alive) setLoading(false);
+    };
+    loadStats();
+    const interval = setInterval(loadStats, anyIngesting ? 4000 : 30000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [idToken, anyIngesting]);
+
+  /* ── Derived series & distributions ───────────────────────────────────── */
   const realBySource = useMemo<Record<string, number>>(
     () => Object.fromEntries((stats?.bySource || []).map((s) => [s.key, s.n])),
     [stats]
@@ -219,113 +222,299 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
   );
   const connectedCount = sources.filter((s) => s.connected).length;
 
-  const typeSegments = useMemo(
-    () => (stats?.byType || [])
-      .filter((t) => TYPE_META[t.key])
-      .map((t) => ({ key: t.key, n: t.n, ...TYPE_META[t.key] })),
-    [stats]
+  // Real data once the graph has anything in it; otherwise a labeled sample so
+  // the dashboard demonstrates itself. Connected-sources panel always stays real.
+  const isLive = !!stats && (
+    (stats.total || 0) > 0 ||
+    (stats.timeline || []).some((d) => d.n > 0) ||
+    (stats.recent || []).length > 0
   );
-  const total = stats?.total || 0;
-  const graphNodes = stats?.graph?.nodes ?? total;
-  const graphEdges = stats?.graph?.edges ?? 0;
-  const ingested14d = useMemo(() => (stats?.timeline || []).reduce((s, d) => s + d.n, 0), [stats]);
-  const anyIngesting = sources.some((s) => s.syncing);
-  const recent: RecentItem[] = stats?.recent || [];
+  const view: Stats = isLive ? (stats as Stats) : SAMPLE_STATS;
+
+  const timeline = view.timeline || [];
+  const daily = timeline.map((d) => d.n);
+  const cumulative = useMemo(() => {
+    let a = 0; return daily.map((n) => (a += n));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+  const tlLabels = timeline.map((d) => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+  const ingested14d = daily.reduce((s, n) => s + n, 0);
+
+  const total = view.total || 0;
+  const graphNodes = view.graph?.nodes ?? total;
+  const graphEdges = view.graph?.edges ?? 0;
+  const documents = view.documents ?? 0;
+  const avgDegree = graphNodes ? (graphEdges * 2) / graphNodes : 0;
+
+  const composition = useMemo(
+    () => (view.byType || [])
+      .map((t) => ({ label: typeMeta(t.key).label, value: t.n, color: typeMeta(t.key).color }))
+      .filter((d) => d.value > 0)
+      .slice(0, 7),
+    [view]
+  );
+  const sourceBars = useMemo(
+    () => (view.bySource || [])
+      .map((s) => ({ label: SRC_META[s.key]?.label || s.key, value: s.n, color: SRC_META[s.key]?.color || '#9C968E' }))
+      .filter((d) => d.value > 0),
+    [view]
+  );
+  const statusBars = useMemo(
+    () => (view.byStatus || [])
+      .map((s) => ({ label: s.key, value: s.n, color: statusColor(s.key) }))
+      .filter((d) => d.value > 0),
+    [view]
+  );
+
+  const recent: RecentItem[] = view.recent || [];
 
   const suggestions = [
     'What changed across my repos this week?',
     'Summarize open work items and their owners',
     'Which pull requests reference Jira tickets?',
   ];
-  const submitAsk = (q?: string) => { const t = (q ?? query).trim(); if (t) onAsk?.(t); };
+  const submitAsk = (q: string) => { const t = q.trim(); if (t) onAsk?.(t); };
 
-  // Read local counts for apps
-  const appsCount = (() => { try { return JSON.parse(localStorage.getItem('hs_apps') || '[]').length; } catch { return 0; } })();
+  /* ── Skeleton (first paint only) ──────────────────────────────────────── */
+  if (loading && !stats) {
+    return (
+      <div className="flex-1 overflow-y-auto bg-[#252523] font-geist">
+        <div className="max-w-[1180px] mx-auto px-6 lg:px-10 py-8 lg:py-10 animate-fade-in">
+          {/* header */}
+          <Skeleton className="h-9 w-72 rounded-lg" />
+          <Skeleton className="h-4 w-56 rounded mt-3" />
+          {/* KPI strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-7">
+            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[116px] rounded-2xl" />)}
+          </div>
+          {/* ingestion chart + composition donut */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
+            <Skeleton className="h-[300px] rounded-2xl lg:col-span-2" />
+            <Skeleton className="h-[300px] rounded-2xl" />
+          </div>
+          {/* source bars + status */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
+            <Skeleton className="h-[200px] rounded-2xl" />
+            <Skeleton className="h-[200px] rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#252523] font-geist animate-fade-in">
       <div className="max-w-[1180px] mx-auto px-6 lg:px-10 py-8 lg:py-10">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-7">
           <div>
             <h1 className="text-[30px] lg:text-[34px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-none">
               {partOfDay}, {firstName}
             </h1>
-            <p className="text-[13.5px] font-geist text-[#8C8880] mt-2">
-              {dateStr} · {connectedCount} source{connectedCount === 1 ? '' : 's'} connected
+            <p className="text-[13.5px] font-geist text-[#8C8880] mt-2 flex items-center gap-2 flex-wrap">
+              <span>{dateStr}</span>
+              <span className="text-[#4A4744]">·</span>
+              <span>{connectedCount} source{connectedCount === 1 ? '' : 's'} connected</span>
+              {anyIngesting && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#2C2A28] border border-[#3D3A37] text-[11px] font-medium text-[#A8A39B]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C9A66B] animate-pulse" /> Syncing
+                </span>
+              )}
+              {!isLive && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#2C2A28] border border-[#3D3A37] text-[11px] font-medium text-[#9C968E]" title="Connect a source and run a sync to see your own analytics">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#8C8880]" /> Sample data
+                </span>
+              )}
             </p>
           </div>
-          <div className="flex items-center gap-2.5">
-            <button onClick={() => onNavigate?.('integrations')} className="btn-bump btn-bump-dark px-3.5 py-2 text-[12.5px]">
-              <Blocks size={15} strokeWidth={1.75} /> Connect sources
+          <div className="flex items-center gap-2.5 self-start sm:self-auto">
+            <button onClick={() => onNavigate?.('integrations')} className="btn-bump btn-bump-gold px-4 py-2.5 text-[12.5px]">
+              <Plus size={15} strokeWidth={2.2} /> Connect source
+            </button>
+            <button onClick={() => onNavigate?.('knowledge')} className="btn-bump btn-bump-dark px-4 py-2.5 text-[12.5px]">
+              <Database size={15} strokeWidth={1.9} /> Knowledge bases
             </button>
           </div>
         </div>
 
-        {/* Stat cards — Applications | Knowledge Bases */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
-          <button onClick={() => onNavigate?.('applications')} className="text-left group card-elev rounded-2xl p-6 flex flex-col gap-3 hover:bg-[#2A2826] transition-colors border border-transparent hover:border-[#3D3A37]">
-            <div className="flex items-center justify-between">
-              <span className="text-[14px] font-geist font-semibold text-[#8C8880] tracking-tight group-hover:text-[#F4F0EB] transition-colors">Applications</span>
-              <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#1E1D1C] border border-[#3D3A37]">
-                <Activity size={18} className="text-[#9C968E]" strokeWidth={1.75} />
-              </span>
-            </div>
-            <div className="flex items-end justify-between">
-              <span className="font-geist font-semibold text-[#F4F0EB] text-[42px] leading-none tracking-tight tabular-nums">{appsCount}</span>
-              <span className="text-[12px] font-geist font-medium text-[#8C8880] mb-1 flex items-center gap-1 group-hover:text-[#C9A66B] transition-colors">View apps <ArrowRight size={14} /></span>
-            </div>
-          </button>
-
-          <button onClick={() => onNavigate?.('knowledge')} className="text-left group card-elev rounded-2xl p-6 flex flex-col gap-3 hover:bg-[#2A2826] transition-colors border border-transparent hover:border-[#3D3A37]">
-            <div className="flex items-center justify-between">
-              <span className="text-[14px] font-geist font-semibold text-[#8C8880] tracking-tight group-hover:text-[#F4F0EB] transition-colors">Knowledge Bases</span>
-              <span className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#1E1D1C] border border-[#3D3A37]">
-                <Database size={18} className="text-[#9C968E]" strokeWidth={1.75} />
-              </span>
-            </div>
-            <div className="flex items-end justify-between">
-              <span className="font-geist font-semibold text-[#F4F0EB] text-[42px] leading-none tracking-tight tabular-nums">{kbsCount}</span>
-              <span className="text-[12px] font-geist font-medium text-[#8C8880] mb-1 flex items-center gap-1 group-hover:text-[#C9A66B] transition-colors">View bases <ArrowRight size={14} /></span>
-            </div>
-          </button>
+        {/* KPI strip — hero card + neutral cards, all clickable */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+          <KpiCard hero label="Knowledge nodes" value={graphNodes.toLocaleString()} chip={`+${ingested14d}`} chipHint="last 14 days" onClick={() => onNavigate?.('knowledge')} />
+          <KpiCard label="Relationships" value={graphEdges.toLocaleString()} chip={avgDegree ? avgDegree.toFixed(1) : '0'} chipHint="avg links per node" onClick={() => onNavigate?.('knowledge')} />
+          <KpiCard label="Entities" value={total.toLocaleString()} chip={`${composition.length}`} chipHint={`type${composition.length === 1 ? '' : 's'} in the graph`} onClick={() => onNavigate?.('knowledge')} />
+          <KpiCard label="Documents" value={documents.toLocaleString()} chip={`${kbsCount}`} chipHint={`knowledge base${kbsCount === 1 ? '' : 's'}`} onClick={() => onNavigate?.('knowledge')} />
         </div>
 
-        {/* Connected sources */}
-        <div className="card-elev rounded-2xl p-6 max-w-[600px]">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-[16px] font-geist font-semibold text-[#F4F0EB] tracking-tight">Connected sources</h2>
-            <span className="text-[12px] font-geist font-medium text-[#8C8880] tabular-nums">{connectedCount}/{Object.keys(SRC_META).length}</span>
+        {/* Ingestion line chart + entity composition donut */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
+          <div className="card-elev rounded-2xl p-5 lg:col-span-2">
+            <PanelHead Icon={TrendingUp} title="Knowledge ingestion" hint={`${ingested14d} entities · last 14 days`} />
+            {timeline.length ? (
+              <AreaChart
+                labels={tlLabels}
+                series={[{ name: 'Entities', color: '#C9A66B', values: daily }]}
+                height={236}
+              />
+            ) : <EmptyHint text="Connect a source — ingestion volume will chart here as the graph builds." />}
           </div>
-          <div className="flex flex-col gap-3">
-            {sources.map((s) => (
-              <div key={s.id} className="flex items-center gap-4 py-1">
-                <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-[#1E1D1C] border border-[#3D3A37]">
-                  {icon(s.id, 18)}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-geist font-medium text-[#F4F0EB] truncate">{s.label}</p>
-                  <p className="text-[12px] font-geist text-[#8C8880] mt-0.5">
-                    {s.connected ? 'Connected and authorized' : 'Not connected'}
-                  </p>
-                </div>
-                {s.connected ? (
-                   <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-geist font-medium text-[#8FAE97] bg-[#1E2A22] border border-[#2E4636] shrink-0">
-                     <span className="w-1.5 h-1.5 rounded-full bg-[#8FAE97]" /> Active
-                   </span>
-                ) : COMING_SOON.includes(s.id) ? (
-                   <span className="text-[10px] font-geist font-semibold text-[#C9A66B] bg-[#2A2318] border border-[#5A4A28] px-2 py-1 rounded-md uppercase tracking-wide shrink-0">Coming Soon</span>
-                ) : (
-                   <button onClick={() => onNavigate?.('integrations')} className="bg-[#F4F0EB] hover:bg-[#EAE5DF] text-[#1E1D1C] px-3.5 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.2)]">Connect</button>
-                )}
+          <div className="card-elev rounded-2xl p-5">
+            <PanelHead Icon={PieChart} title="Composition" hint="by type" />
+            {composition.length
+              ? <Donut data={composition} unit="entities" />
+              : <EmptyHint text="No entities yet. Selected items populate the graph after their first sync." />}
+          </div>
+        </div>
+
+        {/* Source distribution + work-item status (graph overview fallback) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+          <div className="card-elev rounded-2xl p-5">
+            <PanelHead Icon={BarChart3} title="Knowledge by source" />
+            {sourceBars.length
+              ? <BarList data={sourceBars} />
+              : <EmptyHint text="Once a connector finishes syncing, its share of the graph appears here." />}
+          </div>
+          <div className="card-elev rounded-2xl p-5">
+            <PanelHead Icon={Target} title={statusBars.length ? 'Work item status' : 'Graph overview'} />
+            {statusBars.length ? (
+              <BarList data={statusBars} />
+            ) : (
+              <div className="grid grid-cols-3 gap-3 pt-1">
+                {[
+                  { k: 'Nodes', v: graphNodes, c: '#C9A66B' },
+                  { k: 'Edges', v: graphEdges, c: '#8AA9C9' },
+                  { k: 'Avg links', v: avgDegree ? avgDegree.toFixed(1) : '0', c: '#8FAE97' },
+                ].map((m) => (
+                  <div key={m.k} className="rounded-xl bg-[#1E1D1C] border border-[#33302E] p-3.5 flex flex-col gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: m.c }} />
+                    <span className="text-[22px] font-geist font-semibold text-[#F4F0EB] tabular-nums leading-none">{m.v}</span>
+                    <span className="text-[11px] font-geist text-[#8C8880]">{m.k}</span>
+                  </div>
+                ))}
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* Recent activity + connected sources */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Recent activity feed */}
+          <div className="card-elev rounded-2xl p-5 lg:col-span-7">
+            <PanelHead Icon={History} title="Recent activity" hint={recent.length ? `${recent.length} latest` : undefined} />
+            {recent.length ? (
+              <div className="flex flex-col">
+                {recent.map((r, i) => {
+                  const tm = typeMeta(r.type);
+                  const ago = fmtAgo(r.updatedAt);
+                  const ref = r.repoRef || r.projectRef;
+                  return (
+                    <a
+                      key={r.id || i}
+                      href={r.url || undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group flex items-center gap-3 py-2.5 border-b border-[#2E2C2A] last:border-0 -mx-1.5 px-1.5 rounded-lg hover:bg-[#2A2826] transition-colors"
+                    >
+                      <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-[#1E1D1C] border border-[#33302E]">
+                        <tm.Icon size={15} style={{ color: tm.color }} strokeWidth={1.85} />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-geist text-[#F4F0EB] truncate">{r.title || 'Untitled'}</p>
+                        <p className="text-[11.5px] font-geist text-[#8C8880] truncate flex items-center gap-1.5">
+                          <span>{tm.label}</span>
+                          {ref && <><span className="text-[#4A4744]">·</span><span className="truncate">{ref}</span></>}
+                          {SRC_META[r.source] && <><span className="text-[#4A4744]">·</span><span>{SRC_META[r.source].label}</span></>}
+                        </p>
+                      </div>
+                      {r.status && (
+                        <span className="hidden sm:flex items-center gap-1.5 text-[10.5px] font-geist font-medium px-2 py-1 rounded-md shrink-0 bg-[#1E1D1C] border border-[#33302E] text-[#A8A39B]">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: statusColor(r.status) }} />
+                          {r.status}
+                        </span>
+                      )}
+                      {ago && <span className="text-[11px] font-geist text-[#6B6762] tabular-nums shrink-0 w-14 text-right">{ago}</span>}
+                      {r.url && <ExternalLink size={13} className="text-[#4A4744] group-hover:text-[#8C8880] transition-colors shrink-0" />}
+                    </a>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyHint text="Activity from your connected tools — PRs, commits, tickets and docs — will stream in here." />
+            )}
+          </div>
+
+          {/* Right rail: quick nav + connected sources */}
+          <div className="lg:col-span-5 flex flex-col gap-5">
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={() => onNavigate?.('applications')} className="card-elev card-elev-hover rounded-2xl p-4 text-left flex flex-col gap-3 transition-transform duration-150 active:translate-y-[2px]">
+                <div className="flex items-center justify-between">
+                  <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#1E1D1C] border border-[#3D3A37]"><Boxes size={17} className="text-[#9C968E]" strokeWidth={1.85} /></span>
+                  <ArrowRight size={15} className="text-[#6B6762]" />
+                </div>
+                <div>
+                  <p className="text-[24px] font-geist font-semibold text-[#F4F0EB] tabular-nums leading-none">{appsCount}</p>
+                  <p className="text-[11.5px] font-geist text-[#8C8880] mt-1.5">Applications</p>
+                </div>
+              </button>
+              <button onClick={() => onNavigate?.('knowledge')} className="card-elev card-elev-hover rounded-2xl p-4 text-left flex flex-col gap-3 transition-transform duration-150 active:translate-y-[2px]">
+                <div className="flex items-center justify-between">
+                  <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#1E1D1C] border border-[#3D3A37]"><Database size={17} className="text-[#9C968E]" strokeWidth={1.85} /></span>
+                  <ArrowRight size={15} className="text-[#6B6762]" />
+                </div>
+                <div>
+                  <p className="text-[24px] font-geist font-semibold text-[#F4F0EB] tabular-nums leading-none">{kbsCount}</p>
+                  <p className="text-[11.5px] font-geist text-[#8C8880] mt-1.5">Knowledge bases</p>
+                </div>
+              </button>
+            </div>
+
+            <div className="card-elev rounded-2xl p-5 flex-1">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[14px] font-geist font-semibold text-[#F4F0EB] tracking-tight">Connected sources</h3>
+                <span className="text-[12px] font-geist font-medium text-[#8C8880] tabular-nums">{connectedCount}/{Object.keys(SRC_META).length}</span>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {sources.map((s) => (
+                  <div key={s.id} className="flex items-center gap-3 py-0.5">
+                    <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-[#1E1D1C] border border-[#3D3A37]">
+                      {icon(s.id, 17)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-geist font-medium text-[#F4F0EB] truncate">{s.label}</p>
+                      <p className="text-[11px] font-geist text-[#8C8880] mt-0.5">
+                        {s.syncing ? 'Syncing…' : s.connected ? (s.count ? `${s.count} items` : 'Connected') : 'Not connected'}
+                      </p>
+                    </div>
+                    {s.connected ? (
+                      <span className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[10.5px] font-geist font-medium text-[#A8A39B] bg-[#1E1D1C] border border-[#33302E] shrink-0">
+                        <span className={`w-1.5 h-1.5 rounded-full bg-[#8FAE97] ${s.syncing ? 'animate-pulse' : ''}`} /> {s.syncing ? 'Syncing' : 'Active'}
+                      </span>
+                    ) : COMING_SOON.includes(s.id) ? (
+                      <span className="text-[9.5px] font-geist font-semibold text-[#8C8880] bg-[#1E1D1C] border border-[#33302E] px-1.5 py-1 rounded-md uppercase tracking-wide shrink-0">Soon</span>
+                    ) : (
+                      <button onClick={() => onNavigate?.('integrations')} className="btn-bump btn-bump-accent px-3 py-1.5 text-[11px] shrink-0">Connect</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => onNavigate?.('integrations')} className="btn-bump btn-bump-dark w-full mt-5 py-2.5 text-[12.5px]">
+                <Plus size={15} strokeWidth={2} /> Manage integrations
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Suggestions — only while showing sample data, to guide first use */}
+        {!isLive && (
+          <div className="flex flex-wrap items-center gap-2 mt-6">
+            <span className="text-[12px] font-geist text-[#6B6762]">Try asking</span>
+            {suggestions.map((q) => (
+              <button key={q} onClick={() => submitAsk(q)} className="text-[12px] font-geist text-[#C7C2BC] bg-[#2C2A28] border border-[#3D3A37] hover:border-[#57534E] rounded-full px-3 py-1.5 transition-colors">
+                {q}
+              </button>
             ))}
           </div>
-          <button onClick={() => onNavigate?.('integrations')} className="btn-bump btn-bump-dark w-full mt-6 py-3 text-[13px]">
-            <Plus size={15} strokeWidth={2} /> Manage integrations
-          </button>
-        </div>
+        )}
 
       </div>
     </div>

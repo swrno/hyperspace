@@ -2,8 +2,9 @@ import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken, checkRateLimit, logMessageUsage } from './auth.js';
 import { graphSearch, recallMemory, rememberMemory } from './cognee.js';
-import { retrieveContext } from './retrieval.js';
+import { retrieveContext, retrieveNodeGraphContext } from './retrieval.js';
 import { routeQuery } from './lib/router.js';
+import { generateReply as llmGenerate, MODELS, type ProviderModel } from './lib/llm.js';
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]).catch(() => null);
 
@@ -56,38 +57,8 @@ Formatting (important):
 - Use a fenced code block ONLY for genuine multi-line code, config, or terminal commands, and always tag the language (\`\`\`js). NEVER wrap a single short value or path in a fenced block.
 - Use ## / ### headings only when the answer has multiple real sections. Use tables for comparisons. Bold key terms sparingly.`;
 
-// ── LLM providers (OpenAI-compatible, except Gemini) ────────────────────────
-// Each takes an explicit model id so retrieval modes can choose the best model.
-
-async function callOpenAICompatible(url, key, model, messages, maxTokens) {
-  if (!key) throw new Error('key not set');
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model, messages, temperature: 0.6, max_tokens: maxTokens || 2048 }),
-  });
-  if (!res.ok) throw new Error(`${res.status}`);
-  return (await (res.json() as any)).choices?.[0]?.message?.content?.trim();
-}
-const callGroq = (model, messages, mt) => callOpenAICompatible('https://api.groq.com/openai/v1/chat/completions', process.env.GROQ_API_KEY, model, messages, mt);
-const callFireworks = (model, messages, mt) => callOpenAICompatible('https://api.fireworks.ai/inference/v1/chat/completions', process.env.FIREWORKS_API_KEY, model, messages, mt);
-const callOpenRouter = (model, messages, mt) => callOpenAICompatible('https://openrouter.ai/api/v1/chat/completions', process.env.OPENROUTER_API_KEY, model, messages, mt);
-
-async function callGemini(model, messages, maxTokens) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY not set');
-  const systemText = messages.filter(m => m.role === 'system').map(m => m.content).join('\n');
-  const contents = messages.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ systemInstruction: systemText ? { parts: [{ text: systemText }] } : undefined, contents, generationConfig: { temperature: 0.6, maxOutputTokens: maxTokens || 2048 } }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  return (await (res.json() as any)).candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
-}
-
-const CALL = { groq: callGroq, fireworks: callFireworks, gemini: callGemini, openrouter: callOpenRouter };
+// LLM provider routing (Fireworks primary → Groq → Gemini) with multi-key
+// Fireworks rotation lives in lib/llm.ts. Modes below only choose the chain.
 
 // Per-mode answer depth instruction (drives how long/structured the reply is).
 export const MODE_STYLE = {
@@ -102,32 +73,27 @@ export const MODE_STYLE = {
  * (b) the Cognee graph search type, (c) retrieval breadth, and (d) answer length.
  * Provider names and model ids are never exposed to the client.
  */
-const MODES = {
+// Fireworks (primary, multi-key) leads every chain; Groq is the fallback and
+// Gemini the last resort. Model ids are centralised in lib/llm.ts (MODELS).
+const MODES: Record<string, { searchType: string; topK: number; timeout: number; maxTokens: number; chain: ProviderModel[] }> = {
   normal: {
     searchType: 'GRAPH_COMPLETION', topK: 8, timeout: 6000, maxTokens: 1024,
-    chain: [['groq', 'openai/gpt-oss-120b'], ['fireworks', 'accounts/fireworks/models/gpt-oss-120b'], ['gemini', 'qwen/qwen3.6-27b']],
+    chain: [['fireworks', MODELS.fireworksPrimary], ['groq', MODELS.groq], ['gemini', MODELS.geminiFast]],
   },
   deep: {
     searchType: 'GRAPH_COMPLETION_DECOMPOSITION', topK: 12, timeout: 10000, maxTokens: 2800,
-    chain: [['fireworks', 'accounts/fireworks/models/kimi-k2p6'], ['groq', 'openai/gpt-oss-120b'], ['gemini', 'gemini-2.5-pro']],
+    chain: [['fireworks', MODELS.fireworksLarge], ['groq', MODELS.groq], ['gemini', MODELS.geminiPro]],
   },
   hyper: {
     searchType: 'GRAPH_COMPLETION_COT', topK: 16, timeout: 15000, maxTokens: 4096,
-    chain: [['fireworks', 'accounts/fireworks/models/deepseek-v4-pro'], ['fireworks', 'accounts/fireworks/models/kimi-k2p6'], ['groq', 'openai/gpt-oss-120b']],
+    chain: [['fireworks', MODELS.fireworksLarge], ['groq', MODELS.groq], ['gemini', MODELS.geminiPro]],
   },
 };
 export const resolveMode = (m) => (MODES[m] ? m : 'normal');
 
 async function generateReply(messages, modeId) {
   const mode = MODES[resolveMode(modeId)];
-  let lastErr;
-  for (const [provider, model] of mode.chain) {
-    try {
-      const out = await CALL[provider](model, messages, mode.maxTokens);
-      if (out) return out;
-    } catch (e) { lastErr = e; console.warn(`Provider ${provider} failed:`, e.message); }
-  }
-  throw new Error(lastErr ? `All providers failed (${lastErr.message})` : 'No AI providers configured');
+  return llmGenerate(messages, mode.chain, { maxTokens: mode.maxTokens });
 }
 
 async function generateTitle(message) {
@@ -178,10 +144,14 @@ export default async function handler(req: Request, res: Response) {
 
     let systemContent;
     if (kbScope) {
-      const memory = await withTimeout(recallMemory(message, { userId: user.uid }), 2500);
+      const [memory, nodeGraph] = await Promise.all([
+        withTimeout(recallMemory(message, { userId: user.uid }), 2500),
+        retrieveNodeGraphContext(user.uid, message, { kbId }).catch(() => null),
+      ]);
       const blocks = [];
       if (memory) blocks.push(`## What hypr remembers about you\n${memory}`);
       blocks.push(`## Knowledge base "${kbScope.name}"\n${kbScope.context}`);
+      if (nodeGraph) blocks.push(`## Knowledge graph (entities & relations)\n${nodeGraph}`);
       systemContent = `${depthPrompt}\n\n# Scope: knowledge base "${kbScope.name}"\nThe user is asking specifically about this knowledge base. Answer using ONLY the content below. Cite document names and source items. If the answer isn't present, say it isn't in this knowledge base and suggest what to add.\n\n${blocks.join('\n\n')}`;
     } else {
       // Otherwise ground from three sources in parallel (README §6 hybrid retrieval):
@@ -190,9 +160,10 @@ export default async function handler(req: Request, res: Response) {
       //  3. Personal memory (PSI) — what hypr knows about this user.
       const route = routeQuery(message);
       const searchType = route.mode === 'global' ? 'GRAPH_SUMMARY_COMPLETION' : mode.searchType;
-      const [cogneeAnswer, localContext, memory] = await Promise.all([
+      const [cogneeAnswer, localContext, nodeGraph, memory] = await Promise.all([
         withTimeout(graphSearch(message, { userId: user.uid, searchType, topK: mode.topK }), mode.timeout),
         retrieveContext(user.uid, message).catch(() => null),
+        retrieveNodeGraphContext(user.uid, message).catch(() => null),
         withTimeout(recallMemory(message, { userId: user.uid }), 2500),
       ]);
 
@@ -200,6 +171,7 @@ export default async function handler(req: Request, res: Response) {
       if (memory) ctxParts.push(`## What hypr remembers about you\n${memory}`);
       if (cogneeAnswer) ctxParts.push(`## Knowledge graph reasoning (${route.mode} search)\n${cogneeAnswer}`);
       if (localContext) ctxParts.push(`## Connected data (structured index)\n${localContext}`);
+      if (nodeGraph) ctxParts.push(`## Knowledge graph (entities & relations)\n${nodeGraph}`);
       const kgContext = ctxParts.length ? ctxParts.join('\n\n') : null;
 
       systemContent = kgContext

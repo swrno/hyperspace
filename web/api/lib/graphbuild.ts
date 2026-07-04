@@ -1,3 +1,4 @@
+// UPDATED: added additive NODE_GRAPH_EDGES constants + buildNodeGraphEdges() for the new Source/Chunk/Entity graph — buildKbGraph()/buildStructuralGraph() untouched.
 import { sourceLabel } from './schema.js';
 
 /** Human label + node type per connector platform, for the per-KB graph. */
@@ -156,4 +157,69 @@ export function buildStructuralGraph(ents) {
     edges,
     stats: { nodes: nodes.length, edges: edges.length, entities: ents.length, sources: sources.length, people: people.size },
   };
+}
+
+// ── Node-graph edges (additive, Source/Chunk/Entity scaffolding) ────────────
+//
+// Pure edge assembler for the new KnowledgeBase -> Source -> Chunk -> Entity
+// model. Platform-agnostic: it doesn't know about gdocs/gslides/jira/gcal
+// specifics, it just wires the parent/child/entity ids it's handed by
+// ingest.ts's buildNodeGraphForProvider(). Does not touch buildKbGraph() or
+// buildStructuralGraph() above.
+
+export const NODE_GRAPH_EDGES = {
+  HAS_SOURCE: 'HAS_SOURCE',
+  HAS_CHUNK: 'HAS_CHUNK',
+  HAS_ENTITY: 'HAS_ENTITY',
+  RELATES_TO: 'RELATES_TO',
+};
+
+const PARENT_ID_FIELDS = [
+  'parent_document_id',
+  'parent_presentation_id',
+  'parent_project_id',
+  'parent_calendar_id',
+];
+
+/**
+ * Build HAS_SOURCE / HAS_CHUNK / HAS_ENTITY / RELATES_TO edges for one
+ * platform batch.
+ *   sources      — top-level Source nodes (Document/Presentation/Project/Calendar), each {id}
+ *   children     — Chunk/Slide/Issue/CalendarEvent nodes, each {id, metadata: {parent_*_id}}
+ *   entities     — EntityNode[], each {id, metadata: {source_node_id}}
+ *   entityLinks  — pre-computed RELATES_TO pairs: {fromEntityId, toEntityId, description}
+ *                  (reused as-is for both entity co-occurrence edges and Jira
+ *                  linked_issues edges — this builder only cares that both ids
+ *                  exist among the assembled node set, not the node type)
+ */
+export function buildNodeGraphEdges({ kbId, sources = [], children = [], entities = [], entityLinks = [] }: any) {
+  const edges: any[] = [];
+  const seen = new Set<string>();
+  const addEdge = (source: string, target: string, label: string, extra: any = {}) => {
+    if (!source || !target || source === target) return;
+    const k = `${source}|${target}|${label}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    edges.push({ source, target, label, ...extra });
+  };
+
+  const kbRootId = `kb:${kbId}`;
+  for (const s of sources) addEdge(kbRootId, s.id, NODE_GRAPH_EDGES.HAS_SOURCE);
+
+  for (const c of children) {
+    const parentId = PARENT_ID_FIELDS.map((f) => c.metadata?.[f]).find(Boolean);
+    addEdge(parentId, c.id, NODE_GRAPH_EDGES.HAS_CHUNK);
+  }
+
+  for (const e of entities) {
+    addEdge(e.metadata?.source_node_id, e.id, NODE_GRAPH_EDGES.HAS_ENTITY);
+  }
+
+  for (const link of entityLinks) {
+    addEdge(link.fromEntityId, link.toEntityId, NODE_GRAPH_EDGES.RELATES_TO, {
+      description: link.description,
+    });
+  }
+
+  return { edges };
 }

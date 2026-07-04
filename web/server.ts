@@ -13,6 +13,8 @@ import statsHandler from './api/stats.js';
 import graphHandler from './api/graph.js';
 import { authorizeHandler, callbackHandler } from './api/oauth.js';
 import { syncAllDue } from './api/ingest.js';
+import { ensureUserIndexes } from './api/auth.js';
+import { ensureSchema } from './api/lib/neo4j.js';
 import appsHandler from './api/apps.js';
 import appChatHandler from './api/app-chat.js';
 import generatePromptHandler from './api/generate-prompt.js';
@@ -99,6 +101,14 @@ app.all('/api/graph', async (req, res) => {
 if (!process.env.VERCEL) {
   const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+
+    // Ensure the unique index on users.uid so first-login upserts stay idempotent.
+    ensureUserIndexes().catch((e) => console.warn('ensureUserIndexes error:', e.message));
+
+    // Build Neo4j vector/full-text indexes now that dotenv has loaded NEO4J_*.
+    // (cognee.ts also lazily ensures this, but warming it here avoids the first
+    // chat/ingest paying for index creation.)
+    ensureSchema().catch((e) => console.warn('Neo4j ensureSchema error:', e.message));
 
     // Polling safety net / "update every N minutes" delta loop (architecture §7).
     // Runs continuously while the server is up; each tick polls connections whose

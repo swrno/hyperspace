@@ -4,7 +4,14 @@ import { verifyToken } from './auth.js';
 import { ingest as cogneeIngest, cognify, formatConnectorPayload, ingestGitHubEntity } from './cognee.js';
 import { textFromBase64 } from './lib/pdf.js';
 import { getConnection, getAccessToken } from './connections.js';
+import { buildNodeGraphForProvider } from './ingest.js';
 import * as github from './lib/github.js';
+
+// Connectors that feed the additive Source/Chunk/Entity node graph, and the
+// OAuth provider whose stored connection holds each one's token.
+const NODE_GRAPH_PLATFORMS = ['gdocs', 'gslides', 'jira', 'gcal'];
+const oauthProviderForPlatform = (p: string) =>
+  ['gdocs', 'gslides', 'gsheets', 'gcal'].includes(p) ? 'google' : p;
 
 /** Per-KB Cognee tag so a knowledge base's graph is built only from its own
  *  documents and attached sources (README §4 — graph "based on sources"). */
@@ -177,10 +184,39 @@ export default async function handler(req: Request, res: Response) {
         );
         if (source.items.length) {
           const payload = formatConnectorPayload(kbId, user.uid, user.email, platform, source.items);
-          cogneeIngest(payload, { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] })
-            .catch((e) => console.warn('KB source Cognee ingest failed (non-fatal):', e.message));
+
+          // Non-GitHub live connectors: progress-tracked ingestion so the KB card
+          // shows a spinner + phases like GitHub does. Runs async; the response
+          // returns immediately. Progress is keyed by kbId (same map GitHub uses).
+          if (platform !== 'github') {
+            ingestProgress.set(kbId, { phase: 'Starting…', pct: 3, done: false, startedAt: Date.now() });
+            (async () => {
+              try {
+                ingestProgress.set(kbId, { phase: 'Indexing into knowledge graph…', pct: 25, done: false, startedAt: Date.now() });
+                await cogneeIngest(payload, { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] });
+
+                // Additive node graph, keyed by the REAL kbId (not the userId stand-in).
+                if (NODE_GRAPH_PLATFORMS.includes(platform)) {
+                  ingestProgress.set(kbId, { phase: 'Fetching & embedding content…', pct: 60, done: false, startedAt: Date.now() });
+                  const conn = await getConnection(user.uid, oauthProviderForPlatform(platform));
+                  if (conn) {
+                    const token = await getAccessToken(conn);
+                    await buildNodeGraphForProvider(user.uid, kbId, platform, source.items, token, conn);
+                  }
+                }
+                ingestProgress.set(kbId, { phase: 'Complete', pct: 100, done: true, startedAt: Date.now() });
+                setTimeout(() => ingestProgress.delete(kbId), 10 * 60 * 1000);
+              } catch (e: any) {
+                console.warn(`KB ingest failed for ${platform} (non-fatal):`, e.message);
+                ingestProgress.set(kbId, { phase: `Failed: ${e.message}`, pct: 0, done: true, error: e.message, startedAt: Date.now() });
+                setTimeout(() => ingestProgress.delete(kbId), 10 * 60 * 1000);
+              }
+            })();
+          }
 
           if (platform === 'github') {
+            cogneeIngest(payload, { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] })
+              .catch((e) => console.warn('KB source Cognee ingest failed (non-fatal):', e.message));
             // Deep background ingestion — runs fully async so the HTTP response
             // returns immediately while content is streamed into Cognee.
             ingestProgress.set(kbId, { phase: 'Starting…', pct: 2, done: false, startedAt: Date.now() });

@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { verifyToken } from './auth.js';
+import { getDb } from './mongodb.js';
 import { createOAuthState, consumeOAuthState, saveConnection } from './connections.js';
 import { runInitialSync } from './ingest.js';
 import * as github from './lib/github.js';
@@ -23,8 +24,10 @@ import * as google from './lib/google.js';
 
 const APP_BASE = (process.env.APP_BASE_URL || 'http://localhost:5173').replace(/\/$/, '');
 
+type OAuthProvider = 'github' | 'jira' | 'google';
+
 // UI connector id → OAuth provider that actually handles it.
-const UI_TO_OAUTH = {
+const UI_TO_OAUTH: Record<string, OAuthProvider | undefined> = {
   github: 'github',
   jira: 'jira',
   gdocs: 'google',
@@ -34,13 +37,13 @@ const UI_TO_OAUTH = {
 };
 
 // One OAuth config per real provider.
-const OAUTH = {
+const OAUTH: Record<string, { authorizeUrl: (redirectUri: string, state: string) => string; exchange: (code: string, redirectUri: string) => Promise<unknown> } | undefined> = {
   github: { authorizeUrl: github.authorizeUrl, exchange: github.exchangeCode },
   jira: { authorizeUrl: jira.authorizeUrl, exchange: jira.exchangeCode },
   google: { authorizeUrl: google.authorizeUrl, exchange: google.exchangeCode },
 };
 
-function redirectUri(oauthProvider) {
+function redirectUri(oauthProvider: string) {
   return `${APP_BASE}/api/auth/${oauthProvider}/callback`;
 }
 
@@ -58,12 +61,35 @@ export async function authorizeHandler(req: Request, res: Response) {
     // Store the originating UI platform so the callback can return the user to
     // the right connector card (gdocs vs gslides).
     const state = await createOAuthState(user.uid, uiPlatform);
-    const url = OAUTH[op].authorizeUrl(redirectUri(op), state);
+    const url = OAUTH[op]!.authorizeUrl(redirectUri(op), state);
     return res.redirect(url);
-  } catch (e) {
+  } catch (e: any) {
     console.error('authorize error:', e.message);
     return res.redirect(`${APP_BASE}/?connect_error=${encodeURIComponent(uiPlatform)}`);
   }
+}
+
+/** Mark the originating UI connector card as connected — the SPA reads this
+    from /api/connectors. Item selection now lives in the Knowledge tab, so the
+    callback is what flips the card. Field-level $set keeps any previously
+    selected items intact on reconnect. */
+async function markConnected(userId: string, uiPlatform: string, account?: string) {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  await db.collection('connectors').updateOne(
+    { userId },
+    {
+      $set: {
+        userId,
+        [`connectors.${uiPlatform}.connected`]: true,
+        [`connectors.${uiPlatform}.account`]: account || 'connected',
+        [`connectors.${uiPlatform}.status`]: 'connected',
+        [`connectors.${uiPlatform}.lastSync`]: now,
+        [`connectors.${uiPlatform}.updatedAt`]: now,
+      },
+    },
+    { upsert: true },
+  );
 }
 
 /** GET /api/auth/:provider/callback */
@@ -87,6 +113,7 @@ export async function callbackHandler(req: Request, res: Response) {
       const tokens = await github.exchangeCode(code, ruri);
       const gh = await github.getUser(tokens.accessToken);
       await saveConnection(userId, 'github', tokens, { accountId: String(gh.id), username: gh.login });
+      await markConnected(userId, uiPlatform, gh.login);
     } else if (op === 'jira') {
       const tokens = await jira.exchangeCode(code, ruri);
       const sites = await jira.accessibleResources(tokens.accessToken);
@@ -100,10 +127,12 @@ export async function callbackHandler(req: Request, res: Response) {
         siteUrl: site.url,
         siteName: site.name,
       });
+      await markConnected(userId, uiPlatform, acct?.email || acct?.name);
     } else if (op === 'google') {
       const tokens = await google.exchangeCode(code, ruri);
       const acct = await google.me(tokens.accessToken);
       await saveConnection(userId, 'google', tokens, { accountId: acct?.sub, username: acct?.email });
+      await markConnected(userId, uiPlatform, acct?.email);
     }
 
     // Jira can snapshot its accessible projects immediately. GitHub and Google
@@ -113,7 +142,7 @@ export async function callbackHandler(req: Request, res: Response) {
     }
 
     return back('connected', uiPlatform);
-  } catch (e) {
+  } catch (e: any) {
     console.error(`${op} callback error:`, e.message);
     return back('connect_error');
   }

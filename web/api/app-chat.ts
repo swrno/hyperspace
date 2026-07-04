@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { multiHopSearch } from './cognee.js';
 import { verifyToken } from './auth.js';
+import { retrieveNodeGraphContext } from './retrieval.js';
+import { generateReply, DEFAULT_CHAIN, MODELS, llmConfigured } from './lib/llm.js';
 
 export default async function appChatHandler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -26,9 +28,8 @@ export default async function appChatHandler(req: Request, res: Response) {
       }
     }
 
-    const groqKey = process.env.GROQ_API_KEY;
-    if (!groqKey) {
-      return res.status(500).json({ error: 'GROQ_API_KEY is missing' });
+    if (!llmConfigured()) {
+      return res.status(500).json({ error: 'No LLM provider configured (set FIREWORKS_API_KEYS or GROQ_API_KEY)' });
     }
 
     const messages = [];
@@ -85,7 +86,7 @@ export default async function appChatHandler(req: Request, res: Response) {
       // prepend them — they are semantically richer than keyword matching.
       try {
         const fetchPromises = linkedKbIds.map((kbId: string) =>
-          multiHopSearch(message, { userId, kbId, topK: 10, groqKey })
+          multiHopSearch(message, { userId, kbId, topK: 10 })
         );
         const results = await Promise.all(fetchPromises);
         const parts = results.filter((r): r is string => !!r);
@@ -96,6 +97,23 @@ export default async function appChatHandler(req: Request, res: Response) {
         }
       } catch (err) {
         console.warn('Cognee hybrid search failed:', err);
+      }
+
+      // ── Node-graph instant cache (kb_nodes) ─────────────────────────────
+      // Surfaces attached-source content (docs/issues/events) the moment it's
+      // ingested — before Cognee's async graph catches up, and even when its
+      // NER was rate-limited. This is where attached Google Docs / Jira text
+      // actually lives, so it fills the gap MongoDB docs + Cognee leave.
+      try {
+        const ngResults = await Promise.all(
+          linkedKbIds.map((kbId: string) =>
+            retrieveNodeGraphContext(userId, message, { kbId }).catch(() => null)
+          )
+        );
+        const ng = ngResults.filter((r): r is string => !!r).join('\n\n---\n\n');
+        if (ng) retrievedContext = (retrievedContext ? retrievedContext + '\n\n---\n\n' : '') + ng;
+      } catch (err) {
+        console.warn('Node-graph retrieval failed:', err);
       }
     }
 
@@ -153,30 +171,16 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
     // Add new user message
     messages.push({ role: 'user', content: message });
 
-    // Call Groq
-    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${groqKey}`
-      },
-      body: JSON.stringify({
-        model: model || 'qwen/qwen3.6-27b',
-        messages,
-        temperature: temperature ?? 0.7,
-        max_tokens: maxTokens ?? 1024,
-        top_p: topP ?? 1
-      })
+    // Fireworks (primary, multi-key) → Groq → Gemini. A caller-supplied `model`
+    // (a Fireworks id) leads the chain; otherwise the default Fireworks primary.
+    const chain = model
+      ? [['fireworks', model], ...DEFAULT_CHAIN] as typeof DEFAULT_CHAIN
+      : DEFAULT_CHAIN;
+    const replyContent = await generateReply(messages, chain, {
+      temperature: temperature ?? 0.7,
+      maxTokens: maxTokens ?? 1024,
+      topP: topP ?? 1,
     });
-
-    if (!groqRes.ok) {
-      const errTxt = await groqRes.text();
-      console.error('Groq API Error:', errTxt);
-      throw new Error(`Groq API Error: ${groqRes.status}`);
-    }
-
-    const groqData = await (groqRes.json() as any);
-    const replyContent = groqData.choices?.[0]?.message?.content || '';
 
     // Save messages to MongoDB
     const db = await getDb();

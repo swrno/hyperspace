@@ -1,4 +1,15 @@
+// UPDATED: added additive node-graph snapshot functions (gdocsNodeSnapshot, gslidesNodeSnapshot, gcalNodeSnapshot) for the Source/Chunk graph — existing snapshot()/exportFileText()/calendarList()/calendarEvent() untouched.
 import { normalizeGoogleDoc, normalizeCalendarEvent } from './schema.js';
+import {
+  normalizeDocument,
+  normalizeChunk,
+  normalizePresentation,
+  normalizeSlide,
+  normalizeCalendarNode,
+  normalizeCalendarEventNode,
+  chunkText,
+} from './schema.js';
+import { embedBatch } from './embeddings.js';
 
 /**
  * Google OAuth 2.0 + Workspace client.
@@ -165,4 +176,256 @@ export async function snapshot(token, selectedItems, kind) {
     entities.push(normalizeGoogleDoc({ id: item.id, name: item.name }, kind, text));
   }
   return { entities };
+}
+
+// ── Node-graph snapshot (additive, Source/Chunk/Entity scaffolding) ─────────
+//
+// Parallel to snapshot() above — does not replace it. Populates the new
+// KnowledgeBase -> Source -> Chunk -> Entity node model consumed by
+// ingest.ts's buildNodeGraphForProvider(). Never throws; failures are logged
+// and degrade to empty/undefined pieces so a single bad item can't abort a
+// whole sync.
+
+/**
+ * Embed many texts in one paced batch (embedBatch handles concurrency +
+ * rate-limit pacing). Returns embeddings positionally aligned to `texts`; on
+ * total failure returns undefined per slot so nodes are still created.
+ */
+async function safeEmbedBatch(texts) {
+  if (!texts.length) return [];
+  try {
+    return await embedBatch(texts);
+  } catch (e) {
+    console.warn('Node-graph embedBatch failed (non-fatal):', e.message);
+    return texts.map(() => undefined);
+  }
+}
+
+function deriveHeading(chunk) {
+  const firstLine = (chunk.split('\n')[0] || '').trim();
+  if (firstLine && firstLine.length < 80 && !/[.,;:!?]$/.test(firstLine)) return firstLine;
+  return '';
+}
+
+/**
+ * Delta filter for Drive files (docs/slides have no cheap changes API here):
+ * keep only items whose Drive `modifiedTime` is >= the cursor. Items whose
+ * metadata can't be fetched are kept (fail-open — better a redundant re-ingest
+ * than a silently dropped update). Returns `items` unchanged when `sinceIso` is
+ * falsy (full build).
+ */
+async function filterModifiedSince(token, items, sinceIso) {
+  if (!sinceIso) return items || [];
+  const kept = [];
+  for (const item of items || []) {
+    if (!item.id) continue;
+    try {
+      const res = await fetch(`${DRIVE}/files/${item.id}?fields=modifiedTime`, { headers: auth(token) });
+      if (!res.ok) {
+        kept.push(item); // fail-open on metadata error
+        continue;
+      }
+      const meta = (await res.json()) as any;
+      if (!meta.modifiedTime || meta.modifiedTime >= sinceIso) kept.push(item);
+    } catch (e) {
+      console.warn(`filterModifiedSince failed for ${item.id}:`, e.message);
+      kept.push(item);
+    }
+  }
+  return kept;
+}
+
+export async function gdocsNodeSnapshot(token, selectedItems, kbId, sinceIso?) {
+  const documents = [];
+  const chunks = [];
+  const items = await filterModifiedSince(token, selectedItems, sinceIso);
+  for (const item of items) {
+    if (!item.id) continue;
+    try {
+      const text = await exportFileText(token, item.id, 'gdocs');
+      const description = (text.split(/\n\n+/).find((p) => p.trim()) || '').slice(0, 300);
+      const rawChunks = chunkText(text);
+      // One paced batch per document: [doc summary text, ...chunk texts].
+      const embeds = await safeEmbedBatch([`${item.name}\n${description}`, ...rawChunks]);
+
+      const doc = normalizeDocument({ id: item.id, name: item.name }, description, kbId);
+      doc.metadata.embedding = embeds[0];
+      documents.push(doc);
+
+      for (let i = 0; i < rawChunks.length; i++) {
+        const heading = deriveHeading(rawChunks[i]);
+        // Truncation placeholder, not an LLM summary — see plan notes: no LLM
+        // client is available in this file without duplicating the NER call
+        // point that already lives in ingest.ts.
+        const summary = rawChunks[i].slice(0, 160);
+        const chunk = normalizeChunk(rawChunks[i], i, heading, summary, doc.id, kbId);
+        chunk.metadata.embedding = embeds[i + 1];
+        chunks.push(chunk);
+      }
+    } catch (e) {
+      console.warn(`gdocsNodeSnapshot failed for ${item.id}:`, e.message);
+    }
+  }
+  return { documents, chunks };
+}
+
+async function fetchSlidesPresentation(token, presentationId) {
+  try {
+    const res = await fetch(`https://slides.googleapis.com/v1/presentations/${presentationId}`, {
+      headers: auth(token),
+    });
+    if (!res.ok) {
+      console.warn(`Slides fetch failed for ${presentationId} (${res.status})`);
+      return null;
+    }
+    return (res.json() as any);
+  } catch (e) {
+    console.warn(`Slides fetch error for ${presentationId}:`, e.message);
+    return null;
+  }
+}
+
+function extractSlideText(slide) {
+  const parts = [];
+  for (const el of slide?.pageElements || []) {
+    const textElements = el.shape?.text?.textElements || [];
+    const text = textElements.map((te) => te.textRun?.content || '').join('');
+    if (text.trim()) parts.push(text.trim());
+  }
+  return parts.join('\n');
+}
+
+export async function gslidesNodeSnapshot(token, selectedItems, kbId, sinceIso?) {
+  const presentations = [];
+  const slides = [];
+  const items = await filterModifiedSince(token, selectedItems, sinceIso);
+  for (const item of items) {
+    if (!item.id) continue;
+    try {
+      const pres = await fetchSlidesPresentation(token, item.id);
+      const rawSlides = pres?.slides || [];
+      const slideTexts = rawSlides.map((s) => extractSlideText(s));
+      const hasStructuredText = slideTexts.some((t) => t.trim());
+
+      if (rawSlides.length && hasStructuredText) {
+        // Slides API worked — keep per-slide structure.
+        const firstSlideText = slideTexts[0] || '';
+        const embeds = await safeEmbedBatch([
+          `${item.name}\n${firstSlideText}`,
+          ...slideTexts.map((t, i) => t || `[slide ${i + 1}: no text content]`),
+        ]);
+        const presentation = normalizePresentation({ id: item.id, name: item.name }, firstSlideText, rawSlides.length, kbId);
+        presentation.metadata.embedding = embeds[0];
+        presentations.push(presentation);
+        for (let i = 0; i < rawSlides.length; i++) {
+          const slide = normalizeSlide(rawSlides[i].objectId, i, slideTexts[i] || `[slide ${i + 1}: no text content]`, presentation.id, kbId);
+          slide.metadata.embedding = embeds[i + 1];
+          slides.push(slide);
+        }
+      } else {
+        // Slides API unavailable/empty (e.g. Slides API not enabled) — fall back
+        // to Drive export text, the same reliable path gdocs uses. Chunks stand
+        // in for slides so the content is still retrievable.
+        const text = await exportFileText(token, item.id, 'gslides');
+        if (!text) {
+          console.warn(`gslidesNodeSnapshot: no content for ${item.id} (Slides API and Drive export both empty)`);
+          continue;
+        }
+        const rawChunks = chunkText(text);
+        const description = (text.split(/\n\n+/).find((p) => p.trim()) || '').slice(0, 300);
+        const embeds = await safeEmbedBatch([`${item.name}\n${description}`, ...rawChunks]);
+        const presentation = normalizePresentation({ id: item.id, name: item.name }, description, rawChunks.length, kbId);
+        presentation.metadata.embedding = embeds[0];
+        presentations.push(presentation);
+        for (let i = 0; i < rawChunks.length; i++) {
+          const slide = normalizeSlide(`${item.id}-p${i}`, i, rawChunks[i], presentation.id, kbId);
+          slide.metadata.embedding = embeds[i + 1];
+          slides.push(slide);
+        }
+      }
+    } catch (e) {
+      console.warn(`gslidesNodeSnapshot failed for ${item.id}:`, e.message);
+    }
+  }
+  return { presentations, slides };
+}
+
+/** Fully paginate calendar events via nextPageToken (unlike calendarList(), which only fetches page 1 for the UI picker). */
+async function listAllCalendarEvents(token, updatedMin?) {
+  const events = [];
+  let pageToken;
+  const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  do {
+    const q = new URLSearchParams({
+      maxResults: '250',
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      timeMin,
+      // Delta: only events changed since the cursor (Calendar's real updatedMin).
+      ...(updatedMin ? { updatedMin } : {}),
+      ...(pageToken ? { pageToken } : {}),
+    });
+    let res;
+    try {
+      res = await fetch(`${CALENDAR}/events?${q}`, { headers: auth(token) });
+    } catch (e) {
+      console.warn('Calendar events fetch error:', e.message);
+      break;
+    }
+    if (!res.ok) {
+      console.warn(`Calendar events fetch failed (${res.status})`);
+      break;
+    }
+    const data = await (res.json() as any);
+    events.push(...(data.items || []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return events;
+}
+
+export async function gcalNodeSnapshot(token, selectedItems, kbId, sinceIso?) {
+  let calRaw;
+  try {
+    const res = await fetch(`${CALENDAR}`, { headers: auth(token) });
+    calRaw = res.ok ? await (res.json() as any) : { id: 'primary', summary: 'Calendar', description: '' };
+  } catch {
+    calRaw = { id: 'primary', summary: 'Calendar', description: '' };
+  }
+  const calendar = normalizeCalendarNode(calRaw, kbId);
+
+  let allEvents = [];
+  try {
+    allEvents = await listAllCalendarEvents(token, sinceIso);
+  } catch (e) {
+    console.warn('gcalNodeSnapshot: failed to list events:', e.message);
+  }
+  const selectedIds = new Set((selectedItems || []).map((i) => i.id).filter(Boolean));
+  const rawEvents = selectedIds.size ? allEvents.filter((e) => selectedIds.has(e.id)) : allEvents;
+
+  // One paced batch for the calendar + every event.
+  const embeds = await safeEmbedBatch([
+    `${calRaw.summary || 'Calendar'}\n${calRaw.description || ''}`,
+    ...rawEvents.map((e) => `${e.summary || ''}\n${e.description || ''}`),
+  ]);
+  calendar.metadata.embedding = embeds[0];
+
+  const events = [];
+  const structuredEntities = [];
+  for (let i = 0; i < rawEvents.length; i++) {
+    const e = rawEvents[i];
+    try {
+      const eventNode = normalizeCalendarEventNode(e, calendar.id, kbId);
+      eventNode.metadata.embedding = embeds[i + 1];
+      events.push(eventNode);
+
+      const candidates = [
+        ...eventNode.metadata.attendees.map((name) => ({ name, type: 'People', description: '' })),
+        ...(eventNode.metadata.location ? [{ name: eventNode.metadata.location, type: 'Location', description: '' }] : []),
+      ];
+      if (candidates.length) structuredEntities.push({ eventId: eventNode.id, candidates });
+    } catch (err) {
+      console.warn(`gcalNodeSnapshot: failed to normalize event ${e.id}:`, err.message);
+    }
+  }
+  return { calendar, events, structuredEntities };
 }
