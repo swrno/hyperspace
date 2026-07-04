@@ -1,4 +1,4 @@
-/** Credentials + identity for every hyper-sdk call. */
+/** Credentials + identity for every hypr-sdk call. */
 export interface HyperClientConfig {
   /** App-level secret (`sk_live_...`), generated when the app was created in hypr. */
   apiKey: string;

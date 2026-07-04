@@ -6,7 +6,7 @@ export { SimpleRetriver, HyperRetriever, Ingestor };
 
 /**
  * ```ts
- * import { HyperClient } from 'hyper-sdk';
+ * import { HyperClient } from 'hypr-sdk';
  *
  * const simpleRetriver = new HyperClient.simpleRetriver({
  *   apiKey: process.env.HYPER_API_KEY!,

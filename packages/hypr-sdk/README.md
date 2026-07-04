@@ -1,4 +1,4 @@
-# hyper-sdk
+# hypr-sdk
 
 Client SDK for integrating third-party applications with hypr: retrieval over
 an app's Knowledge Base, plus per-end-user personalization memory that builds
@@ -6,18 +6,14 @@ automatically from conversation.
 
 ## Install
 
-Not yet published — for now, build it locally and reference it by path:
-
 ```bash
-cd packages/hyper-sdk
-npm install
-npm run build
+npm install hypr-sdk
 ```
 
 ## Usage
 
 ```ts
-import { HyperClient } from 'hyper-sdk';
+import { HyperClient } from 'hypr-sdk';
 
 const config = {
   apiKey: process.env.HYPER_API_KEY!,
