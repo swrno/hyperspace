@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
-import { multiHopSearch } from './cognee.js';
+import { vectorSearch, hybridSearch, multiHopSearch } from './cognee.js';
 import { verifyToken } from './auth.js';
 import { retrieveNodeGraphContext } from './retrieval.js';
 import { generateReply, DEFAULT_CHAIN, llmConfigured } from './lib/llm.js';
@@ -9,7 +9,7 @@ export default async function appChatHandler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { appId, message, systemPrompt, model, temperature, maxTokens, topP, history = [], linkedKbIds = [], sessionId = 'default' } = req.body;
+    const { appId, message, systemPrompt, model, searchMode = 'normal', temperature, maxTokens, topP, history = [], linkedKbIds = [], sessionId = 'default' } = req.body;
 
     if (!appId || !message) {
       return res.status(400).json({ error: 'appId and message are required' });
@@ -81,22 +81,28 @@ export default async function appChatHandler(req: Request, res: Response) {
         console.warn('KB direct retrieval failed:', err);
       }
 
-      // ── Cognee hybrid search (graph + vector) ───────────────────────────
-      // Run in parallel with (or after) MongoDB. If Cognee returns results,
+      // ── Graph/vector retrieval, depth chosen by searchMode ──────────────
+      // Run in parallel with (or after) MongoDB. If this returns results,
       // prepend them — they are semantically richer than keyword matching.
+      //   normal — fast vector lookup only
+      //   hyper  — hybrid graph + vector, reranked
+      //   deep   — multi-hop: planner decomposes the query, each sub-question
+      //            runs the hybrid+rerank pipeline
       try {
-        const fetchPromises = linkedKbIds.map((kbId: string) =>
-          multiHopSearch(message, { userId, kbId, topK: 10 })
-        );
+        const fetchPromises = linkedKbIds.map((kbId: string) => {
+          if (searchMode === 'deep') return multiHopSearch(message, { userId, kbId, topK: 10 });
+          if (searchMode === 'hyper') return hybridSearch(message, { userId, kbId, topK: 10 });
+          return vectorSearch(message, { userId, kbId, topK: 10 }).then((chunks) => chunks.join('\n\n') || null);
+        });
         const results = await Promise.all(fetchPromises);
         const parts = results.filter((r): r is string => !!r);
         if (parts.length > 0) {
-          // Cognee results take priority — prepend to any MongoDB context.
+          // Graph/vector results take priority — prepend to any MongoDB context.
           retrievedContext = parts.join('\n\n---\n\n')
             + (retrievedContext ? '\n\n---\n\n' + retrievedContext : '');
         }
       } catch (err) {
-        console.warn('Cognee hybrid search failed:', err);
+        console.warn('Graph/vector search failed:', err);
       }
 
       // ── Node-graph instant cache (kb_nodes) ─────────────────────────────

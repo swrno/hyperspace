@@ -41,7 +41,7 @@
 
 import { configured, runCypher, ensureSchema, int } from './lib/neo4j.js';
 import { embed, embedBatch, semanticChunkText } from './lib/embeddings.js';
-import { generateReply, DEFAULT_CHAIN, llmConfigured, type ProviderModel } from './lib/llm.js';
+import { generateReply, PLANNER_CHAIN, llmConfigured, rerankFireworks } from './lib/llm.js';
 import { extractNamedEntities, type NamedEntity } from './lib/ner.js';
 
 // Lazily ensure the Neo4j vector/full-text indexes exist — but only once, and
@@ -444,28 +444,40 @@ function rrfMerge(a: string[], b: string[], k = 60): string[] {
   return [...scores.entries()].sort((x, y) => y[1] - x[1]).map(([t]) => t);
 }
 
+/**
+ * Merge graph + vector candidates and rerank them with qwen3-reranker-8b
+ * (Deep Hyper Search's reranking stage). Falls back to the plain RRF merge if
+ * the reranker call fails.
+ */
 export async function hybridSearch(query: string, { userId, kbId, topK = 10 }: any = {}): Promise<string | null> {
   if (!configured() || !query?.trim()) return null;
   const opts = { userId, kbId, topK };
   const [graphResult, vectorResults] = await Promise.all([graphSearch(query, opts), vectorSearch(query, opts)]);
   const graphParts = graphResult ? graphResult.split('\n\n').filter((s) => s.trim()) : [];
-  const merged = rrfMerge(graphParts, vectorResults);
+  const candidates = [...new Set([...graphParts, ...vectorResults])];
+  if (!candidates.length) return null;
+  const merged = candidates.length > topK
+    ? await rerankFireworks(query, candidates, topK)
+    : rrfMerge(graphParts, vectorResults);
   return merged.length ? merged.join('\n\n') : null;
 }
 
+/**
+ * Deep Hyper Search retrieval: a reasoning model (PLANNER_CHAIN) decomposes the
+ * query into sub-questions, each is run through hybridSearch's graph+vector+
+ * rerank pipeline, and results are deduped back into one context block.
+ */
 export async function multiHopSearch(query: string, { userId, kbId, topK = 10 }: any = {}): Promise<string | null> {
   if (!configured() || !query?.trim()) return null;
   let subQueries: string[] = [query];
   if (llmConfigured() && query.trim().split(/\s+/).length >= 4) {
     try {
-      // A small, fast model is enough to decompose the question.
-      const decomChain: ProviderModel[] = DEFAULT_CHAIN;
       const raw = await generateReply(
         [
           { role: 'system', content: 'Decompose the user question into 1–3 short, specific retrieval sub-questions. Return ONLY a valid JSON array of strings, no explanation, no markdown.' },
           { role: 'user', content: query },
         ],
-        decomChain,
+        PLANNER_CHAIN,
         { temperature: 0, maxTokens: 200 },
       );
       const match = raw.match(/\[[\s\S]*\]/);

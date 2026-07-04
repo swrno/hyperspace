@@ -1024,7 +1024,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const navigate = useNavigate();
   const currentChatId = chatId || null;
 
-  const [currentModel] = useState('qwen/qwen3.6-27b'); // kept for API compatibility
+  const [chatSearchMode, setChatSearchMode] = useState<SearchMode>('normal');
+  const [chatSearchDropdownOpen, setChatSearchDropdownOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('theme') as 'light' | 'dark') || 'light');
@@ -1738,6 +1739,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           message: userMessageContent,
           systemPrompt: app.systemPrompt,
           model: app.model,
+          searchMode: appSearchMode,
           temperature: app.temperature,
           maxTokens: app.maxTokens,
           topP: 1,
@@ -1908,7 +1910,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
         body: JSON.stringify({
           message: userMessage.content,
           history: clearedHistory.map(m => ({ role: m.role, content: m.content })),
-          model: currentModel,
+          mode: chatSearchMode,
           kbId: selectedKbId || undefined,
         }),
       });
@@ -2024,7 +2026,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
         body: JSON.stringify({
           message: userMessage.content,
           history: currentMessages.map(m => ({ role: m.role, content: m.content })),
-          model: currentModel,
+          mode: chatSearchMode,
           kbId: selectedKbId || undefined,
         }),
       });
@@ -2222,6 +2224,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   );
 
   const renderInputBox = () => {
+    const activeChatSearchMode = SEARCH_MODES.find(m => m.id === chatSearchMode) ?? SEARCH_MODES[0];
     return (
       <div className="relative flex flex-col bg-[#33302E] px-5 pt-5 pb-4 rounded-[16px] shadow-[0_15px_40px_rgba(0,0,0,0.35)] transition-colors duration-200" style={{ minHeight: '120px' }}>
         <textarea
@@ -2239,7 +2242,41 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
             e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
           }}
         />
-        <div className="flex items-center justify-end mt-4">
+        <div className="flex items-center justify-between mt-4">
+          <div className="relative">
+            <button
+              onClick={() => setChatSearchDropdownOpen(o => !o)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E1D1C] border border-[#3D3A37] rounded-lg text-[12px] font-medium text-[#C9C5C0] hover:border-[#57534E] hover:text-[#F4F0EB] transition-colors"
+            >
+              <activeChatSearchMode.Icon size={13} className="text-[#C9A66B]" />
+              <span className="whitespace-nowrap">{activeChatSearchMode.label}</span>
+              <ChevronDown size={11} className={`transition-transform ${chatSearchDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {chatSearchDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setChatSearchDropdownOpen(false)} />
+                <div className="absolute bottom-full left-0 mb-2 w-[272px] bg-[#1E1D1C] border border-[#3D3A37] rounded-[14px] shadow-2xl z-50 overflow-hidden p-1.5 space-y-1">
+                  {SEARCH_MODES.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setChatSearchMode(m.id); setChatSearchDropdownOpen(false); }}
+                      className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-[10px] text-left transition-colors ${m.id === chatSearchMode ? 'bg-[#2A2826]' : 'hover:bg-[#252523]'}`}
+                    >
+                      <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-[#252523] border border-[#3D3A37] mt-0.5">
+                        <m.Icon size={14} className="text-[#C9A66B]" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[13px] font-semibold text-[#F4F0EB]">{m.label}</span>
+                        <p className="text-[11px] text-[#6B6762] mt-0.5 leading-snug">{m.desc}</p>
+                      </div>
+                      {m.id === chatSearchMode && <Check size={14} className="text-[#C9A66B] shrink-0 mt-1.5" />}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
@@ -2894,10 +2931,35 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
     const app = applications.find(a => a.id === activeAppId);
     if (!app) return null;
 
-    const APP_MODELS = [
-      { id: 'accounts/fireworks/models/glm-5p2',        name: 'GLM 5.2',          desc: 'Most efficient for everyday tasks',   badge: null },
-      { id: 'accounts/fireworks/models/kimi-k2p7-code', name: 'Kimi K2.7 Code',   desc: 'For complex reasoning and code',      badge: null },
-    ];
+    // Which models are wired into which backend chain (lib/llm.ts NORMAL_CHAIN /
+    // DEEP_CHAIN) — normal mode is fast general-purpose chat; hyper/deep run the
+    // Deep Hyper Search synthesis chain, so only frontier reasoning models apply.
+    const MODELS_BY_MODE: Record<SearchMode, { id: string; name: string; desc: string; badge: string | null }[]> = {
+      normal: [
+        { id: 'accounts/fireworks/models/glm-5p2',    name: 'GLM 5.2',       desc: 'Most efficient for everyday tasks', badge: null },
+        { id: 'accounts/fireworks/models/gpt-oss-120b', name: 'GPT OSS 120B', desc: 'Fast general-purpose chat',         badge: null },
+      ],
+      hyper: [
+        { id: 'accounts/fireworks/models/kimi-k2p6',      name: 'Kimi K2.6',       desc: 'Frontier reasoning for Deep Hyper Search', badge: null },
+        { id: 'accounts/fireworks/models/deepseek-v4-pro', name: 'DeepSeek V4 Pro', desc: 'Frontier reasoning for Deep Hyper Search', badge: null },
+      ],
+      deep: [
+        { id: 'accounts/fireworks/models/kimi-k2p6',      name: 'Kimi K2.6',       desc: 'Frontier reasoning for Deep Hyper Search', badge: null },
+        { id: 'accounts/fireworks/models/deepseek-v4-pro', name: 'DeepSeek V4 Pro', desc: 'Frontier reasoning for Deep Hyper Search', badge: null },
+      ],
+    };
+    const APP_MODELS = MODELS_BY_MODE[appSearchMode];
+
+    // If the model saved on the app isn't valid for the active mode (e.g. a
+    // normal-mode model left over after switching to Deep Search), snap it to
+    // that mode's default so the request never sends an incompatible pairing.
+    const selectSearchMode = (nextMode: SearchMode) => {
+      setAppSearchMode(nextMode);
+      const validModels = MODELS_BY_MODE[nextMode];
+      if (!validModels.some(m => m.id === app.model)) {
+        updateApp(app.id, { model: validModels[0].id });
+      }
+    };
 
     const activeModel = APP_MODELS.find(m => m.id === app.model) ?? APP_MODELS[0];
     const activeSearchMode = SEARCH_MODES.find(m => m.id === appSearchMode) ?? SEARCH_MODES[0];
@@ -3004,7 +3066,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                   {SEARCH_MODES.map((m) => (
                     <button
                       key={m.id}
-                      onClick={() => { setAppSearchMode(m.id); setAppSearchDropdownOpen(false); }}
+                      onClick={() => { selectSearchMode(m.id); setAppSearchDropdownOpen(false); }}
                       className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-[10px] text-left transition-colors ${m.id === appSearchMode ? 'bg-[#2A2826]' : 'hover:bg-[#252523]'}`}
                     >
                       <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-[#252523] border border-[#3D3A37] mt-0.5">

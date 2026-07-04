@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken, checkRateLimit, logMessageUsage } from './auth.js';
-import { graphSearch, recallMemory, rememberMemory } from './cognee.js';
+import { graphSearch, multiHopSearch, recallMemory, rememberMemory } from './cognee.js';
 import { retrieveContext, retrieveNodeGraphContext } from './retrieval.js';
 import { routeQuery } from './lib/router.js';
-import { generateReply as llmGenerate, MODELS, type ProviderModel } from './lib/llm.js';
+import { generateReply as llmGenerate, NORMAL_CHAIN, DEEP_CHAIN, type ProviderModel } from './lib/llm.js';
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]).catch(() => null);
 
@@ -38,11 +38,12 @@ function maybeRememberPSI(userId, message) {
 /**
  * Chat endpoint.
  *
- * Request : POST { message, history: [{role, content}], model }  (Bearer idToken)
+ * Request : POST { message, history: [{role, content}], mode }  (Bearer idToken)
+ *           mode: 'normal' | 'deep' | 'hyper' — selects retrieval depth + model chain.
  * Response: { response: string, title?: string }
  *
- * Routes across multiple providers with automatic fallback so a single
- * provider outage doesn't break chat. Model id chooses which provider leads.
+ * Routes across a Fireworks model chain with automatic fallback so a single
+ * model outage doesn't break chat.
  */
 
 const SYSTEM_PROMPT = `You are hypr, an enterprise knowledge assistant. You answer questions by reasoning across the user's connected tools (GitHub, Jira, Google Docs & Slides, Slack, Salesforce), unified into a knowledge graph.
@@ -58,7 +59,9 @@ Formatting (important):
 - Use ## / ### headings only when the answer has multiple real sections. Use tables for comparisons. Bold key terms sparingly.`;
 
 // LLM routing (Fireworks only, multi-key rotation) lives in lib/llm.ts.
-// Modes below only choose which Fireworks model leads the chain.
+// Normal mode uses the fast general-purpose chain (NORMAL_CHAIN); deep/hyper
+// use the Deep Hyper Search synthesis chain (DEEP_CHAIN) fed by multiHopSearch's
+// planner + reranker retrieval pipeline instead of a flat graph search.
 
 // Per-mode answer depth instruction (drives how long/structured the reply is).
 export const MODE_STYLE = {
@@ -75,18 +78,18 @@ export const MODE_STYLE = {
  */
 // Fireworks (primary, multi-key) leads every chain; Groq is the fallback and
 // Gemini the last resort. Model ids are centralised in lib/llm.ts (MODELS).
-const MODES: Record<string, { searchType: string; topK: number; timeout: number; maxTokens: number; chain: ProviderModel[] }> = {
+const MODES: Record<string, { searchType: string; topK: number; timeout: number; maxTokens: number; chain: ProviderModel[]; deep?: boolean }> = {
   normal: {
     searchType: 'GRAPH_COMPLETION', topK: 8, timeout: 6000, maxTokens: 1024,
-    chain: [['fireworks', MODELS.fireworksPrimary], ['fireworks', MODELS.fireworksLarge]],
+    chain: NORMAL_CHAIN,
   },
   deep: {
-    searchType: 'GRAPH_COMPLETION_DECOMPOSITION', topK: 12, timeout: 10000, maxTokens: 2800,
-    chain: [['fireworks', MODELS.fireworksLarge], ['fireworks', MODELS.fireworksPrimary]],
+    searchType: 'GRAPH_COMPLETION_DECOMPOSITION', topK: 12, timeout: 15000, maxTokens: 2800,
+    chain: DEEP_CHAIN, deep: true,
   },
   hyper: {
-    searchType: 'GRAPH_COMPLETION_COT', topK: 16, timeout: 15000, maxTokens: 4096,
-    chain: [['fireworks', MODELS.fireworksLarge], ['fireworks', MODELS.fireworksPrimary]],
+    searchType: 'GRAPH_COMPLETION_COT', topK: 16, timeout: 20000, maxTokens: 4096,
+    chain: DEEP_CHAIN, deep: true,
   },
 };
 export const resolveMode = (m) => (MODES[m] ? m : 'normal');
@@ -123,11 +126,12 @@ export default async function handler(req: Request, res: Response) {
       return res.status(429).json({ error: `Hourly limit reached (${rate.limit}/hr). Please try again later.` });
     }
 
-    const { message, history = [], model, kbId } = req.body || {};
+    const { message, history = [], mode: modeParam, model, kbId } = req.body || {};
     if (!message || !message.trim()) return res.status(400).json({ error: 'Message is required' });
 
     // Retrieval depth comes from the selected mode (normal / deep / hyper).
-    const modeId = resolveMode(model);
+    // `mode` is the current field name; `model` is kept as a fallback for older clients.
+    const modeId = resolveMode(modeParam ?? model);
     const mode = MODES[modeId];
     const depthPrompt = `${SYSTEM_PROMPT}\n\nResponse depth: ${MODE_STYLE[modeId]}`;
 
@@ -155,13 +159,14 @@ export default async function handler(req: Request, res: Response) {
       systemContent = `${depthPrompt}\n\n# Scope: knowledge base "${kbScope.name}"\nThe user is asking specifically about this knowledge base. Answer using ONLY the content below. Cite document names and source items. If the answer isn't present, say it isn't in this knowledge base and suggest what to add.\n\n${blocks.join('\n\n')}`;
     } else {
       // Otherwise ground from three sources in parallel (README §6 hybrid retrieval):
-      //  1. Cognee graph search — multi-hop GraphRAG reasoning at the chosen depth.
+      //  1. Graph search — flat single-shot for normal mode; deep/hyper instead run
+      //     multiHopSearch (planner decomposition + graph/vector merge + rerank).
       //  2. Local Mongo graph (kb_entities) — deterministic, instant, user-scoped.
       //  3. Personal memory (PSI) — what hypr knows about this user.
       const route = routeQuery(message);
-      const searchType = route.mode === 'global' ? 'GRAPH_SUMMARY_COMPLETION' : mode.searchType;
+      const graphOpts = { userId: user.uid, kbId: undefined, topK: mode.topK };
       const [cogneeAnswer, localContext, nodeGraph, memory] = await Promise.all([
-        withTimeout(graphSearch(message, { userId: user.uid, searchType, topK: mode.topK }), mode.timeout),
+        withTimeout(mode.deep ? multiHopSearch(message, graphOpts) : graphSearch(message, graphOpts), mode.timeout),
         retrieveContext(user.uid, message).catch(() => null),
         retrieveNodeGraphContext(user.uid, message).catch(() => null),
         withTimeout(recallMemory(message, { userId: user.uid }), 2500),
