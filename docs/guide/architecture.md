@@ -61,7 +61,7 @@ web/
   server.ts       Registers every /api/* route
 
 packages/
-  hyper-sdk/      Published client SDK (HyperClient) — see /sdk/getting-started
+  hypr-sdk/       Published client SDK (HyperClient) — see /sdk/getting-started
 
 docs/             This VitePress site
 ```

@@ -1,16 +1,12 @@
-# hyper-sdk: Getting started
+# hypr-sdk: Getting started
 
-`hyper-sdk` (`packages/hyper-sdk`) is the client for integrating a hypr app's
+`hypr-sdk` (`packages/hypr-sdk`) is the client for integrating a hypr app's
 Knowledge Base and personalization Memory into any third-party application.
 
 ## Install
 
-Not yet published to npm — build it locally and reference it by path until it is:
-
 ```bash
-cd packages/hyper-sdk
-npm install
-npm run build
+npm install hypr-sdk
 ```
 
 ## Get your credentials
@@ -20,7 +16,7 @@ Credentials** (`appId`, `apiKey`, `clientId`) — `userId` is not from hypr at
 all, it's your own system's id for the person you're talking to.
 
 ```ts
-import { HyperClient } from 'hyper-sdk';
+import { HyperClient } from 'hypr-sdk';
 
 const config = {
   apiKey: process.env.HYPER_API_KEY!,

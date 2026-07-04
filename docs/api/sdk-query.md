@@ -1,7 +1,7 @@
 # POST /api/sdk/query
 
-The endpoint behind `hyper-sdk`'s `simpleRetriver` and `hyperRetriever` — see
-[hyper-sdk: Getting started](/sdk/getting-started) if you're integrating a
+The endpoint behind `hypr-sdk`'s `simpleRetriver` and `hyperRetriever` — see
+[hypr-sdk: Getting started](/sdk/getting-started) if you're integrating a
 third-party app rather than calling this directly.
 
 **Auth**: `X-Api-Key` / `X-App-Id` / `X-Client-Id` headers (or the equivalent

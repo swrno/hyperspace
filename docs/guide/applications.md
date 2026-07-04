@@ -11,8 +11,8 @@ which generates three credentials on the app document:
 | `apiKey` | `sk_live_<hex>` | App-level secret. |
 | `clientId` | `client_<hex>` | Public identifier paired with `apiKey`. |
 
-All three, together, authenticate every `hyper-sdk` call (see
-[hyper-sdk: Getting started](/sdk/getting-started)) — this is a *different*
+All three, together, authenticate every `hypr-sdk` call (see
+[hypr-sdk: Getting started](/sdk/getting-started)) — this is a *different*
 auth path from the owner's own Firebase login used everywhere else
 (`web/api/auth.ts`, `verifyToken()`).
 
@@ -20,7 +20,7 @@ auth path from the owner's own Firebase login used everywhere else
 
 - **Playground** (`POST /api/app-chat`, Firebase-authenticated) — the owner
   testing their own app. Has a "search mode" and "model" picker per message.
-- **hyper-sdk** (`POST /api/sdk/query`, apiKey/appId/clientId-authenticated) —
+- **hypr-sdk** (`POST /api/sdk/query`, apiKey/appId/clientId-authenticated) —
   a real third-party integration, on behalf of the app's own end-users.
 
 Both paths run the same underlying retrieval + generation logic; they differ
@@ -28,7 +28,7 @@ only in how the caller is authenticated and whose Memory gets personalized.
 
 ## End-user data
 
-Every `hyper-sdk` caller supplies its own `userId` — an opaque string from
+Every `hypr-sdk` caller supplies its own `userId` — an opaque string from
 the calling system, meaningful only to it. hypr never sees more than that
 string. Two collections track this, both in `web/api/lib/appUsers.ts`:
 

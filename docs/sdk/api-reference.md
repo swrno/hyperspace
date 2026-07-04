@@ -1,4 +1,4 @@
-# hyper-sdk: API reference
+# hypr-sdk: API reference
 
 ## `HyperClientConfig`
 
@@ -79,7 +79,7 @@ class HyperApiError extends Error {
 ```
 
 ```ts
-import { HyperApiError } from 'hyper-sdk';
+import { HyperApiError } from 'hypr-sdk';
 
 try {
   await hyperRetriver.query('...');

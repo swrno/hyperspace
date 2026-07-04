@@ -10,7 +10,7 @@ hero:
       text: What is hypr?
       link: /guide/introduction
     - theme: alt
-      text: hyper-sdk
+      text: hypr-sdk
       link: /sdk/getting-started
     - theme: alt
       text: API reference
@@ -21,6 +21,6 @@ features:
     details: Documents, entities, and relationships from GitHub, Jira, Google Docs/Slides/Calendar are ingested into a Neo4j graph with hybrid vector + full-text + graph search.
   - title: Memory
     details: Key facts extracted automatically from a user's own conversations, stored per-user in Cognee — isolated, and used to personalize future replies.
-  - title: hyper-sdk
+  - title: hypr-sdk
     details: Drop the HyperClient into any app to query a hypr Knowledge Base and get personalized, memory-aware answers for your own end-users.
 ---

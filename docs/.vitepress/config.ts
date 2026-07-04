@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress';
 
 export default defineConfig({
   title: 'hypr',
-  description: 'Enterprise knowledge engine — Knowledge Base (GraphRAG on Neo4j), personalization Memory (Cognee), and the hyper-sdk client.',
+  description: 'Enterprise knowledge engine — Knowledge Base (GraphRAG on Neo4j), personalization Memory (Cognee), and the hypr-sdk client.',
   cleanUrls: true,
   lastUpdated: true,
 
@@ -10,7 +10,7 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'API', link: '/api/chat' },
-      { text: 'hyper-sdk', link: '/sdk/getting-started' },
+      { text: 'hypr-sdk', link: '/sdk/getting-started' },
     ],
 
     sidebar: {
@@ -52,7 +52,7 @@ export default defineConfig({
       ],
       '/sdk/': [
         {
-          text: 'hyper-sdk',
+          text: 'hypr-sdk',
           items: [
             { text: 'Getting started', link: '/sdk/getting-started' },
             { text: 'API reference', link: '/sdk/api-reference' },

@@ -1,6 +1,6 @@
 # POST /api/sdk/ingest
 
-The endpoint behind `hyper-sdk`'s `ingestor` — adds content to one of the
+The endpoint behind `hypr-sdk`'s `ingestor` — adds content to one of the
 app's linked Knowledge Bases. This is about the app's shared documents, not
 an end-user's personalization Memory (which builds automatically from
 conversation — see [`/api/sdk/query`](/api/sdk-query)).
