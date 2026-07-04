@@ -40,6 +40,7 @@
 import { configured, runCypher, ensureSchema, int } from './lib/neo4j.js';
 import { embed, embedBatch, semanticChunkText } from './lib/embeddings.js';
 import { generateReply, DEFAULT_CHAIN, MODELS, llmConfigured, type ProviderModel } from './lib/llm.js';
+import { extractNamedEntities, type NamedEntity } from './lib/ner.js';
 
 // Lazily ensure the Neo4j vector/full-text indexes exist — but only once, and
 // only after env is loaded. Calling ensureSchema() at import time ran BEFORE
@@ -74,39 +75,9 @@ export async function resolveDatasetId(userId: string, kbId?: string): Promise<s
 
 // ── Entity extraction ─────────────────────────────────────────────────────────
 
-interface ExtractedEntity { name: string; description: string; type: string }
-
-// Entity extraction runs on every chunk during ingestion, so it leans on the
-// shared Fireworks-primary chain (multi-key) to avoid Groq's tight TPM limits.
-async function extractEntities(text: string): Promise<ExtractedEntity[]> {
-  if (!llmConfigured()) return [];
-  try {
-    const raw = await generateReply(
-      [
-        {
-          role: 'system',
-          content:
-            'Extract the salient named entities from the text. Return ONLY a valid JSON array, no explanation.\n' +
-            'Each item: {"name":"...","description":"1-2 sentences: what it is AND why it matters in this text","type":"People|Organisation|Product|Location|Concept|Technology|Event"}.\n' +
-            'Include up to 15 distinct, specific entities (skip generic filler). Prefer concrete, informative descriptions grounded in the text.',
-        },
-        { role: 'user', content: text.slice(0, 4000) },
-      ],
-      DEFAULT_CHAIN,
-      { temperature: 0, maxTokens: 1500 },
-    );
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) return [];
-    const parsed = JSON.parse(match[0]);
-    return Array.isArray(parsed)
-      ? parsed.slice(0, 15).filter((e: any) => e?.name && e?.description)
-      : [];
-  } catch { return []; }
-}
-
 /** Create Entity nodes from extracted entities, link to a parent node, add RELATES_TO edges. */
 async function writeEntities(
-  entities: ExtractedEntity[],
+  entities: NamedEntity[],
   parentCypher: string, // e.g. `(p:Chunk {chunk_id: $parentId, kb_id: $kbId})`
   parentParams: Record<string, any>,
   kbId: string,
@@ -220,20 +191,18 @@ export async function addText(
       );
     }
 
-    // Extract entities per chunk (requires an LLM provider).
+    // Extract entities per chunk (local NER, no LLM required).
     let totalEntities = 0;
-    if (llmConfigured()) {
-      for (const chunk of chunkRows) {
-        const entities = await extractEntities(chunk.chunk_text_content);
-        if (!entities.length) continue;
-        await writeEntities(
-          entities,
-          `(p:Chunk {chunk_id: $parentId, kb_id: $kbId})`,
-          { parentId: chunk.chunk_id },
-          kbNodeId, userNodeId,
-        );
-        totalEntities += entities.length;
-      }
+    for (const chunk of chunkRows) {
+      const entities = await extractNamedEntities(chunk.chunk_text_content);
+      if (!entities.length) continue;
+      await writeEntities(
+        entities,
+        `(p:Chunk {chunk_id: $parentId, kb_id: $kbId})`,
+        { parentId: chunk.chunk_id },
+        kbNodeId, userNodeId,
+      );
+      totalEntities += entities.length;
     }
 
     return { chunks: chunkRows.length, entities: totalEntities };
@@ -284,8 +253,8 @@ export async function ingestGitHubEntity(
          MERGE (r)-[:HAS_PR]->(p)`,
         { kbId: kbNodeId, repoId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (llmConfigured() &&prText) {
-        const entities = await extractEntities(prText);
+      if (prText) {
+        const entities = await extractNamedEntities(prText);
         if (entities.length) await writeEntities(entities, `(p:PR {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'Issue' && repoId) {
@@ -298,8 +267,8 @@ export async function ingestGitHubEntity(
          MERGE (r)-[:HAS_ISSUE]->(i)`,
         { kbId: kbNodeId, repoId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (llmConfigured() &&issueText) {
-        const entities = await extractEntities(issueText);
+      if (issueText) {
+        const entities = await extractNamedEntities(issueText);
         if (entities.length) await writeEntities(entities, `(i:Issue {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'Commit' && repoId) {
@@ -312,8 +281,8 @@ export async function ingestGitHubEntity(
          MERGE (r)-[:HAS_COMMIT]->(cm)`,
         { kbId: kbNodeId, repoId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (llmConfigured() &&commitText) {
-        const entities = await extractEntities(commitText);
+      if (commitText) {
+        const entities = await extractNamedEntities(commitText);
         if (entities.length) await writeEntities(entities, `(cm:Commit {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'PRComment' && prId) {
@@ -336,8 +305,8 @@ export async function ingestGitHubEntity(
          MERGE (r)-[:HAS_FILE]->(f)`,
         { kbId: kbNodeId, repoId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (llmConfigured() &&fileText) {
-        const entities = await extractEntities(fileText);
+      if (fileText) {
+        const entities = await extractNamedEntities(fileText);
         if (entities.length) await writeEntities(entities, `(f:File {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     } else if (type === 'Calendar') {
@@ -360,8 +329,8 @@ export async function ingestGitHubEntity(
          MERGE (c)-[:HAS_EVENT]->(evt)`,
         { kbId: kbNodeId, calendarId, id: props.id || uid(), props: { ...props, kb_id: kbNodeId, userId }, embedding, now },
       );
-      if (llmConfigured() &&evtText) {
-        const entities = await extractEntities(evtText);
+      if (evtText) {
+        const entities = await extractNamedEntities(evtText);
         if (entities.length) await writeEntities(entities, `(evt:CalendarEvent {id: $parentId, kb_id: $kbId})`, { parentId: props.id }, kbNodeId, userId);
       }
     }
