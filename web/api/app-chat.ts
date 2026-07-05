@@ -190,7 +190,7 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
     // must not be tighter than a normal Cognee Cloud round-trip) so a rare
     // slow request never stalls the reply.
     const memory = usePersonalization ? await Promise.race([
-      recallUserContext(endUserId, message).catch(() => null),
+      recallUserContext(endUserId, message, sessionId).catch(() => null),
       new Promise<null>((r) => setTimeout(() => {
         console.warn(`Memory recall timed out for endUserId=${endUserId}`);
         r(null);

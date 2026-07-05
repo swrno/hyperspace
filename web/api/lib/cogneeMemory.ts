@@ -57,8 +57,18 @@ export async function rememberUserFact(userId: string, text: string): Promise<vo
 /**
  * Recall personalized context for a user relevant to `query`. Returns null on
  * any failure (including "nothing remembered for this user yet" — a 404).
+ *
+ * Uses GRAPH_COMPLETION_COT — Cognee's chain-of-thought search type, which
+ * runs iterative rounds of graph retrieval + reasoning to target the actual
+ * query instead of a single-shot lookup. This matters because the memory
+ * dataset accumulates raw, unstructured conversation turns over time (see
+ * rememberUserFact below) — a single-shot search can surface a superficially
+ * similar but unrelated old note (e.g. a name mentioned in an old aside)
+ * with no reasoning step to filter it out. `session_id`, when passed, scopes
+ * the reasoning to one conversation thread rather than the user's entire
+ * history.
  */
-export async function recallUserContext(userId: string, query: string): Promise<string | null> {
+export async function recallUserContext(userId: string, query: string, sessionId?: string): Promise<string | null> {
   const url = baseUrl(), key = apiKey();
   if (!url || !key || !userId || !query?.trim()) return null;
   try {
@@ -68,8 +78,10 @@ export async function recallUserContext(userId: string, query: string): Promise<
       body: JSON.stringify({
         query,
         datasets: [datasetForUser(userId)],
-        searchType: 'GRAPH_COMPLETION',
+        searchType: 'GRAPH_COMPLETION_COT',
         topK: 5,
+        maxIter: 3,
+        ...(sessionId ? { sessionId } : {}),
       }),
     });
     if (!res.ok) return null; // 404 = no dataset yet for this user; anything else is best-effort
