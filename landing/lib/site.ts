@@ -13,7 +13,7 @@ export const DOCS_URL =
 export const LOGIN_URL = `${APP_URL}/login`;
 export const SIGNUP_URL = `${APP_URL}/login`;
 
-export const GITHUB_URL = 'https://github.com/soumyadipdotexe';
+export const GITHUB_URL = 'https://github.com/swrno/hyperspace';
 
 export const NAV_LINKS = [
   { label: 'Product', href: '/#product' },
