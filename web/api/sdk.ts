@@ -68,7 +68,7 @@ export async function sdkQueryHandler(req: Request, res: Response) {
 
     let systemPrompt = app.systemPrompt || 'You are a helpful AI assistant.';
     if (kbContext) systemPrompt += `\n\n# Retrieved Context\n${kbContext}`;
-    if (memory) systemPrompt += `\n\n# Facts remembered about this user\nThese are facts about the USER (not about you, the assistant), recalled from their past conversations — quoted verbatim, phrasing may be first- or second-person from the original context:\n"""\n${memory}\n"""`;
+    if (memory) systemPrompt += `\n\n# Facts remembered about this user\nRaw notes from this user's own past conversations — quoted verbatim, phrasing may be first- or second-person from the original context. This is a mix of durable facts (identity, preferences, ongoing context) and one-off scratch content (hypothetical drafts, test messages, names mentioned in passing) — it is NOT a verified profile. Use a note only if it's clearly still true and directly relevant to the current message. Never treat a name, role, or detail mentioned in an old, unrelated note as this user's own identity or authorship unless it's unambiguous; if a note conflicts with what the user is telling you right now (or with retrieved KB context like their resume), trust the current message and KB context over the old note.\n"""\n${memory}\n"""`;
     systemPrompt += `\n\n# Output Discipline\nRespond with ONLY the final answer — no reasoning narration.`;
 
     const chain = isHyper ? DEEP_CHAIN : DEFAULT_CHAIN;

@@ -186,13 +186,18 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
     // Memory (Cognee) — key facts this specific end-user has shared before,
     // scoped to their own dataset. Separate from the Knowledge Base retrieval
     // above (Neo4j): this is about the person, not the app's documents. Timed
-    // out short so a slow Cognee Cloud round-trip never stalls the reply.
+    // out (generously — a hard timeout here silently drops memory, so it
+    // must not be tighter than a normal Cognee Cloud round-trip) so a rare
+    // slow request never stalls the reply.
     const memory = usePersonalization ? await Promise.race([
       recallUserContext(endUserId, message).catch(() => null),
-      new Promise<null>((r) => setTimeout(() => r(null), 3000)),
+      new Promise<null>((r) => setTimeout(() => {
+        console.warn(`Memory recall timed out for endUserId=${endUserId}`);
+        r(null);
+      }, 8000)),
     ]) : null;
     if (memory) {
-      finalSystemPrompt += `\n\n# Facts remembered about this user\nThese are facts about the USER (not about you, the assistant), recalled from their past conversations — quoted verbatim, phrasing may be first- or second-person from the original context:\n"""\n${memory}\n"""`;
+      finalSystemPrompt += `\n\n# Facts remembered about this user\nRaw notes from this user's own past conversations — quoted verbatim, phrasing may be first- or second-person from the original context. This is a mix of durable facts (identity, preferences, ongoing context) and one-off scratch content (hypothetical drafts, test messages, names mentioned in passing) — it is NOT a verified profile. Use a note only if it's clearly still true and directly relevant to the current message. Never treat a name, role, or detail mentioned in an old, unrelated note as this user's own identity or authorship unless it's unambiguous; if a note conflicts with what the user is telling you right now (or with retrieved KB context), trust the current message and KB context over the old note.\n"""\n${memory}\n"""`;
     }
 
     // Reasoning models expose their chain-of-thought via a separate field
