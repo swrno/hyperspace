@@ -1,95 +1,163 @@
-# hypr-sdk: API reference
+# SDK API Reference
 
-## `HyperClientConfig`
+This document lists the TypeScript interfaces, classes, and error types exported by the **`hypr-sdk`** package.
+
+---
+
+## Configuration Interface
+
+### `HyperClientConfig`
+Pass this object to the constructors of `SimpleRetriver`, `HyperRetriever`, and `Ingestor`.
 
 ```ts
 interface HyperClientConfig {
-  apiKey: string;           // Account secret (sk_live_...), created under your user's API Keys
-  appId: string;            // Which app to talk to (app_...)
-  clientId: string;         // Public client id paired with apiKey (the app owner's uid)
-  userId: string;           // Your own end-user's id — scopes retrieval + memory
-  personalisation?: boolean; // Recall + update memory even with simpleRetriver (default false)
-  baseUrl?: string;         // Override the API base URL (defaults to production)
+  /** Account-wide secret key (`sk_live_...`) generated under the API Keys tab. */
+  apiKey: string;
+  
+  /** Unique App ID (`app_...`) of the application. */
+  appId: string;
+  
+  /** Public client ID paired with the API Key (the owner's Firebase user ID). */
+  clientId: string;
+  
+  /** Opaque identifier for your end-user. Scopes personalization memory partition. */
+  userId: string;
+  
+  /** 
+   * Toggles personalization memory recall/write independently of search mode.
+   * If true, enables memory operations for the SimpleRetriver.
+   * @default false 
+   */
+  personalisation?: boolean;
+  
+  /** 
+   * Override the base API server URL. Useful for local development.
+   * @default "https://api.hypr.ai"
+   */
+  baseUrl?: string;
 }
 ```
 
-Every field except `personalisation` and `baseUrl` is required — the
-constructor throws if any are missing.
+::: danger Validation Checks
+The constructor validates `apiKey`, `appId`, `clientId`, and `userId`. If any required string parameter is missing or empty, the client throws a validation error on initialization.
+:::
 
-## `HyperClient.simpleRetriver`
+---
 
+## Retrievers & Methods
+
+### `SimpleRetriver`
+Executes low-latency vector search lookups.
+
+* **Constructor**:
+  ```ts
+  const client = new HyperClient.simpleRetriver(config: HyperClientConfig);
+  ```
+* **Query Method**:
+  ```ts
+  query(message: string, options?: QueryOptions): Promise<string>
+  ```
+  - Sends a query payload to `/api/sdk/query` with `mode: "simple"`.
+  - Returns the synthesized response string.
+  - Personalization memory is bypassed unless `personalisation: true` is set in the constructor configuration.
+
+---
+
+### `HyperRetriever`
+Executes deep, multi-hop planner-driven searches.
+
+* **Constructor**:
+  ```ts
+  const client = new HyperClient.hyperRetriever(config: HyperClientConfig);
+  ```
+* **Query Method**:
+  ```ts
+  query(message: string, options?: QueryOptions): Promise<string>
+  ```
+  - Sends a query payload to `/api/sdk/query` with `mode: "hyper"`.
+  - Runs multi-hop graph queries, fetches personalization memory, and writes conversation results to Cognee.
+  - Returns the synthesized response string.
+
+#### `QueryOptions`
 ```ts
-new HyperClient.simpleRetriver(config: HyperClientConfig)
+interface QueryOptions {
+  /** Links messages together under a single thread for dashboard history viewing. */
+  sessionId?: string;
+}
 ```
 
-### `.query(message, opts?)`
+---
 
+### `Ingestor`
+Feeds raw documentation into a Knowledge Base.
+
+* **Constructor**:
+  ```ts
+  const client = new HyperClient.ingestor(config: HyperClientConfig);
+  ```
+* **Ingestion Method**:
+  ```ts
+  ingest(kbId: string, text: string, options?: IngestOptions): Promise<IngestResult>
+  ```
+  - Sends raw text to `/api/sdk/ingest`.
+  - **`kbId`**: Target Knowledge Base ID (must be linked to the active `appId`).
+  - **`text`**: The raw string text to ingest.
+
+#### `IngestOptions`
 ```ts
-query(message: string, opts?: { sessionId?: string }): Promise<string>
+interface IngestOptions {
+  /** User-defined name for the document (displayed in the dashboard). */
+  docName?: string;
+}
 ```
 
-Calls `POST /api/sdk/query` with `mode: "simple"`. Returns the answer text.
-Single-shot Knowledge Base lookup only, no multi-hop planning. Personalization
-memory is off by default — set `personalisation: true` in the config to
-recall + update it without paying for `hyperRetriever`'s multi-hop search.
-
-## `HyperClient.hyperRetriever`
-
+#### `IngestResult`
 ```ts
-new HyperClient.hyperRetriever(config: HyperClientConfig)
-```
-
-### `.query(message, opts?)`
-
-```ts
-query(message: string, opts?: { sessionId?: string }): Promise<string>
-```
-
-Calls `POST /api/sdk/query` with `mode: "hyper"`. Runs multi-hop Knowledge
-Base retrieval, recalls this `userId`'s personalization memory, and — after
-answering — extracts and stores any new facts from the turn.
-
-`sessionId` groups turns into one conversation thread for the "End-User Chat
-History" panel; omit it for an unrelated one-off query.
-
-## `HyperClient.ingestor`
-
-```ts
-new HyperClient.ingestor(config: HyperClientConfig)
-```
-
-### `.ingest(kbId, text, opts?)`
-
-```ts
-ingest(kbId: string, text: string, opts?: { docName?: string }): Promise<{
+interface IngestResult {
+  /** True if the document was successfully processed and written to Neo4j. */
   ok: boolean;
+  /** Quantity of chunk nodes created in Neo4j. */
   chunks?: number;
+  /** Quantity of entity nodes created and linked in Neo4j. */
   entities?: number;
-}>
+}
 ```
 
-Calls `POST /api/sdk/ingest`. `kbId` must be one of the app's linked
-Knowledge Base ids.
+---
 
-## Errors
+## Error Handling
 
-Every method throws `HyperApiError` on a non-2xx response:
+All SDK methods throw a `HyperApiError` if the backend returns a non-2xx HTTP status code.
 
+### `HyperApiError`
 ```ts
-class HyperApiError extends Error {
+export class HyperApiError extends Error {
+  /** The HTTP response status code returned by the server (e.g., 401, 403, 429). */
   status: number;
+  /** The raw error message returned by the server. */
   message: string;
 }
 ```
 
+### Try-Catch Example
 ```ts
-import { HyperApiError } from 'hypr-sdk';
+import { HyperClient, HyperApiError } from 'hypr-sdk';
+
+const retriever = new HyperClient.hyperRetriever(config);
 
 try {
-  await hyperRetriver.query('...');
-} catch (e) {
-  if (e instanceof HyperApiError && e.status === 401) {
-    // bad apiKey / appId / clientId
+  const response = await retriever.query('Hello world');
+} catch (error) {
+  if (error instanceof HyperApiError) {
+    console.error(`Request failed with status ${error.status}: ${error.message}`);
+    
+    if (error.status === 401) {
+      // Handle invalid credentials or expired keys
+    } else if (error.status === 429) {
+      // Handle rate limits
+    }
+  } else {
+    console.error('An unexpected connection error occurred:', error);
   }
 }
 ```

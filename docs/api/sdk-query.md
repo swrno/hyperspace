@@ -1,47 +1,89 @@
-# POST /api/sdk/query
+# Public SDK Query API (`POST /api/sdk/query`)
 
-The endpoint behind `hypr-sdk`'s `simpleRetriver` and `hyperRetriever` — see
-[hypr-sdk: Getting started](/sdk/getting-started) if you're integrating a
-third-party app rather than calling this directly.
+This endpoint is the public query gateway for **`hypr-sdk`** clients (`simpleRetriever` and `hyperRetriever`). It is designed for third-party backend servers to query knowledge systems and personal memory on behalf of their end-users.
 
-**Auth**: `X-Api-Key` / `X-App-Id` / `X-Client-Id` headers (or the equivalent
-`apiKey` / `appId` / `clientId` body fields). `apiKey` is resolved to its
-owning user first (it's account-level, not per-app — see **API Keys** in
-[Applications](/guide/applications)), then `appId`/`clientId` must belong to
-an app owned by that same user. See [`lib/sdkAuth.ts`](/guide/applications).
+---
 
-## Request
+## Authentication & Headers
 
-```jsonc
+Unlike admin-facing endpoints that require Firebase tokens, the public SDK endpoint uses a triple-key authentication system (`apiKey`, `appId`, `clientId`). 
+
+You can provide these keys using HTTP request headers (recommended) or pass them in the JSON body.
+
+### Header Authentication (Recommended)
+```http
+X-Api-Key: sk_live_4a5b6c7d8e...
+X-App-Id: app_6c7d8e9f0a...
+X-Client-Id: firebase_user_uid...
+Content-Type: application/json
+```
+
+### Body Authentication
+Alternatively, omit the custom headers and include `apiKey`, `appId`, and `clientId` directly in the JSON root of the payload.
+
+---
+
+## Request Payload
+
+```json
 {
-  "userId": "string, required — your own end-user's id",
-  "message": "string, required",
-  "mode": "simple" | "hyper",  // default "simple"
-  "sessionId": "string, default \"default\""
+  "userId": "end_user_12345",
+  "message": "Verify the latest security changes in the auth library.",
+  "mode": "hyper",
+  "sessionId": "session_security_check",
+  "personalisation": true
 }
 ```
 
-| `mode` | Knowledge Base retrieval | Memory |
-|---|---|---|
-| `simple` | single-shot vector lookup per linked KB | not used |
-| `hyper` | multi-hop planner + rerank | recalled and updated for this `userId` |
+### Parameter Details
 
-## Response
+| Field | Type | Required | Default | Description |
+| :--- | :---: | :---: | :---: | :--- |
+| **`userId`** | `string` | **Yes** | — | Unique, opaque identifier of your end-user. Used to isolate conversation logs and personal memory. |
+| **`message`** | `string` | **Yes** | — | The query text. |
+| **`mode`** | `string` | No | `"simple"` | Search depth: `"simple"` (fast vector search) or `"hyper"` (multi-hop planner + reranking). |
+| **`sessionId`** | `string` | No | `"default"` | Identifies the unique conversation thread. |
+| **`personalisation`**| `boolean`| No | *Depends* | Toggles Cognee memory recall/write independently of search mode. True by default for `hyper`. |
 
-```jsonc
+---
+
+## Response Payload
+
+```json
 {
-  "response": "string",
-  "mode": "simple" | "hyper"
+  "response": "The recent security patches updated the token validation expiration constraint in `web/api/auth.ts`.",
+  "mode": "hyper"
 }
 ```
 
-## Errors
+### Response Field Details
 
-| Status | Meaning |
-|---|---|
-| 400 | `message` or `userId` missing |
-| 401 | `apiKey` invalid/expired, or `appId`/`clientId` don't belong to that key's owner |
-| 500 | Generation failed |
+* **`response`**: The model's final, grounding-synthesized answer text.
+* **`mode`**: The search depth executed for the query.
 
-Every call appends to the (app, user, session) conversation record; `hyper`
-mode also extracts and stores new Memory facts, fire-and-forget.
+---
+
+## Example Request (cURL)
+
+```bash
+curl -X POST http://localhost:3000/api/sdk/query \
+  -H "X-Api-Key: sk_live_YOUR_API_KEY" \
+  -H "X-App-Id: app_YOUR_APP_ID" \
+  -H "X-Client-Id: YOUR_CLIENT_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user_developer_1",
+    "message": "What repositories do you have access to?",
+    "mode": "simple"
+  }'
+```
+
+---
+
+## Error Status Codes
+
+| HTTP Status | Error Type | Cause / Resolution |
+| :---: | :--- | :--- |
+| **400** | Bad Request | Missing the `message` parameter or `userId` parameter. |
+| **401** | Unauthorized | The `apiKey` is invalid or expired, or the `appId`/`clientId` do not match the owner. |
+| **500** | Server Error | In-process embedding failure or downstream LLM error. |

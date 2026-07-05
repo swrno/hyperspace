@@ -1,85 +1,123 @@
-# hypr-sdk: Getting started
+# SDK Getting Started
 
-`hypr-sdk` (`packages/hypr-sdk`) is the client for integrating a hypr app's
-Knowledge Base and personalization Memory into any third-party application.
+The **`hypr-sdk`** (`packages/hypr-sdk`) is the client library used to integrate the `hypr` Knowledge Base search engine and Personal Memory profiles into external third-party applications.
 
-## Install
+---
+
+## Installation
+
+Install the package via your preferred package manager:
 
 ```bash
 npm install hypr-sdk
+# or
+yarn add hypr-sdk
+# or
+pnpm add hypr-sdk
 ```
 
-## Get your credentials
+---
 
-`appId` and `clientId` come from the app's management page in hypr, under
-**API Credentials**. `apiKey` is different — it's not per-app, it's created
-under your hypr account's **API Keys** section, and any of your keys
-authenticates any app you own. `userId` is not from hypr at all, it's your
-own system's id for the person you're talking to.
+## Configuration & Credentials
+
+To construct a client, you need four key parameters.
 
 ```ts
 import { HyperClient } from 'hypr-sdk';
 
 const config = {
-  apiKey: process.env.HYPER_API_KEY!,
-  appId: process.env.HYPER_APP_ID!,
-  clientId: process.env.HYPER_CLIENT_ID!,
-  userId: currentUser.id, // your own end-user's id — not a hypr credential
+  apiKey: process.env.HYPER_API_KEY!,     // Your private secret key (sk_live_...)
+  appId: process.env.HYPER_APP_ID!,       // The target App identifier (app_...)
+  clientId: process.env.HYPER_CLIENT_ID!, // Your dashboard account user ID
+  userId: currentUser.id,                 // Opaque identifier mapping to your active end-user
 };
 ```
 
-## Query the Knowledge Base
+::: warning Spelling Tip
+Due to exports in the core client packages, the classes and properties are named:
+- **Class**: `SimpleRetriver` *(Notice the missing 'e' in Retriver)*
+- **Client Namespace**: `HyperClient.simpleRetriver`
+- **Class**: `HyperRetriever` *(Standard spelling)*
+- **Client Namespace**: `HyperClient.hyperRetriever`
+:::
+
+---
+
+## Initializing and Querying
+
+### 1. Fast Vector Retrieval (`simpleRetriver`)
+Best for FAQ-style lookups, stateless search queries, or high-throughput queries where latency must be kept under 2s.
 
 ```ts
-// Fast, single-shot retrieval — no personalization memory.
-const simpleRetriver = new HyperClient.simpleRetriver(config);
-const answer = await simpleRetriver.query('What plans do we offer?');
+import { HyperClient } from 'hypr-sdk';
 
-// Deep retrieval + this end-user's own personalization memory.
-const hyperRetriver = new HyperClient.hyperRetriever(config);
-const personalized = await hyperRetriver.query('What did I ask about last time?');
+// Initialize simple retriever (Personal Memory is disabled by default)
+const simpleClient = new HyperClient.simpleRetriver(config);
+
+const answer = await simpleClient.query('What is our corporate policy on remote work?');
+console.log(answer);
 ```
 
-| | `simpleRetriver` | `hyperRetriever` |
-|---|---|---|
-| Knowledge Base search | single-shot vector lookup | multi-hop planner + rerank |
-| Personalization memory | opt-in (see below) | always on, scoped to `userId` |
-| Latency | low | higher |
-| Use for | FAQ-style lookups | contextual, ongoing conversations |
+---
 
-Personalization memory builds automatically — every query that personalizes
-both recalls and updates that end-user's memory. There's no separate
-"remember this" call for conversational facts.
-
-Memory is independent of which retriever you use. `hyperRetriever` always
-personalizes; `simpleRetriver` only does if you set `personalisation: true`
-in the config — useful when you want fast single-shot KB search *and*
-memory, without paying for multi-hop planning:
+### 2. Fast Vector Retrieval + Personal Memory
+You can enable Personalization Memory inside the simple retriever to combine low-latency vector search with context recall.
 
 ```ts
-const simpleRetriver = new HyperClient.simpleRetriver({ ...config, personalisation: true });
-const answer = await simpleRetriver.query('What plans do we offer?');
+const simplePersonalisedClient = new HyperClient.simpleRetriver({
+  ...config,
+  personalisation: true
+});
+
+const answer = await simplePersonalisedClient.query('Tell me about policy options matching my home location.');
 ```
 
-## Ingest content
+---
 
-For content that isn't part of a normal conversation turn — e.g. syncing your
-own product docs into the app's Knowledge Base:
+### 3. Deep Planning Retrieval + Personal Memory (`hyperRetriever`)
+Best for deep, analytical conversations. This retriever uses a multi-hop planner to decompose the query, matches chunks, executes full-text searches, reranks findings, and incorporates personal context.
 
 ```ts
+// Initialize hyper retriever (Personal Memory is always enabled)
+const hyperClient = new HyperClient.hyperRetriever(config);
+
+const reply = await hyperClient.query('Based on what I worked on last week, what tasks are pending?');
+console.log(reply);
+```
+
+---
+
+## Quick Comparison
+
+| Metric / Parameter | `simpleRetriver` | `hyperRetriever` |
+| :--- | :---: | :---: |
+| **Knowledge Base Search** | Single-shot vector similarity | Multi-hop query planner + Rerank |
+| **Personalization Memory** | Disabled by default (Opt-in) | Enabled by default |
+| **Target Latency** | **Low** (<2s) | **Medium-High** (3s - 10s) |
+| **Ideal Use Case** | Direct Q&A, facts, search tools | Reasoning, chat assistants, analysis |
+
+---
+
+## Document Ingestion
+
+To programmatically feed new documents, drafts, or databases into a Knowledge Base (linked to your App):
+
+```ts
+import { HyperClient } from 'hypr-sdk';
+
 const ingestor = new HyperClient.ingestor(config);
-await ingestor.ingest('kb_123', 'Some document text to add to the knowledge base.');
+
+const result = await ingestor.ingest(
+  'kb_development_6c7d8e', 
+  'This is document content detailing the authentication guidelines...',
+  { docName: 'auth_docs_draft.md' }
+);
+
+if (result.ok) {
+  console.log(`Ingested ${result.chunks} chunks and ${result.entities} entities.`);
+}
 ```
 
-`kb_123` must be one of the app's linked Knowledge Base ids — ingestion
-targets the app's shared documents, not any one user's personal memory.
-
-## Isolation
-
-`apiKey` + `appId` + `clientId` together identify and authorize *your app*
-(`apiKey` proves it's you, `appId`/`clientId` say which app). `userId` scopes
-retrieval and memory to *one end-user of that app* — hypr partitions storage
-per user, so one user's data can never leak into another's response, even
-within the same app.
-
-Next: [API reference](/sdk/api-reference) for the full config and return types.
+::: important Scoping Ingests
+Ingestion targets a **Knowledge Base** (`kbId`) linked to the application. Ingested items become readable by *all* end-users querying the application. End-user personalization memory is updated automatically during chat loops and is never modified using the `ingestor` class.
+:::

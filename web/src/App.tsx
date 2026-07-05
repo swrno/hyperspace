@@ -192,7 +192,7 @@ const formatTime = (isoString: string) => {
 };
 
 // Platforms with real OAuth backends
-const DOCS_SDK_GETTING_STARTED_URL = `${import.meta.env.VITE_DOCS_URL || ''}/sdk/getting-started`;
+const DOCS_SDK_GETTING_STARTED_URL = `${import.meta.env.VITE_DOCS_URL || 'https://docs.hypersp.tech'}/sdk/getting-started`;
 
 const OAUTH_PLATFORMS = ['github', 'jira', 'gdocs', 'gslides', 'gsheets', 'gcal'];
 // Platforms not yet implemented — show Coming Soon
@@ -3173,9 +3173,14 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                 </div>
               </div>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-[#1E1D1C] border border-[#3D3A37] rounded-xl text-[13px] font-medium text-[#F4F0EB] hover:bg-[#2A2826] transition-colors">
+            <a
+              href={`${import.meta.env.VITE_DOCS_URL || 'https://docs.hypersp.tech'}/guide/applications`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 px-4 py-2 bg-[#1E1D1C] border border-[#3D3A37] rounded-xl text-[13px] font-medium text-[#F4F0EB] hover:bg-[#2A2826] transition-colors"
+            >
               <ArrowUpRight size={15} /> Guide
-            </button>
+            </a>
           </div>
         </div>
 

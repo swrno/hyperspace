@@ -1,66 +1,102 @@
-# Memory (Cognee)
+# Memory (Cognee Personalization)
 
-Memory is per-end-user personalization: key facts extracted automatically
-from a person's own conversation, recalled on later turns so replies feel
-continuous rather than stateless. It is completely separate from the
-[Knowledge Base](/guide/knowledge-base) — Memory never touches Neo4j, and
-Knowledge Base retrieval never touches Memory.
+**Memory** is the system responsible for per-end-user personalization. It automatically extracts key facts from conversations and recalls them on subsequent turns, creating a continuous interaction flow across sessions.
 
-Implementation: `web/api/lib/cogneeMemory.ts` calls a real, already-provisioned
-Cognee Cloud tenant (`COGNEE_BASE_URL` / `COGNEE_API_KEY`) over plain HTTP —
-the same shape as every other external model call in this codebase (see
-`lib/llm.ts`). There is no SDK dependency and no local process for this.
+Unlike the [Knowledge Base](/guide/knowledge-base), which handles shared document indexing via Neo4j, Memory is completely decentralized and isolated. It operates without local indexes or processes, calling an external **Cognee Cloud** tenant over plain HTTP (`web/api/lib/cogneeMemory.ts`).
 
-## Isolation
+---
 
-Each end-user gets their own Cognee **dataset**, named `hypr_user_<userId>`.
-Cognee partitions storage per dataset, so a recall scoped to one user's
-dataset can never surface another user's data — this is stronger than a
-manual `WHERE userId = ...` filter, since there is no shared index to filter.
+## Strict Tenant Isolation
 
+To guarantee user privacy and data separation, each end-user is assigned an isolated Cognee **dataset namespace**:
+`hypr_user_<sanitizedUserId>`
+
+We sanitize the user identifier to protect the partition namespace from injection:
 ```ts
-// api/lib/cogneeMemory.ts
-rememberUserFact(userId, text)       // POST /api/v1/remember, dataset = hypr_user_<userId>
-recallUserContext(userId, query)     // POST /api/v1/search,   dataset = hypr_user_<userId>
+function datasetForUser(userId: string): string {
+  return `hypr_user_${String(userId || 'anon').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 40)}`;
+}
 ```
 
-Both are best-effort: a failed or slow Cognee call never blocks or breaks a
-chat reply (recall is wrapped in a short timeout; remember is fire-and-forget).
+By querying and saving explicitly into this dataset namespace, there is no shared index. One user's recalled context can never access or contain facts belonging to another user.
 
-## Where it's wired in
+---
 
-| Surface | Recalls memory? | Writes memory? |
-|---|---|---|
-| `/api/chat` (owner's account chat) | yes, always | yes, when the message looks like a personal statement (`maybeRememberPSI`) |
-| `/api/app-chat` (Playground) | yes, always | yes, after every turn |
-| `/api/sdk/query`, mode `simple` | no | no |
-| `/api/sdk/query`, mode `hyper` | yes | yes, after every turn |
+## API Specifications & Payloads
 
-## Prompt injection caveat
+Memory operations interface directly with Cognee Cloud's REST endpoints:
 
-Cognee phrases recalled facts in whatever grammatical person the original
-conversation used (often 2nd person: *"Your favorite color is teal."*). When
-that text is pasted into a **third-party** app's system prompt under a label
-like "what you remember about this user," the pronoun "you" becomes
-ambiguous — does it mean the assistant or the end-user? This caused visible
-model confusion in testing (the model would narrate its own uncertainty
-instead of answering).
+### 1. Ingestion (`/api/v1/remember`)
+Triggered as a fire-and-forget task in the background. It takes raw text, treats it as a text file, and sends it as multipart form-data.
 
-Fix: the injection is always framed explicitly —
+* **Endpoint**: `POST ${COGNEE_BASE_URL}/api/v1/remember`
+* **Headers**:
+  ```http
+  X-Api-Key: <COGNEE_API_KEY>
+  ```
+* **Body (Multipart Form-Data)**:
+  - `datasetName`: `hypr_user_<userId>`
+  - `data`: Text file blob containing user statements.
 
-> "These are facts about the USER (not about you, the assistant), recalled
-> from their past conversations — quoted verbatim, phrasing may be first- or
-> second-person from the original context."
+---
 
-If you add a new place that injects `recallUserContext()`'s result into a
-prompt, keep this framing (see `app-chat.ts` / `sdk.ts` for the exact string).
-For `/api/chat`, no such framing is needed — that surface addresses the same
-person the memory is about, so "you" is unambiguous there.
+### 2. Retrieval (`/api/v1/search`)
+Queries Cognee's search engine to pull facts relevant to the user's active query.
 
-## What's stored where
+* **Endpoint**: `POST ${COGNEE_BASE_URL}/api/v1/search`
+* **Headers**:
+  ```http
+  X-Api-Key: <COGNEE_API_KEY>
+  │Content-Type: application/json
+  ```
+* **Body (JSON)**:
+  ```json
+  {
+    "query": "User query here",
+    "datasets": ["hypr_user_12345"],
+    "searchType": "GRAPH_COMPLETION",
+    "topK": 5,
+    "maxIter": 3,
+    "sessionId": "session_abc"
+  }
+  ```
 
-Memory facts live only in Cognee Cloud, keyed by dataset name — hypr's own
-MongoDB never stores raw memory text. What MongoDB *does* store, per
-end-user, is the raw conversation log (`conversations` collection) and a
-lightweight activity record (`app_users` collection) — see
-[Applications](/guide/applications#end-user-data).
+---
+
+## Timeout & Abort Handling
+
+Memory retrieval is treated as a best-effort, non-blocking feature. If Cognee Cloud experiences cold-starts or network latency, the query is automatically aborted so that the chat turn response is not delayed.
+
+We enforce this using `AbortController` and `Promise.race`:
+
+```ts
+const controller = new AbortController();
+const timer = setTimeout(() => controller.abort(), 8000); // 8s hard gateway cap
+
+const res = await fetch(`${url}/api/v1/search`, {
+  method: 'POST',
+  body: JSON.stringify({ ... }),
+  signal: controller.signal
+});
+```
+
+---
+
+## Person-Specific Information (PSI) Trigger
+
+For owner-facing chats, we avoid flooding the Cognee memory dataset with general search queries. We use a regex trigger (`PSI_RE`) to ensure only declarative statements about identity, preferences, roles, or setups are sent for ingestion:
+
+```ts
+const PSI_RE = /\b(i am|i'm|i've|i have|my name|call me|i prefer|i like|i love|i hate|i don'?t|i use|i work|i'm working|i'm building|i focus|i need|i want|my role|my job|my team|my manager|my company|my project|my email|my stack|my goal|our team|our product|our company|we use|we are|we're|based in|i live|i'm responsible|only show|remember that|remember i|note that|keep in mind|for future|going forward)\b/i;
+```
+
+---
+
+## Wiring Integration Map
+
+| Interface Endpoint | Recalls Memory? | Writes Memory? | Condition |
+| :--- | :---: | :---: | :--- |
+| **`/api/chat`** | Yes | Yes | Writes only if the user message matches `PSI_RE`. |
+| **`/api/app-chat`** | Yes | Yes | Writes automatically after every turn in the playground. |
+| **`/api/sdk/query`** (`mode: 'simple'`) | No | No | Optional; writes/recalls only if `personalisation: true` is passed. |
+| **`/api/sdk/query`** (`mode: 'hyper'`) | Yes | Yes | Yes, automatically on every message/response pair. |

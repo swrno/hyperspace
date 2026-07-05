@@ -1,0 +1,155 @@
+/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap');
+
+/* Theme customizations for hypr docs */
+
+:root {
+  /* Premium violet/indigo branding */
+  --vp-c-brand-1: hsl(262, 80%, 50%);
+  --vp-c-brand-2: hsl(262, 70%, 45%);
+  --vp-c-brand-3: hsl(262, 90%, 60%);
+  --vp-c-brand-next: hsl(282, 85%, 55%);
+  --vp-c-brand-soft: hsla(262, 80%, 50%, 0.08);
+
+  --vp-font-family-base: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --vp-font-family-mono: 'Fira Code', 'JetBrains Mono', source-code-pro, Menlo, Monaco, Consolas, monospace;
+
+  /* Custom hero colors */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(135deg, var(--vp-c-brand-1) 0%, var(--vp-c-brand-next) 100%);
+
+  /* Transitions */
+  --vp-transition-duration: 0.3s;
+}
+
+.dark {
+  /* Futuristic dark mode background */
+  --vp-c-bg: hsl(240, 16%, 6%);
+  --vp-c-bg-alt: hsl(240, 16%, 8%);
+  --vp-c-bg-elv: hsl(240, 14%, 12%);
+  --vp-c-border: hsl(240, 10%, 16%);
+
+  --vp-c-brand-1: hsl(262, 90%, 65%);
+  --vp-c-brand-2: hsl(262, 80%, 58%);
+  --vp-c-brand-3: hsl(262, 95%, 72%);
+  --vp-c-brand-next: hsl(190, 90%, 50%); /* Cyberpunk gradient endpoint */
+  --vp-c-brand-soft: hsla(262, 90%, 65%, 0.12);
+
+  --vp-home-hero-name-background: linear-gradient(135deg, var(--vp-c-brand-1) 0%, var(--vp-c-brand-next) 100%);
+}
+
+/* ----------------------------------------------------
+   SCROLLBAR HIDING (visibly hidden but scrollable)
+   ---------------------------------------------------- */
+::-webkit-scrollbar {
+  display: none !important;
+}
+
+html, body, * {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+/* ----------------------------------------------------
+   DESIGN POLISH & ELEGANCE
+   ---------------------------------------------------- */
+
+
+/* Smooth Scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Header Glassmorphism */
+.VPNavBar {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(16px) saturate(180%);
+  border-bottom: 1px solid var(--vp-c-border) !important;
+}
+.dark .VPNavBar {
+  background-color: hsla(240, 16%, 6%, 0.7) !important;
+}
+
+/* Typography Enhancements */
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.VPHero .name {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  animation: hero-gradient-pan 8s linear infinite;
+  background-size: 200% auto !important;
+}
+
+@keyframes hero-gradient-pan {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Hero Cards / Features styling */
+.VPFeatures .VPFeature {
+  border-radius: 16px !important;
+  border: 1px solid var(--vp-c-border) !important;
+  background-color: var(--vp-c-bg-alt) !important;
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), border-color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+.VPFeatures .VPFeature:hover {
+  transform: translateY(-4px);
+  border-color: var(--vp-c-brand-1) !important;
+  box-shadow: 0 12px 30px hsla(262, 90%, 65%, 0.08);
+}
+
+.VPFeatures .icon {
+  background-color: var(--vp-c-brand-soft) !important;
+  border-radius: 12px !important;
+}
+
+/* Codeblock enhancements */
+div[class*="language-"] {
+  border-radius: 12px !important;
+  border: 1px solid var(--vp-c-border) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Sidebar Hover Styles */
+.VPSidebarItem.level-0 {
+  margin-bottom: 12px;
+}
+
+.VPSidebarItem .text {
+  transition: color var(--vp-transition-duration);
+}
+
+.VPSidebarItem:hover .text {
+  color: var(--vp-c-brand-1);
+}
+
+/* Custom Table Styles */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th {
+  background-color: var(--vp-c-bg-alt) !important;
+  font-weight: 600;
+}
+
+td, th {
+  padding: 12px 16px !important;
+  border: 1px solid var(--vp-c-border) !important;
+}
+
+/* Badge branding */
+.VPBadge.tip {
+  border-color: var(--vp-c-brand-1) !important;
+  background-color: var(--vp-c-brand-soft) !important;
+  color: var(--vp-c-brand-1) !important;
+}
