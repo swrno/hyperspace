@@ -80,7 +80,6 @@ export default function Footer() {
           <p className="text-[12.5px] text-ink-400">
             © {new Date().getFullYear()} hyperspace · Built at the WeMakeDevs hackathon
           </p>
-          <p className="text-[12.5px] text-ink-400">Cognee · LangGraph · Groq</p>
         </div>
       </div>
 
