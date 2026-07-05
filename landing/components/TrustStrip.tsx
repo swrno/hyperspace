@@ -1,4 +1,20 @@
-const STACK = ['Cognee', 'LangGraph', 'Groq', 'Neo4j', 'MongoDB', 'Firebase'];
+import {
+  CogneeLogo,
+  LangGraphLogo,
+  GroqLogo,
+  Neo4jLogo,
+  MongoLogo,
+  FirebaseLogo,
+} from './StackLogos';
+
+const STACK = [
+  { name: 'Cognee', Logo: CogneeLogo },
+  { name: 'LangGraph', Logo: LangGraphLogo },
+  { name: 'Groq', Logo: GroqLogo },
+  { name: 'Neo4j', Logo: Neo4jLogo },
+  { name: 'MongoDB', Logo: MongoLogo },
+  { name: 'Firebase', Logo: FirebaseLogo },
+];
 
 export default function TrustStrip() {
   return (
@@ -7,13 +23,13 @@ export default function TrustStrip() {
         <p className="text-center text-[13px] text-ink-400">
           Built on trusted open infrastructure
         </p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-12 gap-y-4">
-          {STACK.map((name) => (
-            <span
-              key={name}
-              className="font-display text-lg font-medium tracking-tight text-ink-300"
-            >
-              {name}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+          {STACK.map(({ name, Logo }) => (
+            <span key={name} className="flex items-center gap-2">
+              <Logo className="h-5 w-5" />
+              <span className="font-display text-[17px] font-medium tracking-tight text-ink-600">
+                {name}
+              </span>
             </span>
           ))}
         </div>
