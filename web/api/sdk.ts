@@ -64,7 +64,7 @@ export async function sdkQueryHandler(req: Request, res: Response) {
     const kbContext = kbResults.filter(Boolean).join('\n\n---\n\n');
 
     // Memory (Cognee) — personalized to this end-user, if enabled.
-    const memory = usePersonalization ? await recallUserContext(userId, message).catch(() => null) : null;
+    const memory = usePersonalization ? await recallUserContext(userId, message, sessionId).catch(() => null) : null;
 
     let systemPrompt = app.systemPrompt || 'You are a helpful AI assistant.';
     if (kbContext) systemPrompt += `\n\n# Retrieved Context\n${kbContext}`;
