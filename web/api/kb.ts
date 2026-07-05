@@ -17,14 +17,18 @@ const oauthProviderForPlatform = (p: string) =>
  *  documents and attached sources (README §4 — graph "based on sources"). */
 const kbNodeSet = (kbId: string) => `kb:${kbId}`;
 
-/** In-memory ingestion progress — keyed by kbId. Cleared 10 min after done. */
+/** In-memory ingestion progress — keyed by `${kbId}::${platform}` so two
+ *  sources ingesting into the same KB track independently (a shared kbId key
+ *  made every connector card animate at once). Cleared 10 min after done. */
 export const ingestProgress = new Map<string, {
   phase: string;
   pct: number;
   done: boolean;
   error?: string;
+  platform?: string;
   startedAt: number;
 }>();
+const progressKey = (kbId: string, platform: string) => `${kbId}::${platform}`;
 
 /**
  * Knowledge Base endpoint.
@@ -65,7 +69,13 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       // Lightweight progress-poll endpoint — no DB hit needed.
       if (req.query.action === 'ingest-progress' && req.query.kbId) {
-        const p = ingestProgress.get(String(req.query.kbId));
+        const kbId = String(req.query.kbId);
+        const platform = req.query.platform ? String(req.query.platform) : null;
+        // Platform-scoped record when the client asks for one; otherwise fall
+        // back to any in-flight record for this KB (back-compat).
+        const p = platform
+          ? ingestProgress.get(progressKey(kbId, platform))
+          : [...ingestProgress.entries()].find(([k]) => k.startsWith(`${kbId}::`))?.[1];
         if (!p) return res.status(200).json({ found: false });
         return res.status(200).json({ found: true, ...p });
       }
@@ -169,6 +179,11 @@ export default async function handler(req: Request, res: Response) {
       if (action === 'attach-source') {
         const { kbId, platform, items = [] } = body;
         if (!kbId || !platform) return res.status(400).json({ error: 'kbId and platform are required' });
+        // Progress is scoped to THIS (kbId, platform) so each connector card
+        // animates only for its own ingest, never its neighbours'.
+        const setP = (rec: { phase: string; pct: number; done: boolean; error?: string; startedAt: number }) =>
+          ingestProgress.set(progressKey(kbId, platform), { ...rec, platform });
+        const delP = () => ingestProgress.delete(progressKey(kbId, platform));
         const source = {
           platform,
           items: (Array.isArray(items) ? items : []).map((i) => ({
@@ -187,29 +202,29 @@ export default async function handler(req: Request, res: Response) {
 
           // Non-GitHub live connectors: progress-tracked ingestion so the KB card
           // shows a spinner + phases like GitHub does. Runs async; the response
-          // returns immediately. Progress is keyed by kbId (same map GitHub uses).
+          // returns immediately. Progress is scoped per (kbId, platform) via setP.
           if (platform !== 'github') {
-            ingestProgress.set(kbId, { phase: 'Starting…', pct: 3, done: false, startedAt: Date.now() });
+            setP({ phase: 'Starting…', pct: 3, done: false, startedAt: Date.now() });
             (async () => {
               try {
-                ingestProgress.set(kbId, { phase: 'Indexing into knowledge graph…', pct: 25, done: false, startedAt: Date.now() });
+                setP({ phase: 'Indexing into knowledge graph…', pct: 25, done: false, startedAt: Date.now() });
                 await cogneeIngest(payload, { userId: user.uid, kbId, nodeSet: ['kb', kbNodeSet(kbId)] });
 
                 // Additive node graph, keyed by the REAL kbId (not the userId stand-in).
                 if (NODE_GRAPH_PLATFORMS.includes(platform)) {
-                  ingestProgress.set(kbId, { phase: 'Fetching & embedding content…', pct: 60, done: false, startedAt: Date.now() });
+                  setP({ phase: 'Fetching & embedding content…', pct: 60, done: false, startedAt: Date.now() });
                   const conn = await getConnection(user.uid, oauthProviderForPlatform(platform));
                   if (conn) {
                     const token = await getAccessToken(conn);
                     await buildNodeGraphForProvider(user.uid, kbId, platform, source.items, token, conn);
                   }
                 }
-                ingestProgress.set(kbId, { phase: 'Complete', pct: 100, done: true, startedAt: Date.now() });
-                setTimeout(() => ingestProgress.delete(kbId), 10 * 60 * 1000);
+                setP({ phase: 'Complete', pct: 100, done: true, startedAt: Date.now() });
+                setTimeout(delP, 10 * 60 * 1000);
               } catch (e: any) {
                 console.warn(`KB ingest failed for ${platform} (non-fatal):`, e.message);
-                ingestProgress.set(kbId, { phase: `Failed: ${e.message}`, pct: 0, done: true, error: e.message, startedAt: Date.now() });
-                setTimeout(() => ingestProgress.delete(kbId), 10 * 60 * 1000);
+                setP({ phase: `Failed: ${e.message}`, pct: 0, done: true, error: e.message, startedAt: Date.now() });
+                setTimeout(delP, 10 * 60 * 1000);
               }
             })();
           }
@@ -219,7 +234,7 @@ export default async function handler(req: Request, res: Response) {
               .catch((e) => console.warn('KB source Cognee ingest failed (non-fatal):', e.message));
             // Deep background ingestion — runs fully async so the HTTP response
             // returns immediately while content is streamed into Cognee.
-            ingestProgress.set(kbId, { phase: 'Starting…', pct: 2, done: false, startedAt: Date.now() });
+            setP({ phase: 'Starting…', pct: 2, done: false, startedAt: Date.now() });
             (async () => {
               try {
                 const conn = await getConnection(user.uid, 'github');
@@ -232,7 +247,7 @@ export default async function handler(req: Request, res: Response) {
 
                 console.log(`[KB ${kbId}] Starting deep GitHub snapshot for: ${repoNames.join(', ')}`);
                 const { entities, documents } = await github.deepSnapshot(ghToken, repoNames, (phase, pct) => {
-                  ingestProgress.set(kbId, { phase, pct: Math.min(pct, 84), done: false, startedAt: Date.now() });
+                  setP({ phase, pct: Math.min(pct, 84), done: false, startedAt: Date.now() });
                 });
                 console.log(`[KB ${kbId}] Snapshot complete — ${entities.length} entities, ${documents.length} documents`);
 
@@ -243,10 +258,10 @@ export default async function handler(req: Request, res: Response) {
                 const bumpIngest = () => {
                   done++;
                   const pct = 85 + Math.round((done / Math.max(totalItems, 1)) * 13);
-                  ingestProgress.set(kbId, { phase: 'Indexing into knowledge graph…', pct: Math.min(pct, 98), done: false, startedAt: Date.now() });
+                  setP({ phase: 'Indexing into knowledge graph…', pct: Math.min(pct, 98), done: false, startedAt: Date.now() });
                 };
 
-                ingestProgress.set(kbId, { phase: 'Indexing into knowledge graph…', pct: 85, done: false, startedAt: Date.now() });
+                setP({ phase: 'Indexing into knowledge graph…', pct: 85, done: false, startedAt: Date.now() });
 
                 // First pass: ingest Repo nodes and build repoRef → neo4j id map.
                 const repoIdMap = new Map<string, string>();
@@ -333,13 +348,13 @@ export default async function handler(req: Request, res: Response) {
                 }
 
                 console.log(`[KB ${kbId}] GitHub ingestion complete.`);
-                ingestProgress.set(kbId, { phase: 'Complete', pct: 100, done: true, startedAt: Date.now() });
+                setP({ phase: 'Complete', pct: 100, done: true, startedAt: Date.now() });
                 // Auto-clean after 10 min so the map doesn't grow forever.
-                setTimeout(() => ingestProgress.delete(kbId), 10 * 60 * 1000);
+                setTimeout(delP, 10 * 60 * 1000);
               } catch (err: any) {
                 console.error(`[KB ${kbId}] GitHub deepSnapshot failed:`, err.message);
-                ingestProgress.set(kbId, { phase: `Failed: ${err.message}`, pct: 0, done: true, error: err.message, startedAt: Date.now() });
-                setTimeout(() => ingestProgress.delete(kbId), 10 * 60 * 1000);
+                setP({ phase: `Failed: ${err.message}`, pct: 0, done: true, error: err.message, startedAt: Date.now() });
+                setTimeout(delP, 10 * 60 * 1000);
               }
             })();
           }

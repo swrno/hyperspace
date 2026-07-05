@@ -29,9 +29,13 @@ function buildKbContext(kb) {
 }
 
 // Capture Person-Specific Information from the user's message into Cognee
-// memory (README §8) so future answers are personalised.
+// memory (README §8) so future answers are personalised — the "agent memory
+// that never forgets". Broad first-person / declarative trigger so genuine
+// facts and preferences are captured, while questions (what/how/why/…, which
+// lack these markers) are not stored as noise.
+const PSI_RE = /\b(i am|i'm|i've|i have|my name|call me|i prefer|i like|i love|i hate|i don'?t|i do not|i use|i work|i'm working|i'm building|i focus|i need|i want|my role|my job|my team|my manager|my company|my project|my email|my stack|my goal|our team|our product|our company|we use|we are|we're|based in|i live|i'm responsible|only show|remember that|remember i|note that|keep in mind|for future|going forward)\b/i;
 function maybeRememberPSI(userId, message) {
-  if (/\b(i am|i'm|i prefer|i work on|my role|call me|i use|my team|i focus on|only show|i'm working)\b/i.test(message)) {
+  if (PSI_RE.test(message)) {
     rememberUserFact(userId, `User context: ${message}`).catch(() => {});
   }
 }
@@ -82,7 +86,10 @@ export const MODE_STYLE = {
 // Gemini the last resort. Model ids are centralised in lib/llm.ts (MODELS).
 const MODES: Record<string, { topK: number; timeout: number; maxTokens: number; chain: ProviderModel[]; deep?: boolean }> = {
   normal: {
-    topK: 8, timeout: 6000, maxTokens: 1024,
+    // Headroom above 1024 so a reasoning model that thinks inline still has
+    // budget left for the actual answer (otherwise the reply is truncated
+    // mid-thought and comes back empty / as leaked chain-of-thought).
+    topK: 8, timeout: 6000, maxTokens: 2048,
     chain: NORMAL_CHAIN,
   },
   deep: {
@@ -147,7 +154,7 @@ export default async function handler(req: Request, res: Response) {
     let systemContent;
     if (kbScope) {
       const [memory, nodeGraph] = await Promise.all([
-        withTimeout(recallUserContext(user.uid, message), 2500),
+        withTimeout(recallUserContext(user.uid, message), 6000),
         retrieveNodeGraphContext(user.uid, message, { kbId }).catch(() => null),
       ]);
       const blocks = [];
@@ -172,7 +179,7 @@ export default async function handler(req: Request, res: Response) {
         withTimeout(cogneeSearch, mode.timeout),
         retrieveContext(user.uid, message).catch(() => null),
         retrieveNodeGraphContext(user.uid, message).catch(() => null),
-        withTimeout(recallUserContext(user.uid, message), 2500),
+        withTimeout(recallUserContext(user.uid, message), 6000),
       ]);
 
       const ctxParts = [];

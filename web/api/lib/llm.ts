@@ -90,13 +90,41 @@ export type LLMReply = { content: string; reasoning: string };
  * usually return chain-of-thought in a separate `reasoning_content` field, but
  * some inline it as <think>…</think> in `content` instead. Normalize both into
  * one shape so the visible answer never contains leaked "let me think…" prose.
+ *
+ * Handles every leak shape seen in practice, not just a well-formed pair:
+ *   - complete <think>…</think> / <thinking>…</thinking> blocks (any number)
+ *   - a reasoning dump that opens the message and ends at a stray closing tag
+ *     (model started thinking with no opening tag)
+ *   - an unclosed opening tag (max_tokens truncated the reply mid-thought) —
+ *     everything from the tag onward is reasoning, so the visible answer is
+ *     empty and generateReply falls through to the next model in the chain.
  */
 function splitReasoning(content: string, reasoningContent?: string): LLMReply {
-  const inline = content.match(/<think>([\s\S]*?)<\/think>/);
-  if (inline) {
-    return { content: content.replace(inline[0], '').trim(), reasoning: inline[1].trim() };
+  let text = content || '';
+  const chunks: string[] = [];
+
+  // Complete <think>/<thinking>/<reasoning> blocks (case-insensitive, repeated).
+  text = text.replace(/<(think|thinking|reasoning)>([\s\S]*?)<\/\1>/gi, (_m, _tag, inner) => {
+    chunks.push(inner);
+    return '';
+  });
+  // Leading reasoning that ends at an unmatched closing tag.
+  text = text.replace(/^[\s\S]*?<\/(?:think|thinking|reasoning)>/i, (m) => {
+    chunks.push(m);
+    return '';
+  });
+  // Unclosed opening tag — reasoning ran to the end with no answer after it.
+  const open = text.search(/<(?:think|thinking|reasoning)>/i);
+  if (open !== -1) {
+    chunks.push(text.slice(open));
+    text = text.slice(0, open);
   }
-  return { content: content.trim(), reasoning: (reasoningContent || '').trim() };
+
+  const reasoning = [reasoningContent, ...chunks]
+    .map((s) => (s || '').replace(/<\/?(?:think|thinking|reasoning)>/gi, '').trim())
+    .filter(Boolean)
+    .join('\n');
+  return { content: text.trim(), reasoning };
 }
 
 async function callOpenAICompatible(

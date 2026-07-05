@@ -62,41 +62,21 @@ const fmtAgo = (iso?: string): string | null => {
 };
 
 /**
- * Representative analytics shown only while the real graph is still empty
- * (fresh account / pre-ingestion), so the dashboard demonstrates itself.
- * Modeled on the README's GraphRAG domain. The instant /api/stats returns real
- * entities, the live snapshot takes over and the "Sample data" badge disappears.
+ * Empty analytics for a fresh account (no graph yet). Every panel already has
+ * its own "connect a source" empty state, so we feed zeros/empties rather than
+ * fabricated sample data — a new user sees a genuinely clean dashboard, not
+ * placeholder numbers. The live snapshot takes over the instant /api/stats
+ * returns real entities.
  */
-const agoIso = (mins: number) => new Date(Date.now() - mins * 60000).toISOString();
-const dayIso = (back: number) => new Date(Date.now() - back * 86400000).toISOString().slice(0, 10);
-const SAMPLE_DAILY = [9, 14, 11, 6, 4, 22, 19, 27, 13, 31, 24, 8, 17, 12];
-const SAMPLE_STATS: Stats = {
-  total: 164,
-  documents: 17,
-  graph: { nodes: 198, edges: 437 },
-  byType: [
-    { key: 'Commit', n: 58 }, { key: 'WorkItem', n: 34 }, { key: 'CodeChange', n: 21 },
-    { key: 'Document', n: 17 }, { key: 'Person', n: 12 }, { key: 'Event', n: 9 },
-    { key: 'Sprint', n: 6 }, { key: 'Repository', n: 4 }, { key: 'Project', n: 3 },
-  ],
-  bySource: [
-    { key: 'github', n: 83 }, { key: 'jira', n: 49 }, { key: 'gdocs', n: 17 },
-    { key: 'gcal', n: 9 }, { key: 'gslides', n: 6 },
-  ],
-  byStatus: [
-    { key: 'Done', n: 14 }, { key: 'In Progress', n: 11 }, { key: 'To Do', n: 6 }, { key: 'In Review', n: 3 },
-  ],
-  timeline: SAMPLE_DAILY.map((n, i) => ({ date: dayIso(13 - i), n })),
-  recent: [
-    { id: 's1', type: 'CodeChange', source: 'github', title: '#142 · Fix token refresh race in auth middleware', status: 'Merged', repoRef: 'hyperspace/api', updatedAt: agoIso(28) },
-    { id: 's2', type: 'WorkItem', source: 'jira', title: 'HYP-218 · Graph self-correction: de-duplicate entity nodes', status: 'In Progress', projectRef: 'HYP', updatedAt: agoIso(124) },
-    { id: 's3', type: 'Commit', source: 'github', title: 'a3f9c2 · Add Reciprocal Rank Fusion to retrieval loop', repoRef: 'hyperspace/engine', updatedAt: agoIso(190) },
-    { id: 's4', type: 'Document', source: 'gdocs', title: 'Enterprise GraphRAG — Architecture v2', updatedAt: agoIso(320) },
-    { id: 's5', type: 'WorkItem', source: 'jira', title: 'HYP-203 · 30-min delta sync for GitHub audit logs', status: 'Done', projectRef: 'HYP', updatedAt: agoIso(505) },
-    { id: 's6', type: 'CodeChange', source: 'github', title: '#138 · Cognee upsert: OPEN → MERGED edge transition', status: 'Merged', repoRef: 'hyperspace/engine', updatedAt: agoIso(1490) },
-    { id: 's7', type: 'Event', source: 'gcal', title: 'Sprint 14 planning · retrieval quality', updatedAt: agoIso(1620) },
-    { id: 's8', type: 'Commit', source: 'github', title: '7b1e90 · Multi-hop traversal: follow Issue → PR → Commit', repoRef: 'hyperspace/engine', updatedAt: agoIso(2880) },
-  ],
+const EMPTY_STATS: Stats = {
+  total: 0,
+  documents: 0,
+  graph: { nodes: 0, edges: 0 },
+  byType: [],
+  bySource: [],
+  byStatus: [],
+  timeline: [],
+  recent: [],
 };
 
 interface DashboardProps {
@@ -229,7 +209,7 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
     (stats.timeline || []).some((d) => d.n > 0) ||
     (stats.recent || []).length > 0
   );
-  const view: Stats = isLive ? (stats as Stats) : SAMPLE_STATS;
+  const view: Stats = isLive ? (stats as Stats) : EMPTY_STATS;
 
   const timeline = view.timeline || [];
   const daily = timeline.map((d) => d.n);
@@ -322,8 +302,8 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
                 </span>
               )}
               {!isLive && (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#2C2A28] border border-[#3D3A37] text-[11px] font-medium text-[#9C968E]" title="Connect a source and run a sync to see your own analytics">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#8C8880]" /> Sample data
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#2C2A28] border border-[#3D3A37] text-[11px] font-medium text-[#9C968E]" title="Connect a source and run a sync to populate your analytics">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#8C8880]" /> No data yet
                 </span>
               )}
             </p>
@@ -504,7 +484,7 @@ export default function Dashboard({ user, idToken, connectors = {}, onNavigate, 
           </div>
         </div>
 
-        {/* Suggestions — only while showing sample data, to guide first use */}
+        {/* Suggestions — only on a fresh (empty) dashboard, to guide first use */}
         {!isLive && (
           <div className="flex flex-wrap items-center gap-2 mt-6">
             <span className="text-[12px] font-geist text-[#6B6762]">Try asking</span>

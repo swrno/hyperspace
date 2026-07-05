@@ -22,7 +22,13 @@ import * as google from './lib/google.js';
  * both authorize through one `google` grant.
  */
 
-const APP_BASE = (process.env.APP_BASE_URL || 'http://localhost:5173').replace(/\/$/, '');
+// Computed lazily (not a module-level constant): this file is imported before
+// server.ts's own dotenv.config() runs (ESM evaluates imports before the
+// importing module's top-level code), so reading process.env.APP_BASE_URL at
+// import time would always see it unset and freeze on the localhost fallback.
+function appBase() {
+  return (process.env.APP_BASE_URL || 'http://localhost:5173').replace(/\/$/, '');
+}
 
 type OAuthProvider = 'github' | 'jira' | 'google';
 
@@ -44,7 +50,7 @@ const OAUTH: Record<string, { authorizeUrl: (redirectUri: string, state: string)
 };
 
 function redirectUri(oauthProvider: string) {
-  return `${APP_BASE}/api/auth/${oauthProvider}/callback`;
+  return `${appBase()}/api/auth/${oauthProvider}/callback`;
 }
 
 /** GET /api/auth/:platform/authorize */
@@ -65,7 +71,7 @@ export async function authorizeHandler(req: Request, res: Response) {
     return res.redirect(url);
   } catch (e: any) {
     console.error('authorize error:', e.message);
-    return res.redirect(`${APP_BASE}/?connect_error=${encodeURIComponent(uiPlatform)}`);
+    return res.redirect(`${appBase()}/?connect_error=${encodeURIComponent(uiPlatform)}`);
   }
 }
 
@@ -97,7 +103,7 @@ export async function callbackHandler(req: Request, res: Response) {
   const op = req.params.provider; // github | jira | google
   const { code, state, error } = req.query;
   const back = (status: string, platform?: string) =>
-    res.redirect(`${APP_BASE}/?screen=integrations&${status}=${encodeURIComponent(platform || op)}`);
+    res.redirect(`${appBase()}/?screen=integrations&${status}=${encodeURIComponent(platform || op)}`);
 
   if (error) return back('connect_denied');
   if (!OAUTH[op] || !code || !state) return back('connect_error');

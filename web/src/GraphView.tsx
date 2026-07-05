@@ -280,10 +280,9 @@ interface GraphViewProps {
 
 export default function GraphView({ idToken, onAsk, kbId, embedded = false, refreshKey = 0 }: GraphViewProps) {
   const [view, setView] = useState<'2d' | '3d'>('2d');
-  // Default to our node graph (kb_nodes) — it's populated instantly on ingest,
-  // unlike the Cognee graph which extracts asynchronously. Toggle to 'cognee'
-  // for the LLM-extracted view.
-  const [mode, setMode] = useState<'structural' | 'cognee'>('structural');
+  // Cognee (LLM-extracted) graph is the only view — the raw node graph toggle
+  // was removed so the graph always shows the semantic Cognee extraction.
+  const [mode] = useState<'structural' | 'cognee'>('cognee');
   const [colorBy, setColorBy] = useState<'type' | 'community'>('type');
   const [data, setData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -375,16 +374,11 @@ export default function GraphView({ idToken, onAsk, kbId, embedded = false, refr
           <h1 className="text-[20px] font-geist font-semibold tracking-tight text-[#F4F0EB] leading-none">Knowledge Graph</h1>
           <p className="text-[12px] font-geist text-[#8C8880] mt-1.5 truncate">
             {data ? `${data.stats.nodes} nodes · ${data.stats.edges} edges` : (kbId ? 'Built from this base’s documents & sources' : 'Your unified, cross-tool graph')}
-            {mode === 'cognee' ? ' · Cognee-extracted' : ' · node graph'}
+            {' · Cognee-extracted'}
             {communityCount > 1 ? ` · ${communityCount} communities` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Cognee (LLM-extracted) / Nodes (our node graph) */}
-          <div className="flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
-            <button onClick={() => setMode('structural')} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${mode === 'structural' ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>Nodes</button>
-            <button onClick={() => setMode('cognee')} className={`px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${mode === 'cognee' ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}>Cognee</button>
-          </div>
           {/* 2D / 3D */}
           <div className="flex items-center bg-[#1E1D1C] border border-[#3D3A37] rounded-lg p-0.5">
             <button onClick={() => setView('2d')} className={`flex items-center gap-1 px-2.5 py-1.5 text-[11.5px] font-geist font-medium rounded-md transition-colors ${view === '2d' ? 'bg-[#33302E] text-[#F4F0EB]' : 'text-[#8C8880] hover:text-[#F4F0EB]'}`}><Network size={13} /> 2D</button>

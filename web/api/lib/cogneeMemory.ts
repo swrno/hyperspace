@@ -57,10 +57,22 @@ export async function rememberUserFact(userId: string, text: string): Promise<vo
 /**
  * Recall personalized context for a user relevant to `query`. Returns null on
  * any failure (including "nothing remembered for this user yet" — a 404).
+ *
+ * Uses searchType=RAG_COMPLETION with onlyContext=true: this returns the raw
+ * relevant remembered text WITHOUT running Cognee's own answer-synthesis LLM.
+ * That is both what we want (our chat model does the answering — we only need
+ * the facts as grounding) and far faster: ~1.5s vs 4–7s for the completion
+ * search types. The old GRAPH_COMPLETION path took 4–7s, so the caller's short
+ * race-timeout cut it off every time and memory silently never surfaced.
+ *
+ * A hard AbortController cap guarantees this can't hang the chat request even
+ * if Cognee has a cold start.
  */
 export async function recallUserContext(userId: string, query: string): Promise<string | null> {
   const url = baseUrl(), key = apiKey();
   if (!url || !key || !userId || !query?.trim()) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
   try {
     const res = await fetch(`${url}/api/v1/search`, {
       method: 'POST',
@@ -68,17 +80,27 @@ export async function recallUserContext(userId: string, query: string): Promise<
       body: JSON.stringify({
         query,
         datasets: [datasetForUser(userId)],
-        searchType: 'GRAPH_COMPLETION',
+        searchType: 'RAG_COMPLETION',
+        onlyContext: true,
         topK: 5,
       }),
+      signal: controller.signal,
     });
     if (!res.ok) return null; // 404 = no dataset yet for this user; anything else is best-effort
     const data: any = await res.json();
-    const results: string[] = data?.[0]?.search_result || [];
-    const text = results.filter(Boolean).join('\n');
-    return text.trim() || null;
+    // With onlyContext=true, search_result is a plain string; the completion
+    // search types return string[]. Handle both, and drop Cognee's internal
+    // node-dump markers if the graph path ever produces them.
+    const raw = data?.[0]?.search_result;
+    const text = Array.isArray(raw)
+      ? raw.filter((x) => typeof x === 'string').join('\n')
+      : (typeof raw === 'string' ? raw : '');
+    const cleaned = text.replace(/__node_content_(?:start|end)__/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    return cleaned || null;
   } catch (e: any) {
-    console.warn('Cognee recallUserContext failed:', e.message);
+    if (e.name !== 'AbortError') console.warn('Cognee recallUserContext failed:', e.message);
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }

@@ -1,6 +1,4 @@
-import {
-  ArrowRight,
-} from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Reveal from './Reveal';
 import { LogoMark } from './LogoMark';
 import {
@@ -21,13 +19,15 @@ const CONNECTORS = [
   { Icon: SalesforceColorIcon, label: 'Salesforce', note: 'Accounts and activity' },
 ];
 
+// x/y are % positions (icon nodes) AND the SVG viewBox coords (0–100), so the
+// edges + data packets line up with the icons exactly.
 const NODES = [
-  { x: '50%', y: '12%', label: 'GitHub' },
-  { x: '80%', y: '28%', label: 'Google Docs' },
-  { x: '80%', y: '68%', label: 'Jira' },
-  { x: '50%', y: '86%', label: 'Slack' },
-  { x: '20%', y: '68%', label: 'Slides' },
-  { x: '20%', y: '28%', label: 'Salesforce' },
+  { x: 50, y: 12 },
+  { x: 80, y: 28 },
+  { x: 80, y: 68 },
+  { x: 50, y: 86 },
+  { x: 20, y: 68 },
+  { x: 20, y: 28 },
 ] as const;
 
 export default function Connectors() {
@@ -57,40 +57,72 @@ export default function Connectors() {
                     className="absolute inset-0 h-full w-full"
                     preserveAspectRatio="none"
                   >
+                    {/* Static faint spokes so structure stays legible at rest. */}
+                    <g stroke="#E7DDD0" strokeWidth="0.6" strokeLinecap="round">
+                      {NODES.map((n, i) => (
+                        <line key={`b${i}`} x1="50" y1="50" x2={n.x} y2={n.y} />
+                      ))}
+                    </g>
+                    {/* Gold dashes crawling inward — data flowing to the core. */}
                     <g
+                      className="hs-flow-in"
                       stroke="#C9A66B"
-                      strokeOpacity="0.42"
+                      strokeOpacity="0.5"
                       strokeWidth="0.75"
                       strokeDasharray="1.6 3.8"
                       strokeLinecap="round"
                     >
-                      <line x1="50" y1="50" x2="50" y2="12" />
-                      <line x1="50" y1="50" x2="80" y2="28" />
-                      <line x1="50" y1="50" x2="80" y2="68" />
-                      <line x1="50" y1="50" x2="50" y2="86" />
-                      <line x1="50" y1="50" x2="20" y2="68" />
-                      <line x1="50" y1="50" x2="20" y2="28" />
+                      {NODES.map((n, i) => (
+                        <line key={`f${i}`} x1="50" y1="50" x2={n.x} y2={n.y} />
+                      ))}
                     </g>
+
+                    {/* Concentric core rings + radar pings. */}
                     <circle cx="50" cy="50" r="20.5" fill="none" stroke="#E7DDD0" strokeWidth="0.8" />
+                    <circle cx="50" cy="50" r="9" fill="none" stroke="#D2A85A" strokeOpacity="0.5" strokeWidth="0.6" className="hs-ping" />
+                    <circle cx="50" cy="50" r="9" fill="none" stroke="#D2A85A" strokeOpacity="0.5" strokeWidth="0.6" className="hs-ping" style={{ animationDelay: '1.7s' }} />
                     <circle cx="50" cy="50" r="4" fill="#D2A85A" fillOpacity="0.18" stroke="#D2A85A" strokeWidth="0.8" />
+
+                    {/* Data packets streaming from each source into the graph. */}
+                    {NODES.map((n, i) => (
+                      <circle key={`p${i}`} r="1.05" fill="#C9A66B">
+                        <animateMotion
+                          dur="2.6s"
+                          begin={`${i * 0.42}s`}
+                          repeatCount="indefinite"
+                          path={`M${n.x},${n.y} L50,50`}
+                          calcMode="linear"
+                        />
+                        <animate
+                          attributeName="opacity"
+                          dur="2.6s"
+                          begin={`${i * 0.42}s`}
+                          repeatCount="indefinite"
+                          values="0;1;1;0"
+                          keyTimes="0;0.15;0.8;1"
+                        />
+                      </circle>
+                    ))}
                   </svg>
 
                   <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full border border-cream-200 bg-white px-3 py-1 text-[11px] font-medium text-ink-500 shadow-sm sm:left-5 sm:top-5">
-                    <span className="h-2 w-2 rounded-full bg-gold" />
+                    <span className="h-2 w-2 rounded-full bg-gold hs-pulse" />
                     Connected memory map
                   </div>
 
                   {NODES.map((node, index) => {
                     const { Icon, label } = CONNECTORS[index];
-
                     return (
                       <div
                         key={label}
                         className="absolute z-10"
-                        style={{ left: node.x, top: node.y, transform: 'translate(-50%, -50%)' }}
+                        style={{ left: `${node.x}%`, top: `${node.y}%`, transform: 'translate(-50%, -50%)' }}
                       >
-                        <div className="relative flex flex-col items-center gap-2 text-center">
-                          <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cream-300 bg-white shadow-sm sm:h-14 sm:w-14">
+                        <div
+                          className="hs-float group/node relative flex flex-col items-center gap-2 text-center"
+                          style={{ animationDelay: `${index * 0.6}s` }}
+                        >
+                          <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cream-300 bg-white shadow-sm transition-transform duration-300 group-hover/node:scale-110 sm:h-14 sm:w-14">
                             <Icon className="h-4.5 w-4.5 sm:h-5.5 sm:w-5.5" />
                           </span>
                           <span className="rounded-full border border-cream-200 bg-white/95 px-2.5 py-1 text-[11px] font-medium text-ink-500 shadow-sm backdrop-blur">
@@ -101,8 +133,12 @@ export default function Connectors() {
                     );
                   })}
 
+                  {/* Breathing glow behind the core. */}
+                  <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(201,166,107,0.28),transparent_70%)] hs-breathe" />
+
                   <div className="absolute left-1/2 top-1/2 z-20 flex w-[190px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-3 rounded-[1.75rem] border border-cream-200 bg-cream-50 px-5 py-6 text-center shadow-card sm:w-[230px] sm:gap-4 sm:px-6 sm:py-8">
-                    <span className="flex h-18 w-18 items-center justify-center rounded-full border border-cream-300 bg-white shadow-sm sm:h-20 sm:w-20">
+                    <span className="relative flex h-18 w-18 items-center justify-center rounded-full border border-cream-300 bg-white shadow-sm sm:h-20 sm:w-20">
+                      <span className="absolute inset-0 rounded-full border border-gold/30 hs-ping" />
                       <LogoMark className="h-8 w-8 text-gold sm:h-9 sm:w-9" />
                     </span>
                     <div>
@@ -118,14 +154,17 @@ export default function Connectors() {
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
                   {CONNECTORS.map(({ Icon, label, note }, index) => (
-                    <div key={label} className="card flex items-start gap-4 p-4 sm:p-5">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cream-300 bg-white shadow-sm sm:h-12 sm:w-12">
+                    <div
+                      key={label}
+                      className="group card flex items-start gap-4 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-gold/40 hover:shadow-lift sm:p-5"
+                    >
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-cream-300 bg-white shadow-sm transition-transform duration-300 group-hover:scale-105 sm:h-12 sm:w-12">
                         <Icon className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-3">
                           <h3 className="font-display text-[15px] font-medium text-ink">{label}</h3>
-                          <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-400">
+                          <span className="font-mono text-[11px] font-medium tracking-[0.08em] text-ink-400 transition-colors group-hover:text-gold">
                             0{index + 1}
                           </span>
                         </div>

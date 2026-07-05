@@ -137,9 +137,12 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
   const [savingGithubPat, setSavingGithubPat] = useState(false);
   const [needsGithubUsername, setNeedsGithubUsername] = useState(false);
 
-  // Ingestion progress polling — keyed by kbId
+  // Ingestion progress polling — keyed by `${kbId}::${platform}` so each
+  // connector card animates only for its own ingest (a shared kbId key made
+  // every attached connector show the spinner at once).
   const [ingestProgress, setIngestProgress] = useState<Record<string, { phase: string; pct: number; done: boolean; error?: string }>>({});
   const ingestPollRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  const progressKey = (kbId: string, platform: string) => `${kbId}::${platform}`;
 
   // Sync banner shown after attaching a GitHub source
   const [syncBanner, setSyncBanner] = useState<{ visible: boolean; repoName: string }>({ visible: false, repoName: '' });
@@ -268,23 +271,24 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
 
   // ── Sources: attach a globally-authorized connector's items to this KB, or
   //    detach it. Both rebuild the KB graph (graphRefresh) on their own. ──────
-  const startIngestPolling = (kbId: string) => {
-    // Clear any existing interval for this KB first
-    if (ingestPollRef.current[kbId]) clearInterval(ingestPollRef.current[kbId]);
+  const startIngestPolling = (kbId: string, platform: string) => {
+    const key = progressKey(kbId, platform);
+    // Clear any existing interval for this connector first
+    if (ingestPollRef.current[key]) clearInterval(ingestPollRef.current[key]);
     const poll = setInterval(async () => {
       try {
-        const res = await fetch(`/api/kb?action=ingest-progress&kbId=${kbId}`, { headers: authHeaders() });
+        const res = await fetch(`/api/kb?action=ingest-progress&kbId=${kbId}&platform=${platform}`, { headers: authHeaders() });
         if (!res.ok) return;
         const data = await res.json();
         if (!data.found) return;
-        setIngestProgress(prev => ({ ...prev, [kbId]: { phase: data.phase, pct: data.pct, done: data.done, error: data.error } }));
+        setIngestProgress(prev => ({ ...prev, [key]: { phase: data.phase, pct: data.pct, done: data.done, error: data.error } }));
         if (data.done) {
           clearInterval(poll);
-          delete ingestPollRef.current[kbId];
+          delete ingestPollRef.current[key];
         }
       } catch { /* non-fatal */ }
     }, 2000);
-    ingestPollRef.current[kbId] = poll;
+    ingestPollRef.current[key] = poll;
   };
 
   const updateSourceItems = async (kbId: string, platform: string, items: KbSource['items']) => {
@@ -298,8 +302,8 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
         setKbs(kbs.map((k) =>
           k.id === kbId ? { ...k, sources: (k.sources || []).filter((s) => s.platform !== platform), updatedAt: new Date().toISOString() } : k
         ));
-        // Clear any lingering progress for this KB
-        setIngestProgress(prev => { const n = { ...prev }; delete n[kbId]; return n; });
+        // Clear any lingering progress for this connector
+        setIngestProgress(prev => { const n = { ...prev }; delete n[progressKey(kbId, platform)]; return n; });
       } else {
         const res = await fetch('/api/kb', {
           method: 'POST',
@@ -314,8 +318,8 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
         // Start polling ingest progress for any live connector (GitHub deep
         // ingest, or the Cognee + node-graph build for gdocs/gslides/jira/gcal).
         if (LIVE_ITEM_PLATFORMS.includes(platform) && items.length > 0) {
-          setIngestProgress(prev => ({ ...prev, [kbId]: { phase: 'Starting…', pct: 2, done: false } }));
-          startIngestPolling(kbId);
+          setIngestProgress(prev => ({ ...prev, [progressKey(kbId, platform)]: { phase: 'Starting…', pct: 2, done: false } }));
+          startIngestPolling(kbId, platform);
         }
       }
       setGraphRefresh((x) => x + 1);
@@ -641,7 +645,7 @@ export default function KnowledgeBases({ idToken, onAsk, connectors = {}, platfo
                     }
                   };
                   
-                  const kbIngest = active ? ingestProgress[active.id] : undefined;
+                  const kbIngest = active ? ingestProgress[progressKey(active.id, id)] : undefined;
                   const showProgress = !isExpanded && LIVE_ITEM_PLATFORMS.includes(id) && !!kbIngest && attachedItems.length > 0;
 
                   return (

@@ -4,14 +4,17 @@
  * docs are a VitePress site in /docs. Override per environment via
  * NEXT_PUBLIC_APP_URL / NEXT_PUBLIC_DOCS_URL.
  */
-export const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:5173';
+// Empty origin = same-origin links (production: Caddy serves the app under
+// /login, /app, ... and the docs under /docs on the same host).
+const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL ?? '';
 
-export const DOCS_URL =
-  process.env.NEXT_PUBLIC_DOCS_URL ?? 'http://localhost:5174';
+export const APP_URL = APP_ORIGIN || '/app';
 
-export const LOGIN_URL = `${APP_URL}/login`;
-export const SIGNUP_URL = `${APP_URL}/login`;
+export const DOCS_URL = process.env.NEXT_PUBLIC_DOCS_URL ?? '/docs';
+
+export const LOGIN_URL =
+  process.env.NEXT_PUBLIC_LOGIN_URL ?? `${APP_ORIGIN}/login`;
+export const SIGNUP_URL = LOGIN_URL;
 
 export const GITHUB_URL = 'https://github.com/swrno/hyperspace';
 

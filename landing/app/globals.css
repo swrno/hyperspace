@@ -186,6 +186,48 @@
   }
 }
 
+/* ── Living-graph motifs (Stats / Connectors / ValueProps) ───────────────── */
+
+/* Gentle vertical bob for orbiting source nodes (stagger via inline delay). */
+@keyframes hs-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.hs-float { animation: hs-float 5.5s ease-in-out infinite; }
+
+/* Breathing glow behind the graph core. */
+@keyframes hs-breathe {
+  0%, 100% { opacity: 0.30; transform: scale(1); }
+  50% { opacity: 0.62; transform: scale(1.08); }
+}
+.hs-breathe { animation: hs-breathe 3.8s ease-in-out infinite; transform-origin: center; }
+
+/* Radar ping emanating from the core. */
+@keyframes hs-ping {
+  0% { transform: scale(0.55); opacity: 0.55; }
+  80%, 100% { transform: scale(1.7); opacity: 0; }
+}
+.hs-ping { animation: hs-ping 3.4s ease-out infinite; transform-origin: center; }
+
+/* Slow orbital rotation for satellite glyphs. */
+@keyframes hs-spin-slow { to { transform: rotate(360deg); } }
+.hs-spin-slow { animation: hs-spin-slow 26s linear infinite; transform-origin: center; }
+
+/* Dashes crawling toward the graph core (edges carrying data inward). */
+@keyframes hs-flow-in { to { stroke-dashoffset: 24; } }
+.hs-flow-in { animation: hs-flow-in 1.5s linear infinite; }
+
+/* Soft accent pulse (latency spark, live dots). */
+@keyframes hs-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.hs-pulse { animation: hs-pulse 1.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hs-float, .hs-breathe, .hs-ping, .hs-spin-slow, .hs-flow-in, .hs-pulse { animation: none; }
+}
+
 /* Scroll-reveal (driven by components/Reveal.tsx) */
 .reveal {
   opacity: 0;

@@ -198,18 +198,30 @@ const OAUTH_PLATFORMS = ['github', 'jira', 'gdocs', 'gslides', 'gsheets', 'gcal'
 // Platforms not yet implemented — show Coming Soon
 const COMING_SOON_PLATFORMS = ['jira', 'gsheets', 'slack', 'salesforce'];
 
+// Safety net mirroring the backend splitReasoning(): the server already strips
+// chain-of-thought, but if any leaks through (unclosed <think>, <thinking>
+// variants, a stray closing tag) keep it out of the rendered answer.
 const parseMessageWithThink = (content: string) => {
-  const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/);
-  if (thinkMatch) {
-    const reasoning = thinkMatch[1].trim();
-    const restContent = content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
-    return { reasoning, content: restContent };
+  let text = content || '';
+  const chunks: string[] = [];
+  text = text.replace(/<(think|thinking|reasoning)>([\s\S]*?)<\/\1>/gi, (_m, _tag, inner) => {
+    chunks.push(inner);
+    return '';
+  });
+  text = text.replace(/^[\s\S]*?<\/(?:think|thinking|reasoning)>/i, (m) => {
+    chunks.push(m);
+    return '';
+  });
+  const open = text.search(/<(?:think|thinking|reasoning)>/i);
+  if (open !== -1) {
+    chunks.push(text.slice(open));
+    text = text.slice(0, open);
   }
-  if (content.includes('<think>')) {
-    const reasoning = content.split('<think>')[1].trim();
-    return { reasoning, content: '' };
-  }
-  return { reasoning: null, content };
+  const reasoning = chunks
+    .map((s) => s.replace(/<\/?(?:think|thinking|reasoning)>/gi, '').trim())
+    .filter(Boolean)
+    .join('\n') || null;
+  return { reasoning, content: text.trim() };
 };
 
 /* Flatten react-markdown children (strings, nested elements) into raw code text. */
