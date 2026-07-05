@@ -15,7 +15,7 @@ import {
   Mic, Image as ImageIcon, Search, Pencil, RefreshCw, Shield, Users, LogOut, Key,
   LayoutDashboard, Database, Blocks, MessagesSquare, ArrowRight, ArrowUpRight,
   LayoutGrid, AppWindow, Link2, Link2Off, SlidersHorizontal, Cpu, Unlink,
-  Activity, Clock, Code, PlaySquare, Loader2, Telescope, ArrowUp, Gauge, History, type LucideIcon
+  Activity, Clock, Code, PlaySquare, Loader2, Telescope, ArrowUp, History, type LucideIcon
 } from 'lucide-react';
 import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -306,11 +306,10 @@ function ChatMarkdown({ children }: { children: string }) {
 }
 
 /** Retrieval-depth modes shown in the playground composer. */
-type SearchMode = 'normal' | 'hyper' | 'deep';
+type SearchMode = 'normal' | 'deep';
 const SEARCH_MODES: { id: SearchMode; label: string; desc: string; Icon: LucideIcon }[] = [
-  { id: 'normal', label: 'Normal Search', desc: 'Fast vector lookup over the top matches', Icon: Search },
-  { id: 'hyper',  label: 'Hyper Search',  desc: 'Hybrid vector + graph, fused with RRF',    Icon: Gauge },
-  { id: 'deep',   label: 'Deep Search',   desc: 'Multi-hop graph traversal for hard questions', Icon: Telescope },
+  { id: 'normal', label: 'Normal Search', desc: 'Hybrid vector + graph search, fused with RRF', Icon: Search },
+  { id: 'deep',   label: 'Deep Search',   desc: 'Multi-hop graph traversal + hybrid search for hard questions', Icon: Telescope },
 ];
 
 const groupChatsByDate = (chats: Chat[]) => {
@@ -686,7 +685,6 @@ const SettingsModal = ({ isOpen, onClose, settings, onSave, onClearAll, connecto
                   >
                     <option value="normal">Normal retrieval — fast</option>
                     <option value="deep">Deep retrieval — multi-hop</option>
-                    <option value="hyper">Hyper retrieval — deepest</option>
                   </select>
                   <Zap size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#9C968E]" />
                   <ChevronDown size={15} className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#6B6762]" />
@@ -2975,10 +2973,6 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
       normal: [
         { id: 'accounts/fireworks/models/glm-5p2',    name: 'GLM 5.2',       desc: 'Most efficient for everyday tasks', badge: null },
         { id: 'accounts/fireworks/models/gpt-oss-120b', name: 'GPT OSS 120B', desc: 'Fast general-purpose chat',         badge: null },
-      ],
-      hyper: [
-        { id: 'accounts/fireworks/models/kimi-k2p6',      name: 'Kimi K2.6',       desc: 'Frontier reasoning for Deep Hyper Search', badge: null },
-        { id: 'accounts/fireworks/models/deepseek-v4-pro', name: 'DeepSeek V4 Pro', desc: 'Frontier reasoning for Deep Hyper Search', badge: null },
       ],
       deep: [
         { id: 'accounts/fireworks/models/kimi-k2p6',      name: 'Kimi K2.6',       desc: 'Frontier reasoning for Deep Hyper Search', badge: null },

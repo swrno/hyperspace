@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
 import { verifyToken, checkRateLimit, logMessageUsage } from './auth.js';
-import { graphSearch, multiHopSearch } from './cognee.js';
+import { hybridSearch, multiHopSearch } from './cognee.js';
 import { recallUserContext, rememberUserFact } from './lib/cogneeMemory.js';
 import { retrieveContext, retrieveNodeGraphContext } from './retrieval.js';
 import { routeQuery } from './lib/router.js';
@@ -40,7 +40,7 @@ function maybeRememberPSI(userId, message) {
  * Chat endpoint.
  *
  * Request : POST { message, history: [{role, content}], mode }  (Bearer idToken)
- *           mode: 'normal' | 'deep' | 'hyper' — selects retrieval depth + model chain.
+ *           mode: 'normal' | 'deep' — selects retrieval depth + model chain.
  * Response: { response: string, title?: string }
  *
  * Routes across a Fireworks model chain with automatic fallback so a single
@@ -60,36 +60,33 @@ Formatting (important):
 - Use ## / ### headings only when the answer has multiple real sections. Use tables for comparisons. Bold key terms sparingly.`;
 
 // LLM routing (Fireworks only, multi-key rotation) lives in lib/llm.ts.
-// Normal mode uses the fast general-purpose chain (NORMAL_CHAIN); deep/hyper
-// use the Deep Hyper Search synthesis chain (DEEP_CHAIN) fed by multiHopSearch's
-// planner + reranker retrieval pipeline instead of a flat graph search.
+// Normal mode uses the fast general-purpose chain (NORMAL_CHAIN) fed by
+// hybridSearch (graph + vector, reranked); deep mode uses the Deep Hyper
+// Search synthesis chain (DEEP_CHAIN) fed by multiHopSearch's planner +
+// reranker pipeline PLUS a direct hybridSearch pass, merged for broader
+// coverage than multi-hop alone.
 
 // Per-mode answer depth instruction (drives how long/structured the reply is).
 export const MODE_STYLE = {
   normal: 'Concise and direct — answer in 1–4 sentences or a short bulleted list. Don\'t pad.',
-  deep: 'Thorough. Give the answer, then explain the reasoning and the relevant cross-source connections. A few short paragraphs or a structured list. Use ## sections if there are multiple parts.',
-  hyper: 'Comprehensive and analytical. Produce an in-depth, well-structured report: a direct answer, then detailed analysis using ## sections and bullet points — cover cross-source connections (repos ↔ issues ↔ PRs ↔ docs ↔ people), status, implications, and any notable patterns or risks. Be genuinely thorough; do NOT be terse. Aim for several substantive sections.',
+  deep: 'Comprehensive and analytical. Produce an in-depth, well-structured report: a direct answer, then detailed analysis using ## sections and bullet points — cover cross-source connections (repos ↔ issues ↔ PRs ↔ docs ↔ people), status, implications, and any notable patterns or risks. Be genuinely thorough; do NOT be terse. Aim for several substantive sections.',
 };
 
 /**
  * Retrieval modes — the only thing the frontend knows about. Each maps a
  * user-facing depth to (a) an LLM fallback chain of the best model per provider,
- * (b) the Cognee graph search type, (c) retrieval breadth, and (d) answer length.
+ * (b) retrieval breadth, and (c) answer length.
  * Provider names and model ids are never exposed to the client.
  */
 // Fireworks (primary, multi-key) leads every chain; Groq is the fallback and
 // Gemini the last resort. Model ids are centralised in lib/llm.ts (MODELS).
-const MODES: Record<string, { searchType: string; topK: number; timeout: number; maxTokens: number; chain: ProviderModel[]; deep?: boolean }> = {
+const MODES: Record<string, { topK: number; timeout: number; maxTokens: number; chain: ProviderModel[]; deep?: boolean }> = {
   normal: {
-    searchType: 'GRAPH_COMPLETION', topK: 8, timeout: 6000, maxTokens: 1024,
+    topK: 8, timeout: 6000, maxTokens: 1024,
     chain: NORMAL_CHAIN,
   },
   deep: {
-    searchType: 'GRAPH_COMPLETION_DECOMPOSITION', topK: 12, timeout: 15000, maxTokens: 2800,
-    chain: DEEP_CHAIN, deep: true,
-  },
-  hyper: {
-    searchType: 'GRAPH_COMPLETION_COT', topK: 16, timeout: 20000, maxTokens: 4096,
+    topK: 16, timeout: 20000, maxTokens: 4096,
     chain: DEEP_CHAIN, deep: true,
   },
 };
@@ -130,7 +127,7 @@ export default async function handler(req: Request, res: Response) {
     const { message, history = [], mode: modeParam, model, kbId } = req.body || {};
     if (!message || !message.trim()) return res.status(400).json({ error: 'Message is required' });
 
-    // Retrieval depth comes from the selected mode (normal / deep / hyper).
+    // Retrieval depth comes from the selected mode (normal / deep).
     // `mode` is the current field name; `model` is kept as a fallback for older clients.
     const modeId = resolveMode(modeParam ?? model);
     const mode = MODES[modeId];
@@ -160,14 +157,19 @@ export default async function handler(req: Request, res: Response) {
       systemContent = `${depthPrompt}\n\n# Scope: knowledge base "${kbScope.name}"\nThe user is asking specifically about this knowledge base. Answer using ONLY the content below. Cite document names and source items. If the answer isn't present, say it isn't in this knowledge base and suggest what to add.\n\n${blocks.join('\n\n')}`;
     } else {
       // Otherwise ground from three sources in parallel (README §6 hybrid retrieval):
-      //  1. Graph search — flat single-shot for normal mode; deep/hyper instead run
-      //     multiHopSearch (planner decomposition + graph/vector merge + rerank).
+      //  1. Graph/vector search — hybridSearch (graph + vector, reranked) for
+      //     normal mode; deep mode additionally runs multiHopSearch (planner
+      //     decomposition + hybridSearch per sub-question) and merges both.
       //  2. Local Mongo graph (kb_entities) — deterministic, instant, user-scoped.
       //  3. Personal memory (PSI) — what hypr knows about this user.
       const route = routeQuery(message);
       const graphOpts = { userId: user.uid, kbId: undefined, topK: mode.topK };
+      const cogneeSearch = mode.deep
+        ? Promise.all([multiHopSearch(message, graphOpts), hybridSearch(message, graphOpts)])
+            .then(([a, b]) => [a, b].filter(Boolean).join('\n\n') || null)
+        : hybridSearch(message, graphOpts);
       const [cogneeAnswer, localContext, nodeGraph, memory] = await Promise.all([
-        withTimeout(mode.deep ? multiHopSearch(message, graphOpts) : graphSearch(message, graphOpts), mode.timeout),
+        withTimeout(cogneeSearch, mode.timeout),
         retrieveContext(user.uid, message).catch(() => null),
         retrieveNodeGraphContext(user.uid, message).catch(() => null),
         withTimeout(recallUserContext(user.uid, message), 2500),

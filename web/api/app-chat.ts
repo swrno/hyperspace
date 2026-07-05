@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { getDb } from './mongodb.js';
-import { vectorSearch, hybridSearch, multiHopSearch } from './cognee.js';
+import { hybridSearch, multiHopSearch } from './cognee.js';
 import { recallUserContext, rememberUserFact } from './lib/cogneeMemory.js';
 import { verifyToken } from './auth.js';
 import { retrieveNodeGraphContext } from './retrieval.js';
@@ -13,9 +13,9 @@ export default async function appChatHandler(req: Request, res: Response) {
   try {
     const { appId, message, systemPrompt, model, searchMode = 'normal', temperature, maxTokens, topP, history = [], linkedKbIds = [], sessionId = 'default', personalisation } = req.body;
     // Personalization is independent of searchMode's KB-retrieval depth —
-    // hyper/deep always personalize; normal mode only does if the caller
+    // deep mode always personalizes; normal mode only does if the caller
     // (the Playground UI) explicitly opts in, mirroring hypr-sdk's model.
-    const usePersonalization = searchMode !== 'normal' || personalisation === true;
+    const usePersonalization = searchMode === 'deep' || personalisation === true;
 
     if (!appId || !message) {
       return res.status(400).json({ error: 'appId and message are required' });
@@ -97,15 +97,18 @@ export default async function appChatHandler(req: Request, res: Response) {
       // ── Graph/vector retrieval, depth chosen by searchMode ──────────────
       // Run in parallel with (or after) MongoDB. If this returns results,
       // prepend them — they are semantically richer than keyword matching.
-      //   normal — fast vector lookup only
-      //   hyper  — hybrid graph + vector, reranked
-      //   deep   — multi-hop: planner decomposes the query, each sub-question
-      //            runs the hybrid+rerank pipeline
+      //   normal — hybrid graph + vector, reranked
+      //   deep   — multi-hop (planner decomposes the query, each sub-question
+      //            runs the hybrid+rerank pipeline) PLUS a direct hybrid pass,
+      //            merged — broader coverage than multi-hop alone
       try {
         const fetchPromises = linkedKbIds.map((kbId: string) => {
-          if (searchMode === 'deep') return multiHopSearch(message, { userId, kbId, topK: 10 });
-          if (searchMode === 'hyper') return hybridSearch(message, { userId, kbId, topK: 10 });
-          return vectorSearch(message, { userId, kbId, topK: 10 }).then((chunks) => chunks.join('\n\n') || null);
+          const opts = { userId, kbId, topK: 10 };
+          if (searchMode === 'deep') {
+            return Promise.all([multiHopSearch(message, opts), hybridSearch(message, opts)])
+              .then(([a, b]) => [a, b].filter(Boolean).join('\n\n') || null);
+          }
+          return hybridSearch(message, opts);
         });
         const results = await Promise.all(fetchPromises);
         const parts = results.filter((r): r is string => !!r);
