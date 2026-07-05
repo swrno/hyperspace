@@ -3,7 +3,8 @@ import type { QueryOptions, QueryResult, IngestOptions, IngestResult } from './t
 
 /**
  * Fast, single-shot retrieval — one KB lookup + an LLM answer. No cross-source
- * planning, no personalization memory. Cheapest and lowest-latency option.
+ * planning. Personalization memory is off by default; set `personalisation:
+ * true` in the config to recall + update it without paying for multi-hop.
  */
 export class SimpleRetriver extends HyperBase {
   async query(message: string, opts: QueryOptions = {}): Promise<string> {
@@ -11,6 +12,7 @@ export class SimpleRetriver extends HyperBase {
       message,
       sessionId: opts.sessionId,
       mode: 'simple',
+      personalisation: this.config.personalisation,
     });
     return result.response;
   }
@@ -27,6 +29,7 @@ export class HyperRetriever extends HyperBase {
       message,
       sessionId: opts.sessionId,
       mode: 'hyper',
+      personalisation: this.config.personalisation,
     });
     return result.response;
   }

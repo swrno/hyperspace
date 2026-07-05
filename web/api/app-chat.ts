@@ -11,7 +11,11 @@ export default async function appChatHandler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const { appId, message, systemPrompt, model, searchMode = 'normal', temperature, maxTokens, topP, history = [], linkedKbIds = [], sessionId = 'default' } = req.body;
+    const { appId, message, systemPrompt, model, searchMode = 'normal', temperature, maxTokens, topP, history = [], linkedKbIds = [], sessionId = 'default', personalisation } = req.body;
+    // Personalization is independent of searchMode's KB-retrieval depth —
+    // hyper/deep always personalize; normal mode only does if the caller
+    // (the Playground UI) explicitly opts in, mirroring hypr-sdk's model.
+    const usePersonalization = searchMode !== 'normal' || personalisation === true;
 
     if (!appId || !message) {
       return res.status(400).json({ error: 'appId and message are required' });
@@ -180,10 +184,10 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
     // scoped to their own dataset. Separate from the Knowledge Base retrieval
     // above (Neo4j): this is about the person, not the app's documents. Timed
     // out short so a slow Cognee Cloud round-trip never stalls the reply.
-    const memory = await Promise.race([
+    const memory = usePersonalization ? await Promise.race([
       recallUserContext(endUserId, message).catch(() => null),
       new Promise<null>((r) => setTimeout(() => r(null), 3000)),
-    ]);
+    ]) : null;
     if (memory) {
       finalSystemPrompt += `\n\n# Facts remembered about this user\nThese are facts about the USER (not about you, the assistant), recalled from their past conversations — quoted verbatim, phrasing may be first- or second-person from the original context:\n"""\n${memory}\n"""`;
     }
@@ -232,7 +236,7 @@ When using the Swarnendu Data knowledge base, you should cite and reference the 
     // never block the response on a storage write.
     appendConversationTurn(appId, endUserId, sessionId, [userMsgObj, aiMsgObj]).catch(() => {});
     // Extract durable facts from this turn for future personalization.
-    rememberUserFact(endUserId, `User: ${message}\nAssistant: ${replyContent}`).catch(() => {});
+    if (usePersonalization) rememberUserFact(endUserId, `User: ${message}\nAssistant: ${replyContent}`).catch(() => {});
 
     return res.status(200).json({
       userMessage: userMsgObj,

@@ -11,9 +11,11 @@ npm install hypr-sdk
 
 ## Get your credentials
 
-Every field below comes from an app's management page in hypr, under **API
-Credentials** (`appId`, `apiKey`, `clientId`) — `userId` is not from hypr at
-all, it's your own system's id for the person you're talking to.
+`appId` and `clientId` come from the app's management page in hypr, under
+**API Credentials**. `apiKey` is different — it's not per-app, it's created
+under your hypr account's **API Keys** section, and any of your keys
+authenticates any app you own. `userId` is not from hypr at all, it's your
+own system's id for the person you're talking to.
 
 ```ts
 import { HyperClient } from 'hypr-sdk';
@@ -41,13 +43,23 @@ const personalized = await hyperRetriver.query('What did I ask about last time?'
 | | `simpleRetriver` | `hyperRetriever` |
 |---|---|---|
 | Knowledge Base search | single-shot vector lookup | multi-hop planner + rerank |
-| Personalization memory | no | yes, scoped to `userId` |
+| Personalization memory | opt-in (see below) | always on, scoped to `userId` |
 | Latency | low | higher |
 | Use for | FAQ-style lookups | contextual, ongoing conversations |
 
-Personalization memory builds automatically — every `hyperRetriever.query()`
-call both recalls and updates that end-user's memory. There's no separate
+Personalization memory builds automatically — every query that personalizes
+both recalls and updates that end-user's memory. There's no separate
 "remember this" call for conversational facts.
+
+Memory is independent of which retriever you use. `hyperRetriever` always
+personalizes; `simpleRetriver` only does if you set `personalisation: true`
+in the config — useful when you want fast single-shot KB search *and*
+memory, without paying for multi-hop planning:
+
+```ts
+const simpleRetriver = new HyperClient.simpleRetriver({ ...config, personalisation: true });
+const answer = await simpleRetriver.query('What plans do we offer?');
+```
 
 ## Ingest content
 
@@ -64,9 +76,10 @@ targets the app's shared documents, not any one user's personal memory.
 
 ## Isolation
 
-`apiKey` + `appId` + `clientId` identify and authorize *your app*. `userId`
-scopes retrieval and memory to *one end-user of that app* — hypr partitions
-storage per user, so one user's data can never leak into another's response,
-even within the same app.
+`apiKey` + `appId` + `clientId` together identify and authorize *your app*
+(`apiKey` proves it's you, `appId`/`clientId` say which app). `userId` scopes
+retrieval and memory to *one end-user of that app* — hypr partitions storage
+per user, so one user's data can never leak into another's response, even
+within the same app.
 
 Next: [API reference](/sdk/api-reference) for the full config and return types.

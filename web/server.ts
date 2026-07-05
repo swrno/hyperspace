@@ -20,6 +20,7 @@ import appChatHandler from './api/app-chat.js';
 import generatePromptHandler from './api/generate-prompt.js';
 import { sdkQueryHandler, sdkIngestHandler } from './api/sdk.js';
 import appUsersHandler from './api/app-users.js';
+import apiKeysHandler from './api/api-keys.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -75,6 +76,11 @@ app.post('/api/sdk/ingest', async (req, res) => {
 // Owner-facing: end-users of an app + their conversation history
 app.get('/api/app-users', async (req, res) => {
   await appUsersHandler(req, res);
+});
+
+// User-scoped hypr API keys (create/list/revoke) — used to authenticate hypr-sdk calls
+app.all('/api/api-keys', async (req, res) => {
+  await apiKeysHandler(req, res);
 });
 
 // Knowledge Source Connectors Endpoint

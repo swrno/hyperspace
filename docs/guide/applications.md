@@ -3,18 +3,24 @@
 An **Application** is a named, configured chatbot an owner builds inside
 hypr: a system prompt, a model, temperature/maxTokens, and zero or more
 linked Knowledge Bases. It's created via `POST /api/apps` (`web/api/apps.ts`),
-which generates three credentials on the app document:
+which generates two identifiers on the app document:
 
 | Field | Format | Purpose |
 |---|---|---|
 | `appId` | `app_<hex>` | Identifies which app a request is for. |
-| `apiKey` | `sk_live_<hex>` | App-level secret. |
-| `clientId` | `client_<hex>` | Public identifier paired with `apiKey`. |
+| `clientId` | the app owner's Firebase `uid` | Public identifier paired with `apiKey`. |
 
-All three, together, authenticate every `hypr-sdk` call (see
-[hypr-sdk: Getting started](/sdk/getting-started)) — this is a *different*
-auth path from the owner's own Firebase login used everywhere else
-(`web/api/auth.ts`, `verifyToken()`).
+`apiKey` (`sk_live_<hex>`) is *not* generated per app — it's created and
+managed separately, under the owner's account, via **API Keys**
+(`POST /api/api-keys`, `web/api/api-keys.ts`). A user can hold multiple keys,
+and any one of them authenticates `hypr-sdk` calls for any app that user
+owns; `web/api/lib/sdkAuth.ts` resolves `apiKey` → owning user, then checks
+that user owns `appId`/`clientId`.
+
+Together, `apiKey` + `appId` + `clientId` authenticate every `hypr-sdk` call
+(see [hypr-sdk: Getting started](/sdk/getting-started)) — this is a
+*different* auth path from the owner's own Firebase login used everywhere
+else (`web/api/auth.ts`, `verifyToken()`).
 
 ## Two ways to talk to an app
 

@@ -4,15 +4,17 @@
 
 ```ts
 interface HyperClientConfig {
-  apiKey: string;    // App secret (sk_live_...), from the app's API Credentials
-  appId: string;     // Which app to talk to (app_...)
-  clientId: string;  // Public client id paired with apiKey (client_...)
-  userId: string;    // Your own end-user's id — scopes retrieval + memory
-  baseUrl?: string;  // Override the API base URL (defaults to production)
+  apiKey: string;           // Account secret (sk_live_...), created under your user's API Keys
+  appId: string;            // Which app to talk to (app_...)
+  clientId: string;         // Public client id paired with apiKey (the app owner's uid)
+  userId: string;           // Your own end-user's id — scopes retrieval + memory
+  personalisation?: boolean; // Recall + update memory even with simpleRetriver (default false)
+  baseUrl?: string;         // Override the API base URL (defaults to production)
 }
 ```
 
-Every field except `baseUrl` is required — the constructor throws if any are missing.
+Every field except `personalisation` and `baseUrl` is required — the
+constructor throws if any are missing.
 
 ## `HyperClient.simpleRetriver`
 
@@ -27,7 +29,9 @@ query(message: string, opts?: { sessionId?: string }): Promise<string>
 ```
 
 Calls `POST /api/sdk/query` with `mode: "simple"`. Returns the answer text.
-No personalization memory is used or updated.
+Single-shot Knowledge Base lookup only, no multi-hop planning. Personalization
+memory is off by default — set `personalisation: true` in the config to
+recall + update it without paying for `hyperRetriever`'s multi-hop search.
 
 ## `HyperClient.hyperRetriever`
 

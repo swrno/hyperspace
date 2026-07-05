@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Key, Plus, Copy, Check, Trash2, X, TriangleAlert } from 'lucide-react';
 
 /**
- * API Keys — frontend-only key management (no backend).
- *
- * Mirrors how real key products behave: the full secret is shown exactly once,
- * right after creation ("copy it now — you won't see it again"). After that we
- * keep only a masked preview (prefix + last 4); the full key is never stored or
- * revealable again. Persisted to localStorage so the area is fully usable.
+ * API Keys — backed by /api/api-keys. Keys are scoped to the signed-in user
+ * (not a specific app); any of a user's keys authenticates hypr-sdk calls for
+ * any app they own. The full secret is only ever returned once, right after
+ * creation ("copy it now — you won't see it again"); afterwards only a masked
+ * preview is available.
  */
 
 interface ApiKey {
@@ -17,16 +16,6 @@ interface ApiKey {
   createdAt: string;
   expiresAt: string | null; // ISO date, or null for no expiration
 }
-
-const STORAGE_KEY = 'hs_api_keys';
-
-const genKey = () =>
-  'sk_live_' +
-  Array.from(crypto.getRandomValues(new Uint8Array(24)))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-
-const maskKey = (k: string) => `${k.slice(0, 11)}${'•'.repeat(14)}${k.slice(-4)}`;
 
 const fmtDate = (iso?: string | null): string => {
   if (!iso) return '—';
@@ -50,25 +39,35 @@ const expiryInfo = (iso: string | null): { text: string; expired: boolean } => {
   return { text: fmtDate(iso), expired: false };
 };
 
-// Load + migrate any older records (which stored the full `key`) to masked previews.
-const loadKeys = (): ApiKey[] => {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    return (Array.isArray(raw) ? raw : []).map((k: any) => ({
-      id: k.id,
-      name: k.name,
-      createdAt: k.createdAt,
-      preview: k.preview || (k.key ? maskKey(k.key) : 'sk_live_••••••••••••'),
-      expiresAt: k.expiresAt ?? null,
-    }));
-  } catch { return []; }
-};
+interface ApiKeysProps {
+  idToken: string | null;
+  /** The signed-in user's uid — this is what hypr-sdk's `clientId` config field is. */
+  clientId: string | null;
+}
 
-export default function ApiKeys() {
-  const [keys, setKeys] = useState<ApiKey[]>(loadKeys);
+export default function ApiKeys({ idToken, clientId }: ApiKeysProps) {
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copiedClientId, setCopiedClientId] = useState(false);
+
+  const copyClientId = () => {
+    if (!clientId) return;
+    navigator.clipboard?.writeText(clientId).catch(() => { /* ignore */ });
+    setCopiedClientId(true);
+    setTimeout(() => setCopiedClientId(false), 1600);
+  };
+
+  const authHeaders: Record<string, string> = idToken ? { Authorization: `Bearer ${idToken}` } : {};
+
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(keys)); } catch { /* ignore */ }
-  }, [keys]);
+    if (!idToken) return;
+    fetch('/api/api-keys', { headers: authHeaders })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setKeys(Array.isArray(data) ? data : []))
+      .catch(() => setKeys([]))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idToken]);
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -76,16 +75,32 @@ export default function ApiKeys() {
   // The just-generated full key, shown once. Closing the dialog discards it.
   const [revealKey, setRevealKey] = useState<{ name: string; key: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const openCreate = () => { setNewName(''); setNewExpiryDays(30); setRevealKey(null); setShowCreate(true); };
   const closeModal = () => { setShowCreate(false); setRevealKey(null); setCopied(false); };
 
-  const createKey = () => {
-    const name = newName.trim() || 'Untitled key';
-    const key = genKey();
-    const expiresAt = newExpiryDays == null ? null : new Date(Date.now() + newExpiryDays * 86400000).toISOString();
-    setKeys((prev) => [{ id: `key_${Date.now()}`, name, preview: maskKey(key), createdAt: new Date().toISOString(), expiresAt }, ...prev]);
-    setRevealKey({ name, key }); // transition the dialog to the one-time reveal step
+  const createKey = async () => {
+    setCreating(true);
+    try {
+      const res = await fetch('/api/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ name: newName.trim() || 'Untitled key', expiresInDays: newExpiryDays }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const created = await res.json();
+      setKeys((prev) => [
+        { id: created.id, name: created.name, createdAt: created.createdAt, expiresAt: created.expiresAt, preview: `${created.key.slice(0, 11)}${'•'.repeat(14)}${created.key.slice(-4)}` },
+        ...prev,
+      ]);
+      setRevealKey({ name: created.name, key: created.key });
+    } catch (e) {
+      console.error('Failed to create API key:', e);
+      alert('Failed to create API key.');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const copyReveal = () => {
@@ -95,7 +110,18 @@ export default function ApiKeys() {
     setTimeout(() => setCopied(false), 1600);
   };
 
-  const revoke = (id: string) => setKeys((prev) => prev.filter((k) => k.id !== id));
+  const revoke = async (id: string) => {
+    setKeys((prev) => prev.filter((k) => k.id !== id));
+    try {
+      await fetch('/api/api-keys', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ id }),
+      });
+    } catch (e) {
+      console.error('Failed to revoke API key:', e);
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#252523] font-geist animate-fade-in">
@@ -112,8 +138,20 @@ export default function ApiKeys() {
           </button>
         </div>
 
+        {/* Client ID — paired with any API key below to authenticate hypr-sdk calls */}
+        <div className="card-elev rounded-2xl p-5 mb-6">
+          <div className="text-[11px] font-geist font-semibold text-[#8C8880] uppercase tracking-wider mb-2">Client ID</div>
+          <div className="flex items-center gap-2">
+            <input readOnly value={clientId || '—'} className="flex-1 bg-transparent border border-[#3D3A37] rounded-xl px-4 py-2.5 text-[13px] font-geist-mono text-[#C7C2BC] focus:outline-none" />
+            <button onClick={copyClientId} className="flex items-center gap-2 px-3 py-2.5 border border-[#3D3A37] rounded-xl text-[12px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] hover:bg-[#2A2826] transition-colors shrink-0">
+              {copiedClientId ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+            </button>
+          </div>
+          <p className="text-[11.5px] font-geist text-[#6B6762] mt-2">Your account's uid — pair this with any API key above as the SDK's <code>clientId</code>.</p>
+        </div>
+
         {/* Keys list */}
-        {keys.length === 0 ? (
+        {loading ? null : keys.length === 0 ? (
           <div className="card-elev rounded-2xl py-16 flex flex-col items-center text-center">
             <span className="w-14 h-14 rounded-2xl bg-[#1E1D1C] border border-[#3D3A37] flex items-center justify-center mb-4">
               <Key size={26} className="text-[#9C968E]" />
@@ -203,8 +241,8 @@ export default function ApiKeys() {
 
                 <div className="flex justify-end gap-2.5">
                   <button onClick={closeModal} className="px-4 py-2.5 text-[13px] font-geist font-medium text-[#8C8880] hover:text-[#F4F0EB] transition-colors">Cancel</button>
-                  <button onClick={createKey} className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px]">
-                    <Plus size={15} /> Create key
+                  <button onClick={createKey} disabled={creating} className="btn-bump btn-bump-accent px-5 py-2.5 text-[13px] disabled:opacity-60">
+                    <Plus size={15} /> {creating ? 'Creating…' : 'Create key'}
                   </button>
                 </div>
               </>

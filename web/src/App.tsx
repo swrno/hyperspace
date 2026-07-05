@@ -192,6 +192,8 @@ const formatTime = (isoString: string) => {
 };
 
 // Platforms with real OAuth backends
+const DOCS_SDK_GETTING_STARTED_URL = `${import.meta.env.VITE_DOCS_URL || ''}/sdk/getting-started`;
+
 const OAUTH_PLATFORMS = ['github', 'jira', 'gdocs', 'gslides', 'gsheets', 'gcal'];
 // Platforms not yet implemented — show Coming Soon
 const COMING_SOON_PLATFORMS = ['jira', 'gsheets', 'slack', 'salesforce'];
@@ -1067,6 +1069,8 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
   const [appSessionDropdownOpen, setAppSessionDropdownOpen] = useState(false);
   const [appSearchMode, setAppSearchMode] = useState<SearchMode>('normal');
   const [appSearchDropdownOpen, setAppSearchDropdownOpen] = useState(false);
+  // Personalization memory — always on for hyper/deep; opt-in for normal mode (mirrors hypr-sdk's `personalisation` config field).
+  const [appPersonalisation, setAppPersonalisation] = useState(true);
   const [appConfigModelOpen, setAppConfigModelOpen] = useState(false);
   // End-user chat history (SDK-driven conversations, distinct from the owner's own Playground testing)
   const [appEndUsers, setAppEndUsers] = useState<{ userId: string; turnCount: number; lastActiveAt: string }[]>([]);
@@ -1772,6 +1776,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           systemPrompt: app.systemPrompt,
           model: app.model,
           searchMode: appSearchMode,
+          personalisation: appPersonalisation,
           temperature: app.temperature,
           maxTokens: app.maxTokens,
           topP: 1,
@@ -3115,6 +3120,21 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
               </>
             )}
           </div>
+
+          {/* Personalization memory toggle — hyper/deep always personalize; this only matters for normal mode */}
+          <button
+            onClick={() => setAppPersonalisation(v => !v)}
+            disabled={appSearchMode !== 'normal'}
+            title={appSearchMode !== 'normal' ? 'Hyper/Deep search always personalizes' : 'Recall + update this session\'s personalization memory'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              appPersonalisation || appSearchMode !== 'normal'
+                ? 'bg-[#C9A66B]/15 border-[#C9A66B]/40 text-[#C9A66B]'
+                : 'bg-[#1E1D1C] border-[#3D3A37] text-[#C9C5C0] hover:border-[#57534E] hover:text-[#F4F0EB]'
+            }`}
+          >
+            <Brain size={13} />
+            <span className="whitespace-nowrap">Memory</span>
+          </button>
           </div>
 
           <button
@@ -3288,55 +3308,22 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
                     </button>
                   </div>
                 </div>
-                <div>
-                  <div className="text-[11px] font-semibold text-[#8C8880] uppercase tracking-wider mb-2">API KEY</div>
-                  <div className="flex items-center gap-2">
-                    <input readOnly value={app.apiKey || 'sk_live_...'} className="flex-1 bg-transparent border border-[#3D3A37] rounded-xl px-4 py-2.5 text-[13px] text-[#C7C2BC] focus:outline-none" />
-                    <button className="flex items-center gap-2 px-3 py-2.5 border border-[#3D3A37] rounded-xl text-[12px] font-medium text-[#8C8880] hover:text-[#F4F0EB] hover:bg-[#2A2826] transition-colors shrink-0">
-                      <Copy size={14} /> Copy
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[11px] font-semibold text-[#8C8880] uppercase tracking-wider mb-2">CLIENT ID</div>
-                  <div className="flex items-center gap-2">
-                    <input readOnly value={app.clientId || 'client_...'} className="flex-1 bg-transparent border border-[#3D3A37] rounded-xl px-4 py-2.5 text-[13px] text-[#C7C2BC] focus:outline-none" />
-                    <button className="flex items-center gap-2 px-3 py-2.5 border border-[#3D3A37] rounded-xl text-[12px] font-medium text-[#8C8880] hover:text-[#F4F0EB] hover:bg-[#2A2826] transition-colors shrink-0">
-                      <Copy size={14} /> Copy
-                    </button>
-                  </div>
-                </div>
+                <p className="text-[12px] text-[#8C8880]">
+                  Need an API key or client ID? Both are managed under{' '}
+                  <button onClick={() => handleNavigate('api-keys')} className="text-[#C9A66B] hover:underline">API Keys</button>.
+                </p>
               </div>
             </div>
 
-            {/* Integration Code */}
-            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6">
-              <h3 className="font-semibold text-[#F4F0EB] text-[16px] mb-4">Integration Code</h3>
-              <div className="relative group">
-                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="p-1.5 bg-[#3D3A37] rounded-md text-[#8C8880] hover:text-[#F4F0EB]">
-                    <Copy size={14} />
-                  </button>
-                </div>
-                <div className="bg-[#2A2826] border border-[#3D3A37] rounded-xl overflow-hidden">
-                  <div className="px-4 py-2 border-b border-[#3D3A37] text-[11px] font-mono text-[#8C8880]">typescript</div>
-                  <pre className="p-4 overflow-x-auto text-[13px] leading-relaxed text-[#D4D4D4] font-mono custom-scrollbar">
-                    <span className="text-[#C586C0]">import</span> {'{ HyperClient }'} <span className="text-[#C586C0]">from</span> <span className="text-[#CE9178]">'hypr-sdk'</span>;<br /><br />
-                    <span className="text-[#569CD6]">const</span> config = {'{'}<br />
-                    {'  '}apiKey: <span className="text-[#CE9178]">'{(app.apiKey || 'sk_live_').substring(0, 16)}...'</span>,<br />
-                    {'  '}appId: <span className="text-[#CE9178]">'{app.appId || `app_${app.id.replace(/-/g, '').substring(0, 16)}...`}'</span>,<br />
-                    {'  '}clientId: <span className="text-[#CE9178]">'{(app.clientId || 'client_...').substring(0, 16)}...'</span>,<br />
-                    {'  '}userId: <span className="text-[#6A9955]">// your own end-user's id</span><br />
-                    {'}'};<br /><br />
-                    <span className="text-[#6A9955]">// Fast lookup, no personalization memory</span><br />
-                    <span className="text-[#569CD6]">const</span> simple = <span className="text-[#569CD6]">new</span> HyperClient.simpleRetriver(config);<br />
-                    <span className="text-[#569CD6]">const</span> answer = <span className="text-[#C586C0]">await</span> simple.query(<span className="text-[#CE9178]">'What is the last PR?'</span>);<br /><br />
-                    <span className="text-[#6A9955]">// Deep retrieval + this end-user's own memory</span><br />
-                    <span className="text-[#569CD6]">const</span> hyper = <span className="text-[#569CD6]">new</span> HyperClient.hyperRetriever(config);<br />
-                    <span className="text-[#569CD6]">const</span> personalized = <span className="text-[#C586C0]">await</span> hyper.query(<span className="text-[#CE9178]">'What did I ask about last time?'</span>);
-                  </pre>
-                </div>
+            {/* Integration Code — full setup lives in the docs */}
+            <div className="bg-[#1E1D1C] border border-[#3D3A37] rounded-2xl p-6 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-[#F4F0EB] text-[16px]">Integration Code</h3>
+                <p className="text-[12.5px] text-[#8C8880] mt-1">See the hypr-sdk quickstart for setup, config and usage examples.</p>
               </div>
+              <a href={DOCS_SDK_GETTING_STARTED_URL} target="_blank" rel="noreferrer" className="btn-bump btn-bump-dark px-4 py-2.5 text-[13px] shrink-0">
+                View docs
+              </a>
             </div>
 
             {/* End-User Chat History — real conversations from SDK integrations */}
@@ -3684,7 +3671,7 @@ Actually, wait - I should check if they already have any auth setup. Let me reco
           renderIntegrations()
         ) : activeScreen === 'api-keys' ? (
           <ErrorBoundary label="API keys">
-            <ApiKeys />
+            <ApiKeys idToken={idToken} clientId={user?.uid || null} />
           </ErrorBoundary>
         ) : activeScreen === 'applications' ? (
           renderApplications()

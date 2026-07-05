@@ -23,8 +23,12 @@ function sendAuthError(res: Response, e: any) {
 
 /**
  * POST /api/sdk/query
- * body: { apiKey?, appId?, clientId?, userId, message, mode?: 'simple'|'hyper', sessionId? }
+ * body: { apiKey?, appId?, clientId?, userId, message, mode?: 'simple'|'hyper', sessionId?, personalisation? }
  * (apiKey/appId/clientId may instead be sent as X-Api-Key / X-App-Id / X-Client-Id headers.)
+ *
+ * `personalisation` toggles Cognee memory recall/write independently of
+ * `mode` (which only controls Neo4j KB search depth) — hyper mode always
+ * personalizes; simple mode does too if this is `true`.
  */
 export async function sdkQueryHandler(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -36,7 +40,7 @@ export async function sdkQueryHandler(req: Request, res: Response) {
     return sendAuthError(res, e);
   }
   const { app, userId } = auth;
-  const { message, mode = 'simple', sessionId = 'default' } = req.body || {};
+  const { message, mode = 'simple', sessionId = 'default', personalisation } = req.body || {};
   if (!message?.trim()) return res.status(400).json({ error: 'message is required' });
 
   try {
@@ -44,6 +48,9 @@ export async function sdkQueryHandler(req: Request, res: Response) {
     const ownerId = app.userId; // the app owner's KB data is scoped to their own uid
     const kbIds: string[] = app.linkedKbIds || [];
     const isHyper = mode === 'hyper';
+    // Memory is independent of search depth — hyper mode always personalizes;
+    // simple mode only does if the caller opts in via `personalisation: true`.
+    const usePersonalization = isHyper || personalisation === true;
 
     // Knowledge Base retrieval (Neo4j) — simple mode does a fast single-shot
     // vector lookup per KB; hyper mode runs the full multi-hop planner+rerank.
@@ -56,8 +63,8 @@ export async function sdkQueryHandler(req: Request, res: Response) {
     );
     const kbContext = kbResults.filter(Boolean).join('\n\n---\n\n');
 
-    // Memory (Cognee) — only for hyper mode, personalized to this end-user.
-    const memory = isHyper ? await recallUserContext(userId, message).catch(() => null) : null;
+    // Memory (Cognee) — personalized to this end-user, if enabled.
+    const memory = usePersonalization ? await recallUserContext(userId, message).catch(() => null) : null;
 
     let systemPrompt = app.systemPrompt || 'You are a helpful AI assistant.';
     if (kbContext) systemPrompt += `\n\n# Retrieved Context\n${kbContext}`;
@@ -74,7 +81,7 @@ export async function sdkQueryHandler(req: Request, res: Response) {
     const userMsgObj = { id: Date.now(), role: 'user', content: message, timestamp: new Date().toISOString(), sessionId };
     const aiMsgObj = { id: Date.now() + 1, role: 'assistant', content, timestamp: new Date().toISOString(), sessionId };
     appendConversationTurn(app.appId, userId, sessionId, [userMsgObj, aiMsgObj]).catch(() => {});
-    if (isHyper) rememberUserFact(userId, `User: ${message}\nAssistant: ${content}`).catch(() => {});
+    if (usePersonalization) rememberUserFact(userId, `User: ${message}\nAssistant: ${content}`).catch(() => {});
 
     return res.status(200).json({ response: content, mode });
   } catch (e: any) {

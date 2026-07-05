@@ -2,8 +2,13 @@
  * Authentication for the public hypr-sdk surface (api/sdk.ts) — distinct from
  * verifyToken() (Firebase, used everywhere else for the app *owner*). Callers
  * here are third-party integrations, identified by an (apiKey, appId,
- * clientId) triple that must all belong to the same app document, plus a
- * caller-supplied `userId` naming their own end-user.
+ * clientId) triple, plus a caller-supplied `userId` naming their own
+ * end-user.
+ *
+ * Unlike appId/clientId (generated per-app), apiKey is owned by a hypr *user*
+ * account (see api/api-keys.ts) and not tied to any one app — any of that
+ * user's keys authenticates any app they own. So validation is two-step:
+ * resolve apiKey -> owning user, then confirm that user owns appId/clientId.
  */
 import type { Request } from 'express';
 import { getDb } from '../mongodb.js';
@@ -35,7 +40,12 @@ export async function verifySdkAuth(req: Request): Promise<SdkAuthResult> {
   }
 
   const db = await getDb();
-  const app = await db.collection('apps').findOne({ appId, apiKey, clientId });
+  const keyDoc = await db.collection('api_keys').findOne({ key: apiKey });
+  if (!keyDoc || (keyDoc.expiresAt && new Date(keyDoc.expiresAt).getTime() < Date.now())) {
+    throw new SdkAuthError(401, 'Invalid or expired apiKey');
+  }
+
+  const app = await db.collection('apps').findOne({ appId, clientId, userId: keyDoc.userId });
   if (!app) {
     throw new SdkAuthError(401, 'Invalid apiKey, appId, or clientId');
   }

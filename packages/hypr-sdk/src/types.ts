@@ -6,8 +6,14 @@ export interface HyperClientConfig {
   appId: string;
   /** Your own end-user's id — scopes retrieval and personalization memory to them. */
   userId: string;
-  /** Public client identifier paired with apiKey (`client_...`). */
+  /** Public client identifier paired with apiKey (the app owner's uid). */
   clientId: string;
+  /**
+   * Recall + update this end-user's personalization memory. Independent of
+   * which retriever you use — `hyperRetriever` always personalizes;
+   * `simpleRetriver` only does if this is `true`. Default: `false`.
+   */
+  personalisation?: boolean;
   /** Override the hypr API base URL (defaults to the production endpoint). */
   baseUrl?: string;
 }
